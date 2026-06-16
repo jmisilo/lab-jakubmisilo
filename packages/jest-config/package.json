@@ -1,0 +1,20 @@
+{
+  "name": "@labjm/jest-config",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./node": "./node.ts",
+    "./next": "./next.ts"
+  },
+  "devDependencies": {
+    "@labjm/typescript-config": "workspace:*",
+    "jest": "30.4.2",
+    "jest-environment-jsdom": "30.4.1",
+    "next": "16.2.9",
+    "ts-jest": "29.4.11",
+    "typescript": "6.0.3"
+  }
+}

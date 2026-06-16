@@ -1,0 +1,28 @@
+{
+  "name": "@labjm/utilities",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "jest --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./cn": "./src/cn/index.ts",
+    "./url-composer": "./src/url-composer/index.ts"
+  },
+  "dependencies": {
+    "@labjm/schemas": "workspace:*",
+    "classnames": "^2.5.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@labjm/jest-config": "workspace:*",
+    "@labjm/typescript-config": "workspace:*",
+    "@types/jest": "^30.0.0",
+    "jest": "30.4.2",
+    "typescript": "6.0.3"
+  }
+}

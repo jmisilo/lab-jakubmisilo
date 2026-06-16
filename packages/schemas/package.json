@@ -1,0 +1,20 @@
+{
+  "name": "@labjm/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@labjm/typescript-config": "workspace:*",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

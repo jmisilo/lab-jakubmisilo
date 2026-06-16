@@ -1,0 +1,12 @@
+{
+  "extends": "@labjm/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node", "jest"]
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}

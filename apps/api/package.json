@@ -1,0 +1,30 @@
+{
+  "name": "@labjm/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/dev.ts",
+    "lint": "eslint .",
+    "test": "jest --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.5",
+    "hono": "4.12.25"
+  },
+  "devDependencies": {
+    "@labjm/eslint-config": "workspace:*",
+    "@labjm/jest-config": "workspace:*",
+    "@labjm/typescript-config": "workspace:*",
+    "eslint": "9.39.4",
+    "globals": "17.6.0",
+    "jest": "30.4.2",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

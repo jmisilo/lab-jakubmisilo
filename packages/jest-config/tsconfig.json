@@ -1,0 +1,12 @@
+{
+  "extends": "../typescript-config/base.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "noEmit": true,
+    "types": ["node"],
+    "verbatimModuleSyntax": false
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules"]
+}
