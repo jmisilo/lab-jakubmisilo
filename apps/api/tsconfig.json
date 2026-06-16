@@ -1,14 +1,31 @@
 {
-  "extends": "@labjm/typescript-config/base.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "verbatimModuleSyntax": false,
-    "types": ["node"],
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "incremental": false,
+    "isolatedModules": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
+    "lib": ["es2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noUncheckedIndexedAccess": true,
+    "outDir": "./dist",
+    "resolveJsonModule": true,
     "rootDir": "./src",
-    "outDir": "./dist"
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node"],
+    "verbatimModuleSyntax": false
+  },
+  "ts-node": {
+    "experimentalResolver": true,
+    "experimentalSpecifierResolution": "node",
+    "esm": true
   },
   "include": ["src"],
   "exclude": ["node_modules"]

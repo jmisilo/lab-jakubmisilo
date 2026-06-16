@@ -10,8 +10,10 @@ import { url } from "@labjm/utilities/url-composer";
 import { Footer } from "@/ui/footer";
 
 export const metadata: Metadata = {
-  title: "Lab JM",
-  description: "",
+  title: "lab.jakubmisilo.com",
+  description:
+    "Jakub Misilo's space to experiment & explore new tech and ideas.",
+  authors: [{ name: "Jakub Misilo", url: "https://jakubmisilo.com" }],
   metadataBase: new URL(url.origin),
 };
 
