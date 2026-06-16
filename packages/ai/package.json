@@ -1,21 +1,26 @@
 {
-  "name": "@labjm/schemas",
+  "name": "@labjm/ai",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    ".": "./src/index.ts",
     "./ai-widget": "./src/ai-widget/index.ts"
   },
-  "devDependencies": {
-    "@labjm/typescript-config": "workspace:*",
-    "typescript": "6.0.3"
-  },
   "dependencies": {
-    "zod": "^4.4.3"
+    "@labjm/schemas": "workspace:*",
+    "@labjm/types": "workspace:*",
+    "ai": "6.0.206"
+  },
+  "devDependencies": {
+    "@labjm/jest-config": "workspace:*",
+    "@labjm/typescript-config": "workspace:*",
+    "@types/jest": "^30.0.0",
+    "jest": "30.4.2",
+    "typescript": "6.0.3"
   }
 }

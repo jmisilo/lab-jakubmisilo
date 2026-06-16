@@ -1,9 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-export const app = new Hono().use("*", cors()).get("/health", (c) => {
-  return c.json({ status: "ok" });
-});
+import { AIWidgetRouter } from "./routes/ai-widget";
+import { CoreRouter } from "./routes/core";
+
+export const app = new Hono()
+  .use("*", cors())
+  .route("/", CoreRouter)
+  .route("/", AIWidgetRouter);
 
 export type AppType = typeof app;
 

@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias --resolve-full-paths --resolve-full-extension .js",
     "dev": "tsx watch src/dev.ts",
+    "dev:vercel": "vercel dev --listen 8080",
     "lint": "eslint .",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit"
@@ -14,16 +15,26 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.84",
+    "@ai-sdk/google": "3.0.82",
+    "@ai-sdk/openai": "3.0.71",
     "@hono/node-server": "2.0.5",
+    "@hono/zod-validator": "^0.8.0",
+    "@labjm/ai": "workspace:^",
+    "@labjm/schemas": "workspace:^",
+    "@labjm/types": "workspace:^",
+    "ai": "6.0.206",
     "hono": "4.12.25"
   },
   "devDependencies": {
     "@labjm/eslint-config": "workspace:*",
     "@labjm/jest-config": "workspace:*",
     "@labjm/typescript-config": "workspace:*",
+    "dotenv": "17.4.2",
     "eslint": "9.39.4",
     "globals": "17.6.0",
     "jest": "30.4.2",
+    "tsc-alias": "^1.8.17",
     "tsx": "4.22.4",
     "typescript": "6.0.3"
   }

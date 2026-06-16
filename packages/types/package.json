@@ -8,7 +8,12 @@
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./ai-widget": "./src/ai-widget/index.ts"
+  },
+  "dependencies": {
+    "@labjm/schemas": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@labjm/typescript-config": "workspace:*",

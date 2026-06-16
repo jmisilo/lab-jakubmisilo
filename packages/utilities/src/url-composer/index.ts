@@ -1,21 +1,6 @@
 import { UrlSchema } from "@labjm/schemas";
 
-type UrlComposerTarget = "api" | "web";
-type UrlComposerProtocol = "https" | "http";
-
 const isProduction = process.env.NODE_ENV === "production";
-
-const getDefaultDomain = (target: UrlComposerTarget) => {
-  if (!isProduction) {
-    return target === "api" ? "localhost:8080" : "localhost:3000";
-  }
-
-  return target === "api" ? "api.lab.jakubmisilo.com" : "lab.jakubmisilo.com";
-};
-
-const getDefaultProtocol = (): UrlComposerProtocol => {
-  return isProduction ? "https" : "http";
-};
 
 export class UrlComposer {
   origin: string;
@@ -23,8 +8,9 @@ export class UrlComposer {
   protocol: string;
 
   constructor(
-    domain: string = getDefaultDomain("web"),
-    protocol: UrlComposerProtocol = getDefaultProtocol(),
+    /** @todo consume environment variables */
+    domain: string = isProduction ? "lab.jakubmisilo.com" : "localhost:3000",
+    protocol: "https" | "http" = isProduction ? "https" : "http",
   ) {
     this.protocol = protocol;
     this.domain = domain;
@@ -76,4 +62,6 @@ export class UrlComposer {
 }
 
 export const url = new UrlComposer();
-export const apiUrl = new UrlComposer(getDefaultDomain("api"));
+export const apiUrl = new UrlComposer(
+  isProduction ? "api.lab.jakubmisilo.com" : "localhost:8080",
+);

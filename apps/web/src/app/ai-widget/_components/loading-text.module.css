@@ -1,0 +1,28 @@
+.animatedGradientText {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--text-primary) 100%, transparent) 0%,
+    color-mix(in oklab, var(--text-primary) 60%, transparent) 20%,
+    color-mix(in oklab, var(--text-primary) 30%, transparent) 40%,
+    color-mix(in oklab, var(--text-primary) 30%, transparent) 60%,
+    color-mix(in oklab, var(--text-primary) 60%, transparent) 85%,
+    color-mix(in oklab, var(--text-primary) 100%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation-name: gradient-move;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes gradient-move {
+  0% {
+    background-position: 200% 0%;
+  }
+
+  100% {
+    background-position: -200% 0%;
+  }
+}

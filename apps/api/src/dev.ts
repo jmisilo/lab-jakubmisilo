@@ -1,6 +1,9 @@
 import { serve } from "@hono/node-server";
+import { config } from "dotenv";
 
-import { app } from ".";
+config({ path: ".env.local" });
+
+const { app } = await import("./index");
 
 serve(
   {
