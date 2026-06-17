@@ -108,7 +108,7 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
                 "relative z-10 w-full min-w-0 flex-1 h-auto resize-none caret-black focus-visible:ring-0 outline-none ring-0 disabled:invisible",
                 input.length === 0 ? "text-transparent" : "text-black",
                 isExpanded
-                  ? "field-sizing-content max-h-[6lh]"
+                  ? "field-sizing-content max-h-[3lh]"
                   : "min-h-5 max-h-5 overflow-hidden leading-5",
               )}
               value={input}

@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup",
-    "dev": "tsx watch src/dev.ts",
-    "dev:vercel": "vercel dev --listen 8080",
+    "dev": "concurrently -k -n api-build,api-vercel -c blue,green \"tsup --watch\" \"sh scripts/dev-vercel.sh\"",
     "lint": "eslint .",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit"
@@ -30,12 +29,11 @@
     "@labjm/eslint-config": "workspace:*",
     "@labjm/jest-config": "workspace:*",
     "@labjm/typescript-config": "workspace:*",
-    "dotenv": "17.4.2",
+    "concurrently": "^10.0.3",
     "eslint": "9.39.4",
     "globals": "17.6.0",
     "jest": "30.4.2",
     "tsup": "^8.5.1",
-    "tsx": "4.22.4",
     "typescript": "6.0.3"
   }
 }

@@ -1,16 +1,29 @@
 import { apiClient } from "@/infrastructure/api";
 import { Skeleton } from "@/ui/skeleton";
+import { cn } from "@labjm/utilities";
 
 export const ApiStatus = async () => {
   const apiStatus = await getApiStatus();
 
-  return <div>API Status: {apiStatus}</div>;
+  return (
+    <div className="flex items-center gap-x-[0.5ch] text-sm">
+      <span>API Status:</span>
+      <div
+        className={cn("inline-block size-2 rounded-full", {
+          "bg-[#52B371]": apiStatus === "ok",
+          "bg-red-500": apiStatus === "failed",
+        })}
+      ></div>
+    </div>
+  );
 };
 
 const ApiStatusSkeleton = () => {
   return (
-    <div className="flex items-center gap-x-[0.5ch]">
-      <span>API Status:</span> <Skeleton className="h-4.5 w-12  inline-block" />
+    <div className="flex items-center gap-x-[0.5ch] text-sm">
+      <span>API Status:</span>
+
+      <Skeleton className="size-2! rounded-full! inline-block" />
     </div>
   );
 };
