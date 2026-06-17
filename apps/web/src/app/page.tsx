@@ -45,7 +45,7 @@ const HomePage = () => {
           <p>
             Place to experiment.{" "}
             <a
-              href="https://github.com/jmisilo/lab-jakubmisilo/"
+              href="https://jakubmisilo.com"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-colors duration-125 ease-in-out text-zinc-500 hover:text-zinc-700"
