@@ -75,7 +75,7 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
   return (
     <motion.div
       animate={{ height: chatContentBounds.height }}
-      className="overflow-hidden"
+      className="overflow-hidden "
       initial={{ height: 0 }}
       transition={{
         type: "spring",
@@ -88,7 +88,7 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
 
         <div
           ref={listRef}
-          className="scrollbar-thin flex max-h-150 flex-col gap-y-3 overflow-x-hidden overflow-y-auto px-3 text-sm"
+          className="scrollbar-thin flex max-h-[min(37.5rem,45vh)] flex-col gap-y-3 overflow-x-hidden overflow-y-auto px-3 text-sm"
         >
           <AnimatePresence initial={false}>
             {messages.map((message) => {
@@ -116,9 +116,9 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
 
             {shouldShowLoader && <LoadingText>Loading</LoadingText>}
           </AnimatePresence>
-
-          <div className="h-5 shrink-0" />
         </div>
+
+        <div className="h-5 shrink-0" />
       </div>
     </motion.div>
   );
