@@ -1,0 +1,36 @@
+{
+  "name": "@labjm/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./agent/*.ts",
+    "#evals/*": "./evals/*.ts"
+  },
+  "scripts": {
+    "build": "eve build",
+    "dev": "eve dev",
+    "start": "eve start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "4.0.0-beta.83",
+    "@labjm/ai": "workspace:^",
+    "@labjm/schemas": "workspace:*",
+    "@labjm/types": "workspace:*",
+    "@vercel/connect": "0.2.2",
+    "ai": "7.0.0-beta.178",
+    "eve": "^0.11.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "ai": "7.0.0-beta.178"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
