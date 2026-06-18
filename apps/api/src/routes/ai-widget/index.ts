@@ -15,9 +15,11 @@ import type {
   AIWidgetThinkingIntensity,
 } from "@labjm/types/ai-widget";
 import {
+  createUIMessageStreamResponse,
   convertToModelMessages,
-  stepCountIs,
+  isStepCount,
   streamText,
+  toUIMessageStream,
   validateUIMessages,
 } from "ai";
 import { Hono } from "hono";
@@ -45,11 +47,13 @@ export const AIWidgetRouter = new Hono().post(
       system:
         "Answer user's requests about the football WC 2022 Argentina vs France final game.",
       tools,
-      stopWhen: stepCountIs(2),
+      stopWhen: isStepCount(2),
       ...getModelOptions({ model, thinkingIntensity }),
     });
 
-    return result.toUIMessageStreamResponse();
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream({ stream: result.stream }),
+    });
   },
 );
 
