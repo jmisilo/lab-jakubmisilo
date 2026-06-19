@@ -42,3 +42,5 @@ yarn-error.log*
 .codex/**/*
 .gemini/**/*
 .claude/**/*
+
+tsconfig.tsbuildinfo

@@ -6,12 +6,19 @@ import type {
   MatchDetailWorkflowStep,
   MatchDetailWorkflowStepStatus,
 } from "@labjm/types/ai-widget";
-import { tool, zodSchema } from "ai";
+import { Tool, tool, zodSchema } from "ai";
 
 import { DATA_WORKFLOW_RESULT } from "./data-workflow-result";
+import z from "zod";
 
+/** @todo type annotation is workaround for AI SDK v7 type inference issue, to be tracked & remove */
 /** @note the tool is just a mock implementation that returns a static response, for showcase purposes only (at least for now) */
-export const tools = {
+export const tools: {
+  "retrieve-match-detail": Tool<
+    z.infer<typeof MatchDetailToolInputSchema>,
+    z.infer<typeof MatchDetailToolOutputSchema>
+  >;
+} = {
   "retrieve-match-detail": tool({
     description: "Retrieves match detail based on the query and game ID",
     inputSchema: zodSchema(MatchDetailToolInputSchema),
