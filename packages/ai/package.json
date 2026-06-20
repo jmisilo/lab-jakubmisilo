@@ -14,7 +14,7 @@
   "dependencies": {
     "@labjm/schemas": "workspace:*",
     "@labjm/types": "workspace:*",
-    "ai": "7.0.0-beta.178",
+    "ai": "7.0.0-beta.182",
     "zod": "^4.4.3"
   },
   "devDependencies": {

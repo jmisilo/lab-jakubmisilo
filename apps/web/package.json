@@ -16,7 +16,7 @@
     "@labjm/api": "workspace:^",
     "@labjm/types": "workspace:*",
     "@labjm/utilities": "workspace:*",
-    "ai": "7.0.0-beta.178",
+    "ai": "7.0.0-beta.182",
     "hono": "4.12.25",
     "motion": "12.40.0",
     "next": "16.2.9",
