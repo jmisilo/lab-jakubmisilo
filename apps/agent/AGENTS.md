@@ -1,3 +1,3 @@
-# eve Agent App
+# Agent App
 
-This project uses the eve framework. Before writing code, always read the relevant guide in `node_modules/eve/docs/`.
+This project is a minimal Chat SDK Telegram bot backed by AI SDK.

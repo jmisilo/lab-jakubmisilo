@@ -3,33 +3,33 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "imports": {
-    "#*": "./agent/*.ts",
-    "#evals/*": "./evals/*.ts"
-  },
   "scripts": {
-    "build": "eve build",
-    "dev": "eve dev",
-    "start": "eve start",
+    "build": "tsup",
+    "dev:server": "vercel dev --listen 2000 --yes",
+    "dev": "pnpm build && node dist/app/tui/index.js",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/google": "4.0.0-beta.83",
     "@ai-sdk/openai": "4.0.0-beta.74",
-    "@labjm/ai": "workspace:^",
-    "@labjm/schemas": "workspace:*",
-    "@labjm/types": "workspace:*",
-    "@vercel/connect": "0.2.2",
-    "ai": "7.0.0-beta.178",
-    "eve": "^0.11.6",
-    "zod": "4.4.3"
+    "@ai-sdk/tui": "1.0.0-beta.18",
+    "@chat-adapter/state-memory": "4.31.0",
+    "@chat-adapter/telegram": "4.31.0",
+    "@vercel/functions": "3.7.1",
+    "ai": "7.0.0-beta.182",
+    "chat": "4.31.0",
+    "dedent": "1.7.2",
+    "dotenv": "17.4.2",
+    "hono": "4.12.25",
+    "pino": "10.3.1"
+  },
+  "overrides": {
+    "ai": "7.0.0-beta.182"
   },
   "devDependencies": {
     "@types/node": "24.x",
+    "tsup": "^8.5.1",
     "typescript": "6.0.3"
-  },
-  "overrides": {
-    "ai": "7.0.0-beta.178"
   },
   "engines": {
     "node": "24.x"
