@@ -1,14 +1,13 @@
-import { createMemoryState } from "@chat-adapter/state-memory";
+import { createPostgresState } from "@chat-adapter/state-pg";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { Chat, type Message, type Thread } from "chat";
-import { toAiMessages } from "chat/ai";
-import type { ModelMessage } from "ai";
 
 import { AIAgentService } from "@/app/agent";
+import { AgentContextService } from "@/app/memory/context";
+import { AgentMemoryService } from "@/app/memory";
 import { chatLogger, logger } from "@/infrastructure/logger";
 
 const TYPING_INDICATOR_REFRESH_MS = 3_000;
-const MAX_CONTEXT_MESSAGES = 20;
 
 export const bot = new Chat({
   userName: process.env.TELEGRAM_BOT_USERNAME ?? "labjm_assistant_bot",
@@ -18,7 +17,17 @@ export const bot = new Chat({
       secretToken: process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN,
     }),
   },
-  state: createMemoryState(),
+  state: createPostgresState({
+    url: process.env.DATABASE_URL,
+    keyPrefix: "agent",
+    logger: chatLogger.child("state-pg"),
+  }),
+  /** @todo temp solution, provide proper solve */
+  identity: () => "123",
+  transcripts: {
+    retention: "30d",
+    maxPerUser: 200,
+  },
   threadHistory: {
     maxMessages: 20,
     ttlMs: 1000 * 60 * 60 * 24 * 7,
@@ -69,7 +78,30 @@ const respondToMessage = async ({
       "[TELEGRAM_AGENT]: agent thinking started",
     );
 
-    const contextMessages = await getContextMessages(thread);
+    /** @todo temp solution, provide proper solve */
+    const identityId = message.userKey ?? "123";
+
+    await Promise.all([
+      bot.transcripts.append(thread, message),
+      AgentMemoryService.recordMessage({
+        identityId,
+        threadId: thread.id,
+        role: "user",
+        content: message.text,
+        sourceMessageId: message.id,
+      }),
+    ]);
+
+    const shortTermMemory = await bot.transcripts.list({
+      userKey: identityId,
+      threadId: thread.id,
+      limit: AgentContextService.contextSourceMessageLimit,
+    });
+    const contextMessages = await AgentMemoryService.buildContext({
+      identityId,
+      threadId: thread.id,
+      shortTermMemory,
+    });
 
     logger.info(
       {
@@ -81,7 +113,7 @@ const respondToMessage = async ({
     );
 
     const result = await withTypingIndicator(thread, () =>
-      AIAgentService.generate({ messages: contextMessages }),
+      AIAgentService.generate({ messages: contextMessages, identityId }),
     );
 
     logger.info(
@@ -95,6 +127,20 @@ const respondToMessage = async ({
 
     await thread.post(result.text);
 
+    await Promise.all([
+      bot.transcripts.append(
+        thread,
+        { role: "assistant", text: result.text },
+        { userKey: identityId },
+      ),
+      AgentMemoryService.recordMessage({
+        identityId,
+        threadId: thread.id,
+        role: "assistant",
+        content: result.text,
+      }),
+    ]);
+
     logger.info(
       {
         threadId: thread.id,
@@ -102,6 +148,11 @@ const respondToMessage = async ({
       },
       "[TELEGRAM_AGENT]: message sent",
     );
+
+    await AgentMemoryService.compressShortTermMemory({
+      identityId,
+      threadId: thread.id,
+    });
   } catch (error) {
     logger.error(
       {
@@ -154,29 +205,3 @@ const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
-
-const getContextMessages = async (thread: Thread): Promise<ModelMessage[]> => {
-  const messages: Message[] = [];
-
-  for await (const message of thread.allMessages) {
-    messages.push(message);
-  }
-
-  const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
-  const aiMessages = await toAiMessages(recentMessages, {
-    includeNames: true,
-    onUnsupportedAttachment: (attachment, message) => {
-      logger.warn(
-        {
-          threadId: thread.id,
-          messageId: message.id,
-          attachmentType: attachment.type,
-          attachmentName: attachment.name,
-        },
-        "[TELEGRAM_AGENT]: skipped unsupported attachment in context",
-      );
-    },
-  });
-
-  return aiMessages as ModelMessage[];
-};

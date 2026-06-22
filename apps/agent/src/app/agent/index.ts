@@ -1,8 +1,14 @@
 import { openai } from "@ai-sdk/openai";
 import { isStepCount, ToolLoopAgent, type ModelMessage } from "ai";
+import { z } from "zod/v4";
 
+import { agentTools } from "@/app/agent/tools";
 import { instruction } from "@/app/instruction";
 import { logger } from "@/infrastructure/logger";
+
+const AgentRuntimeContextSchema = z.object({
+  identityId: z.string(),
+});
 
 export class AIAgentService {
   private static timeout = {
@@ -17,6 +23,23 @@ export class AIAgentService {
   static readonly agent = new ToolLoopAgent({
     model: openai(this.model),
     instructions: instruction,
+    tools: agentTools,
+    toolsContext: {
+      "create-noted-memory": {
+        identityId: "123",
+      },
+    },
+    callOptionsSchema: AgentRuntimeContextSchema,
+    prepareCall: ({ options, ...input }) => ({
+      ...input,
+      toolsContext: {
+        "create-noted-memory": {
+          identityId:
+            options?.identityId ??
+            input.toolsContext["create-noted-memory"].identityId,
+        },
+      },
+    }),
     maxRetries: 1,
     stopWhen: isStepCount(3),
     onStart: (event) => {
@@ -42,9 +65,13 @@ export class AIAgentService {
     },
   });
 
-  static async generate(
-    input: { prompt: string } | { messages: ModelMessage[] },
-  ): Promise<{ text: string }> {
+  static async generate({
+    identityId,
+    messages,
+  }: {
+    messages: ModelMessage[];
+    identityId: string;
+  }): Promise<{ text: string }> {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
       abortController.abort(
@@ -56,7 +83,8 @@ export class AIAgentService {
       logger.info({ model: this.model }, "[AI_AGENT]: generating response");
 
       const result = await this.agent.generate({
-        ...input,
+        messages,
+        options: { identityId },
         abortSignal: abortController.signal,
         timeout: { totalMs: this.timeout.total, stepMs: this.timeout.step },
       });
