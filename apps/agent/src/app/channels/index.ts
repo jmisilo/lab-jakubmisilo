@@ -23,7 +23,7 @@ export const bot = new Chat({
     logger: chatLogger.child("state-pg"),
   }),
   /** @todo temp solution, provide proper solve */
-  identity: () => "123",
+  identity: ({ author }) => author.userId,
   transcripts: {
     retention: "30d",
     maxPerUser: 200,
@@ -79,7 +79,7 @@ const respondToMessage = async ({
     );
 
     /** @todo temp solution, provide proper solve */
-    const identityId = message.userKey ?? "123";
+    const identityId = message.userKey ?? message.author.userId;
 
     await Promise.all([
       bot.transcripts.append(thread, message),
