@@ -41,27 +41,27 @@ export class AIAgentService {
       },
     }),
     maxRetries: 1,
-    stopWhen: isStepCount(3),
+    stopWhen: isStepCount(5),
     onStart: (event) => {
-      logger.info(
+      logger.debug(
         { model: this.model, lastMessage: event.messages.at(-1) },
         "[AI_AGENT]: agent process started",
       );
     },
     onStepStart: (event) => {
-      logger.info(
+      logger.debug(
         { provider: event.provider, modelId: event.modelId },
         "[AI_AGENT]: step started",
       );
     },
     onStepEnd: (event) => {
-      logger.info(
+      logger.debug(
         { finishReason: event.finishReason, text: event.text },
         "[AI_AGENT]: step ended",
       );
     },
     onEnd: (event) => {
-      logger.info({ result: event.text }, "[AI_AGENT]: agent process ended");
+      logger.debug({ result: event.text }, "[AI_AGENT]: agent process ended");
     },
   });
 
@@ -80,7 +80,7 @@ export class AIAgentService {
     }, this.timeout.total);
 
     try {
-      logger.info({ model: this.model }, "[AI_AGENT]: generating response");
+      logger.debug({ model: this.model }, "[AI_AGENT]: generating response");
 
       const result = await this.agent.generate({
         messages,
@@ -89,7 +89,7 @@ export class AIAgentService {
         timeout: { totalMs: this.timeout.total, stepMs: this.timeout.step },
       });
 
-      logger.info("[AI_AGENT]: response generated");
+      logger.info({ model: this.model }, "[AI_AGENT]: response generated");
 
       return { text: result.text };
     } catch (error) {

@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 
 import { AgentMemoryService } from "@/app/memory";
 import { logger } from "@/infrastructure/logger";
+import { openai } from "@ai-sdk/openai";
 
 export const CreateNotedMemoryToolInputSchema = z.object({
   content: z.string().describe("The concise durable memory to save."),
@@ -30,78 +31,64 @@ export const CreateNotedMemoryToolContextSchema = z.object({
   identityId: z.string(),
 });
 
-type CreateNotedMemoryInput = z.infer<typeof CreateNotedMemoryToolInputSchema>;
-type CreateNotedMemoryOutput = z.infer<
-  typeof CreateNotedMemoryToolOutputSchema
->;
-type CreateNotedMemoryContext = z.infer<
-  typeof CreateNotedMemoryToolContextSchema
->;
-type CreateNotedMemoryTool = Tool<
-  CreateNotedMemoryInput,
-  CreateNotedMemoryOutput,
-  CreateNotedMemoryContext
-> & {
-  execute: NonNullable<
-    Tool<
-      CreateNotedMemoryInput,
-      CreateNotedMemoryOutput,
-      CreateNotedMemoryContext
-    >["execute"]
+export type AgentTools = {
+  webSearch: ReturnType<typeof openai.tools.webSearch>;
+  "create-noted-memory": Tool<
+    z.infer<typeof CreateNotedMemoryToolInputSchema>,
+    z.infer<typeof CreateNotedMemoryToolOutputSchema>,
+    z.infer<typeof CreateNotedMemoryToolContextSchema>
   >;
 };
 
-export const createNotedMemoryTool: CreateNotedMemoryTool = tool<
-  CreateNotedMemoryInput,
-  CreateNotedMemoryOutput,
-  CreateNotedMemoryContext
->({
-  description:
-    "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, and important project context. Do not use for transient conversation details.",
-  inputSchema: CreateNotedMemoryToolInputSchema,
-  outputSchema: CreateNotedMemoryToolOutputSchema,
-  contextSchema: CreateNotedMemoryToolContextSchema,
-  inputExamples: [
-    {
-      input: {
-        content: "The user prefers concise implementation-focused updates.",
-        kind: "preference",
-        importance: 3,
-      },
-    },
-  ],
-  execute: async ({ content, kind = "note", importance = 1 }, { context }) => {
-    const memory = await AgentMemoryService.recordNotedInfo({
-      identityId: context.identityId,
-      content,
-      kind,
-      importance,
-      metadata: {
-        source: "agent_tool",
-      },
-    });
+/** @todo defer loading tools, upon having multiple choices */
+export const agentTools: AgentTools = {
+  webSearch: openai.tools.webSearch({
+    searchContextSize: "medium",
+  }),
 
-    logger.info(
+  "create-noted-memory": tool({
+    description:
+      "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, and important project context. Do not use for transient conversation details.",
+    inputSchema: CreateNotedMemoryToolInputSchema,
+    outputSchema: CreateNotedMemoryToolOutputSchema,
+    contextSchema: CreateNotedMemoryToolContextSchema,
+    inputExamples: [
       {
+        input: {
+          content: "The user prefers concise implementation-focused updates.",
+          kind: "preference",
+          importance: 3,
+        },
+      },
+    ],
+    execute: async (
+      { content, kind = "note", importance = 1 },
+      { context },
+    ) => {
+      const memory = await AgentMemoryService.recordNotedInfo({
         identityId: context.identityId,
-        memoryId: memory?.id,
+        content,
         kind,
         importance,
-      },
-      "[AGENT_MEMORY]: noted memory created",
-    );
+        metadata: {
+          source: "agent_tool",
+        },
+      });
 
-    return {
-      id: memory?.id ?? null,
-      saved: Boolean(memory),
-    };
-  },
-});
+      logger.info(
+        {
+          identityId: context.identityId,
+          memoryId: memory?.id,
+          kind,
+          importance,
+        },
+        "[AGENT_MEMORY]: noted memory created",
+      );
 
-export type AgentTools = {
-  "create-noted-memory": CreateNotedMemoryTool;
-};
-
-export const agentTools: AgentTools = {
-  "create-noted-memory": createNotedMemoryTool,
+      return {
+        id: memory?.id ?? null,
+        saved: !!memory,
+      };
+    },
+  }),
 };

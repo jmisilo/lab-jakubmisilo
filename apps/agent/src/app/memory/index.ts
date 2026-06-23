@@ -89,6 +89,16 @@ export class AgentMemoryService {
       });
 
     if (totalUncompressedTokens <= compressionTriggerTokenLimit) {
+      logger.debug(
+        {
+          identityId,
+          threadId,
+          totalUncompressedTokens,
+          compressionTriggerTokenLimit,
+        },
+        "[AGENT_MEMORY]: short-term memory under compression budget",
+      );
+
       return;
     }
 
@@ -101,7 +111,7 @@ export class AgentMemoryService {
       return;
     }
 
-    logger.info(
+    logger.debug(
       {
         model: AIService.compressionModel,
         messageCount: messages.length,

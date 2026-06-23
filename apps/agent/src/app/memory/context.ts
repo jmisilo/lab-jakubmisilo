@@ -9,6 +9,7 @@ import type {
   ShortTermMemory,
 } from "@/app/memory/types";
 import { AgentMemoryDbService } from "@/infrastructure/db/services/agent-memory";
+import { logger } from "@/infrastructure/logger";
 
 export class AgentContextService {
   static readonly contextSourceMessageLimit = 200;
@@ -50,7 +51,9 @@ export class AgentContextService {
     shortTermMemory: ShortTermMemory[];
   }): Promise<ModelMessage[]> {
     const currentQuery = this.getCurrentQuery(shortTermMemory);
-    const queryEmbedding = currentQuery ? await AIService.embed(currentQuery) : null;
+    const queryEmbedding = currentQuery
+      ? await AIService.embed(currentQuery)
+      : null;
 
     const [notedMemories, semanticNotedMemories, compressedChunks] =
       await Promise.all([
@@ -96,11 +99,30 @@ export class AgentContextService {
       });
     }
 
-    context.push(
-      ...this.selectShortTermContext({
-        shortTermMemory,
-        tokenBudget: shortMemoryTokenBudget,
-      }),
+    const shortTermSelection = this.selectShortTermContext({
+      shortTermMemory,
+      tokenBudget: shortMemoryTokenBudget,
+    });
+
+    context.push(...shortTermSelection.messages);
+
+    logger.info(
+      {
+        identityId,
+        threadId,
+        contextMessageCount: context.length,
+        shortTermMessageCount: shortTermMemory.length,
+        selectedShortTermMessageCount: shortTermSelection.messages.length,
+        selectedShortTermTokens: shortTermSelection.usedTokens,
+        notedMemoryCount: notedMemories.length,
+        semanticNotedMemoryCount: semanticNotedMemories.length,
+        selectedNotedMemoryCount: memoryContext.notedMemoryCount,
+        selectedNotedMemoryTokens: memoryContext.notedTokensUsed,
+        compressedChunkCount: compressedChunks.length,
+        selectedCompressedChunkCount: memoryContext.compressedChunkCount,
+        selectedCompressedTokens: memoryContext.compressedTokensUsed,
+      },
+      "[AGENT_MEMORY]: context assembled",
     );
 
     return context;
@@ -174,7 +196,10 @@ export class AgentContextService {
     if (sections.length === 0) {
       return {
         content: null,
+        compressedChunkCount: 0,
         compressedTokensUsed: 0,
+        notedMemoryCount: 0,
+        notedTokensUsed: 0,
       };
     }
 
@@ -184,7 +209,10 @@ export class AgentContextService {
 
         ${sections.join("\n\n")}
       `,
+      compressedChunkCount: chunkSelection.items.length,
       compressedTokensUsed: chunkSelection.usedTokens,
+      notedMemoryCount: notedSelection.items.length,
+      notedTokensUsed: notedSelection.usedTokens,
     };
   }
 
@@ -216,7 +244,7 @@ export class AgentContextService {
   }: {
     shortTermMemory: ShortTermMemory[];
     tokenBudget: number;
-  }): ModelMessage[] {
+  }): { messages: ModelMessage[]; usedTokens: number } {
     const selected: ModelMessage[] = [];
     let usedTokens = 0;
 
@@ -238,7 +266,7 @@ export class AgentContextService {
       usedTokens += tokens;
     }
 
-    return selected.reverse();
+    return { messages: selected.reverse(), usedTokens };
   }
 
   private static selectNotedMemoriesForContext(notedMemories: NotedMemory[]) {
