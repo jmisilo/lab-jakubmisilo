@@ -1,9 +1,21 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+
 import pino from "pino";
 import type { Logger as ChatLogger } from "chat";
 
-export const logger = pino({
+const logFile = process.env.AGENT_LOG_FILE;
+const loggerOptions = {
   level: process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? "info",
-});
+};
+
+if (logFile) {
+  mkdirSync(dirname(logFile), { recursive: true });
+}
+
+export const logger = logFile
+  ? pino(loggerOptions, pino.destination({ dest: logFile, sync: false }))
+  : pino(loggerOptions);
 
 const createChatLogger = (component: string): ChatLogger => {
   const child = logger.child({ component });

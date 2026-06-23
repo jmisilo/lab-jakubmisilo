@@ -1,5 +1,6 @@
 import { createPostgresState } from "@chat-adapter/state-pg";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
+import { waitUntil } from "@vercel/functions";
 import { Chat, type Message, type Thread } from "chat";
 
 import { AIAgentService } from "@/app/agent";
@@ -148,10 +149,12 @@ const respondToMessage = async ({
       "[TELEGRAM_AGENT]: message sent",
     );
 
-    await AgentMemoryService.compressShortTermMemory({
-      identityId,
-      threadId: thread.id,
-    });
+    waitUntil(
+      AgentMemoryService.compressShortTermMemory({
+        identityId,
+        threadId: thread.id,
+      }),
+    );
   } catch (error) {
     logger.error(
       {

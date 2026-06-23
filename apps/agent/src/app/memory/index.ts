@@ -68,108 +68,121 @@ export class AgentMemoryService {
     identityId: string;
     threadId: string;
   }) {
-    const uncompressedMessages =
-      await AgentMemoryDbService.getUncompressedMessages({
-        identityId,
-        threadId,
-        limit: this.compressionSourceMessageLimit,
-      });
-    const totalUncompressedTokens =
-      AgentContextService.countMessagesTokens(uncompressedMessages);
-    const compressedChunks = await AgentMemoryDbService.getRecentMemoryChunks({
-      identityId,
-      threadId,
-      limit: AgentContextService.contextCompressedChunkFetchLimit,
-    });
-    const compressedTokensUsed =
-      AgentContextService.countCompressedTokens(compressedChunks);
-    const compressionTriggerTokenLimit =
-      AgentContextService.getCompressionTriggerTokenLimit({
-        compressedTokensUsed,
-      });
-
-    if (totalUncompressedTokens <= compressionTriggerTokenLimit) {
-      logger.debug(
+    try {
+      const uncompressedMessages =
+        await AgentMemoryDbService.getUncompressedMessages({
+          identityId,
+          threadId,
+          limit: this.compressionSourceMessageLimit,
+        });
+      const totalUncompressedTokens =
+        AgentContextService.countMessagesTokens(uncompressedMessages);
+      const compressedChunks = await AgentMemoryDbService.getRecentMemoryChunks(
         {
           identityId,
           threadId,
+          limit: AgentContextService.contextCompressedChunkFetchLimit,
+        },
+      );
+      const compressedTokensUsed =
+        AgentContextService.countCompressedTokens(compressedChunks);
+      const compressionTriggerTokenLimit =
+        AgentContextService.getCompressionTriggerTokenLimit({
+          compressedTokensUsed,
+        });
+
+      if (totalUncompressedTokens <= compressionTriggerTokenLimit) {
+        logger.debug(
+          {
+            identityId,
+            threadId,
+            totalUncompressedTokens,
+            compressionTriggerTokenLimit,
+          },
+          "[AGENT_MEMORY]: short-term memory under compression budget",
+        );
+
+        return;
+      }
+
+      const messages = AgentContextService.selectCompressionMessages({
+        messages: uncompressedMessages,
+        totalUncompressedTokens,
+      });
+
+      if (messages.length === 0) {
+        return;
+      }
+
+      logger.debug(
+        {
+          model: AIService.compressionModel,
+          messageCount: messages.length,
+        },
+        "[AGENT_MEMORY]: generating compressed memory summary",
+      );
+
+      const transcript = messages
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n");
+      const summary = await AIService.generate({
+        model: AIService.compressionModel,
+        timeoutMs: AIService.compressionTimeoutMs,
+        messages: [
+          {
+            role: "user",
+            content: dedent`
+              Compress this conversation window into a concise durable memory.
+
+              Preserve:
+              - decisions
+              - user preferences
+              - open tasks
+              - durable personal/project facts
+
+              Avoid transient chatter and repeated wording.
+
+              Conversation:
+              ${transcript}
+            `,
+          },
+        ],
+      });
+
+      await AgentMemoryDbService.createMemoryChunk({
+        identityId,
+        threadId,
+        summary,
+        sourceMessageIds: messages.map((message) => message.id),
+        metadata: {
+          strategy: "rolling_summary",
+          sourceCount: messages.length,
+        },
+      });
+
+      await AgentMemoryDbService.markMessagesCompressed(
+        messages.map((message) => message.id),
+      );
+
+      logger.info(
+        {
+          identityId,
+          threadId,
+          compressedMessageCount: messages.length,
           totalUncompressedTokens,
           compressionTriggerTokenLimit,
         },
-        "[AGENT_MEMORY]: short-term memory under compression budget",
+        "[AGENT_MEMORY]: short-term memory compressed",
       );
-
-      return;
-    }
-
-    const messages = AgentContextService.selectCompressionMessages({
-      messages: uncompressedMessages,
-      totalUncompressedTokens,
-    });
-
-    if (messages.length === 0) {
-      return;
-    }
-
-    logger.debug(
-      {
-        model: AIService.compressionModel,
-        messageCount: messages.length,
-      },
-      "[AGENT_MEMORY]: generating compressed memory summary",
-    );
-
-    const transcript = messages
-      .map((message) => `${message.role}: ${message.content}`)
-      .join("\n");
-    const summary = await AIService.generate({
-      model: AIService.compressionModel,
-      timeoutMs: AIService.compressionTimeoutMs,
-      messages: [
+    } catch (error) {
+      logger.error(
         {
-          role: "user",
-          content: dedent`
-            Compress this conversation window into a concise durable memory.
-
-            Preserve:
-            - decisions
-            - user preferences
-            - open tasks
-            - durable personal/project facts
-
-            Avoid transient chatter and repeated wording.
-
-            Conversation:
-            ${transcript}
-          `,
+          identityId,
+          threadId,
+          error,
         },
-      ],
-    });
-
-    await AgentMemoryDbService.createMemoryChunk({
-      identityId,
-      threadId,
-      summary,
-      sourceMessageIds: messages.map((message) => message.id),
-      metadata: {
-        strategy: "rolling_summary",
-        sourceCount: messages.length,
-      },
-    });
-
-    await AgentMemoryDbService.markMessagesCompressed(
-      messages.map((message) => message.id),
-    );
-
-    logger.info(
-      {
-        identityId,
-        threadId,
-        compressedMessageCount: messages.length,
-        totalUncompressedTokens,
-        compressionTriggerTokenLimit,
-      },
-      "[AGENT_MEMORY]: short-term memory compressed",
-    );
+        "[AGENT_MEMORY]: short-term memory compression failed",
+      );
+    }
   }
 }
