@@ -1,0 +1,16 @@
+{
+  "branchNameLinter": {
+    "prefixes": ["feat", "fix", "chore", "docs", "refactor", "test", "revert", "hotfix"],
+    "suggestions": {
+      "feature": "feat",
+      "bugfix": "fix"
+    },
+    "banned": ["wip"],
+    "skip": ["main", "master", "develop"],
+    "disallowed": ["master", "develop"],
+    "separator": "/",
+    "msgPrefixNotAllowed": "Branch prefix \"%s\" is not allowed.",
+    "msgPrefixSuggestion": "Instead of \"%s\" try \"%s\".",
+    "msgSeparatorRequired": "Branch \"%s\" must contain a separator \"%s\"."
+  }
+}
