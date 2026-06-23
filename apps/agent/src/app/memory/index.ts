@@ -116,7 +116,7 @@ export class AgentMemoryService {
 
       logger.debug(
         {
-          model: AIService.compressionModel,
+          model: AIService.model,
           messageCount: messages.length,
         },
         "[AGENT_MEMORY]: generating compressed memory summary",
@@ -126,8 +126,6 @@ export class AgentMemoryService {
         .map((message) => `${message.role}: ${message.content}`)
         .join("\n");
       const summary = await AIService.generate({
-        model: AIService.compressionModel,
-        timeoutMs: AIService.compressionTimeoutMs,
         messages: [
           {
             role: "user",

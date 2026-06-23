@@ -48,7 +48,7 @@ export const agentTools: AgentTools = {
 
   "create-noted-memory": tool({
     description:
-      "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, and important project context. Do not use for transient conversation details.",
+      "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, and important project context. Do not use for transient conversation details. Examples: 'I really like X', 'I prefer concise implementation-focused updates', 'My birthday is on X', 'My favorite color is X', 'I am allergic to X', 'The project is called X and the deadline is Y'.",
     inputSchema: CreateNotedMemoryToolInputSchema,
     outputSchema: CreateNotedMemoryToolOutputSchema,
     contextSchema: CreateNotedMemoryToolContextSchema,
