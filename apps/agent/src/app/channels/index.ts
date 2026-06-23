@@ -64,13 +64,12 @@ const respondToMessage = async ({
       threadId: thread.id,
       messageId: message.id,
       authorId: message.author.userId,
-      text: message.text,
     },
     "[TELEGRAM_AGENT]: message received",
   );
 
   try {
-    logger.info(
+    logger.debug(
       {
         threadId: thread.id,
         messageId: message.id,
@@ -103,7 +102,7 @@ const respondToMessage = async ({
       shortTermMemory,
     });
 
-    logger.info(
+    logger.debug(
       {
         threadId: thread.id,
         messageId: message.id,
@@ -116,7 +115,7 @@ const respondToMessage = async ({
       AIAgentService.generate({ messages: contextMessages, identityId }),
     );
 
-    logger.info(
+    logger.debug(
       {
         threadId: thread.id,
         messageId: message.id,
@@ -125,7 +124,7 @@ const respondToMessage = async ({
       "[TELEGRAM_AGENT]: model output generated",
     );
 
-    await thread.post(result.text);
+    await thread.post({ markdown: result.text });
 
     await Promise.all([
       bot.transcripts.append(
