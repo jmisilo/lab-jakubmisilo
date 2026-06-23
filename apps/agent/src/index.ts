@@ -1,14 +1,12 @@
-import { Hono } from "hono";
-import { waitUntil } from "@vercel/functions";
+import { waitUntil } from '@vercel/functions';
+import { Hono } from 'hono';
 
-import { bot } from "@/app/channels";
+import { bot } from '@/app/channels';
 
 const app = new Hono()
-  .get("/", (c) => c.json({ ok: true, service: "agent" }))
-  .get("/health", (c) => c.json({ ok: true }))
-  .post("/webhooks/telegram", (c) =>
-    bot.webhooks.telegram(c.req.raw, { waitUntil }),
-  );
+  .get('/', (c) => c.json({ ok: true, service: 'agent' }))
+  .get('/health', (c) => c.json({ ok: true }))
+  .post('/webhooks/telegram', (c) => bot.webhooks.telegram(c.req.raw, { waitUntil }));
 
 export type AppType = typeof app;
 

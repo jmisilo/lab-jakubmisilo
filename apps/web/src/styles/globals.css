@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 html {
   scroll-padding-top: 8rem;
@@ -11,7 +11,7 @@ html {
 }
 
 button:not(:disabled),
-[role="button"]:not([aria-disabled="true"]) {
+[role='button']:not([aria-disabled='true']) {
   @apply cursor-pointer;
 }
 

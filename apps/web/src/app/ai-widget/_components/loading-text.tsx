@@ -1,11 +1,12 @@
-"use client";
+'use client';
 
-import type { CSSProperties, FC } from "react";
-import { useEffect, useState } from "react";
+import type { CSSProperties, FC } from 'react';
 
-import { cn } from "@labjm/utilities/cn";
+import { useEffect, useState } from 'react';
 
-import styles from "./loading-text.module.css";
+import { cn } from '@labjm/utilities/cn';
+
+import styles from './loading-text.module.css';
 
 type LoadingTextProps = {
   children: string;
@@ -18,7 +19,7 @@ const ANIMATION_INTERVAL_DURATION = 750;
 export const LoadingText: FC<LoadingTextProps> = ({
   children,
   totalAmountOfDots = 3,
-  color = "#333333",
+  color = '#333333',
 }) => {
   const [amountOfDots, setAmountOfDots] = useState(0);
 
@@ -38,11 +39,11 @@ export const LoadingText: FC<LoadingTextProps> = ({
 
   return (
     <div
-      className={cn(styles.animatedGradientText, "font-medium text-sm")}
+      className={cn(styles.animatedGradientText, 'text-sm font-medium')}
       style={
         {
           animationDuration: `${2 * ANIMATION_INTERVAL_DURATION * (totalAmountOfDots + 1)}ms`,
-          "--text-primary": color,
+          '--text-primary': color,
         } as CSSProperties
       }
     >
@@ -53,8 +54,8 @@ export const LoadingText: FC<LoadingTextProps> = ({
         .map((_, index) => (
           <span
             key={`dot-${index}`}
-            className={cn("tracking-wide", {
-              "opacity-0": index >= amountOfDots,
+            className={cn('tracking-wide', {
+              'opacity-0': index >= amountOfDots,
             })}
           >
             .

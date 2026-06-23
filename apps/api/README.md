@@ -2,7 +2,6 @@
 
 Hono-based API server powering [lab.jakubmisilo.com](https://jakubmisilo.com). Deployed as a Vercel serverless function.
 
-
 ## Environment
 
 ```sh

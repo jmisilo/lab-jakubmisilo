@@ -1,6 +1,7 @@
-import { apiClient } from "@/infrastructure/api";
-import { Skeleton } from "@/ui/skeleton";
-import { cn } from "@labjm/utilities";
+import { cn } from '@labjm/utilities';
+
+import { apiClient } from '@/infrastructure/api';
+import { Skeleton } from '@/ui/skeleton';
 
 export const ApiStatus = async () => {
   const apiStatus = await getApiStatus();
@@ -9,9 +10,9 @@ export const ApiStatus = async () => {
     <div className="flex items-center gap-x-[0.5ch] text-sm">
       <span>API Status:</span>
       <div
-        className={cn("inline-block size-2 rounded-full", {
-          "bg-[#52B371]": apiStatus === "ok",
-          "bg-red-500": apiStatus === "failed",
+        className={cn('inline-block size-2 rounded-full', {
+          'bg-[#52B371]': apiStatus === 'ok',
+          'bg-red-500': apiStatus === 'failed',
         })}
       ></div>
     </div>
@@ -23,25 +24,25 @@ const ApiStatusSkeleton = () => {
     <div className="flex items-center gap-x-[0.5ch] text-sm">
       <span>API Status:</span>
 
-      <Skeleton className="size-2! rounded-full! inline-block" />
+      <Skeleton className="inline-block size-2! rounded-full!" />
     </div>
   );
 };
 
 ApiStatus.Skeleton = ApiStatusSkeleton;
 
-const getApiStatus = async (): Promise<"failed" | "ok"> => {
+const getApiStatus = async (): Promise<'failed' | 'ok'> => {
   try {
     const response = await apiClient.health.$get();
 
     if (!response.ok) {
-      return "failed";
+      return 'failed';
     }
 
     const data = await response.json();
 
-    return data.status === "ok" ? "ok" : "failed";
+    return data.status === 'ok' ? 'ok' : 'failed';
   } catch {
-    return "failed";
+    return 'failed';
   }
 };

@@ -1,12 +1,13 @@
-import { openai } from "@ai-sdk/openai";
-import type { ModelMessage } from "ai";
-import { embed, generateText } from "ai";
+import type { ModelMessage } from 'ai';
+
+import { openai } from '@ai-sdk/openai';
+import { embed, generateText } from 'ai';
 
 export class AIService {
-  static readonly model = "gpt-5.4-nano";
+  static readonly model = 'gpt-5.4-nano';
   static readonly timeout = 30_000;
 
-  static readonly embeddingModel = "text-embedding-3-small";
+  static readonly embeddingModel = 'text-embedding-3-small';
   static readonly embeddingDimensions = 1536;
   static readonly embeddingTimeout = 10_000;
 

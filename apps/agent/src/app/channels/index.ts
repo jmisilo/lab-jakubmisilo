@@ -1,17 +1,19 @@
-import { createPostgresState } from "@chat-adapter/state-pg";
-import { createTelegramAdapter } from "@chat-adapter/telegram";
-import { waitUntil } from "@vercel/functions";
-import { Chat, type Message, type Thread } from "chat";
+import type { Message, Thread } from 'chat';
 
-import { AIAgentService } from "@/app/agent";
-import { AgentContextService } from "@/app/memory/context";
-import { AgentMemoryService } from "@/app/memory";
-import { chatLogger, logger } from "@/infrastructure/logger";
+import { createPostgresState } from '@chat-adapter/state-pg';
+import { createTelegramAdapter } from '@chat-adapter/telegram';
+import { waitUntil } from '@vercel/functions';
+import { Chat } from 'chat';
+
+import { AIAgentService } from '@/app/agent';
+import { AgentMemoryService } from '@/app/memory';
+import { AgentContextService } from '@/app/memory/context';
+import { chatLogger, logger } from '@/infrastructure/logger';
 
 const TYPING_INDICATOR_REFRESH_MS = 3_000;
 
 export const bot = new Chat({
-  userName: process.env.TELEGRAM_BOT_USERNAME ?? "labjm_assistant_bot",
+  userName: process.env.TELEGRAM_BOT_USERNAME ?? 'labjm_assistant_bot',
   adapters: {
     telegram: createTelegramAdapter({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
@@ -20,13 +22,13 @@ export const bot = new Chat({
   },
   state: createPostgresState({
     url: process.env.DATABASE_URL,
-    keyPrefix: "agent",
-    logger: chatLogger.child("state-pg"),
+    keyPrefix: 'agent',
+    logger: chatLogger.child('state-pg'),
   }),
   /** @todo temp solution, provide proper solve */
   identity: ({ author }) => author.userId,
   transcripts: {
-    retention: "30d",
+    retention: '30d',
     maxPerUser: 200,
   },
   threadHistory: {
@@ -34,20 +36,20 @@ export const bot = new Chat({
     ttlMs: 1000 * 60 * 60 * 24 * 7,
   },
   logger: chatLogger,
-  concurrency: "queue",
+  concurrency: 'queue',
 });
 
 bot.onDirectMessage(async (thread, message) => {
-  await respondToMessage({ event: "direct_message", thread, message });
+  await respondToMessage({ event: 'direct_message', thread, message });
 });
 
 bot.onNewMention(async (thread, message) => {
   await thread.subscribe();
-  await respondToMessage({ event: "new_mention", thread, message });
+  await respondToMessage({ event: 'new_mention', thread, message });
 });
 
 bot.onSubscribedMessage(async (thread, message) => {
-  await respondToMessage({ event: "subscribed_message", thread, message });
+  await respondToMessage({ event: 'subscribed_message', thread, message });
 });
 
 const respondToMessage = async ({
@@ -66,7 +68,7 @@ const respondToMessage = async ({
       messageId: message.id,
       authorId: message.author.userId,
     },
-    "[TELEGRAM_AGENT]: message received",
+    '[TELEGRAM_AGENT]: message received',
   );
 
   try {
@@ -75,7 +77,7 @@ const respondToMessage = async ({
         threadId: thread.id,
         messageId: message.id,
       },
-      "[TELEGRAM_AGENT]: agent thinking started",
+      '[TELEGRAM_AGENT]: agent thinking started',
     );
 
     /** @todo temp solution, provide proper solve */
@@ -86,7 +88,7 @@ const respondToMessage = async ({
       AgentMemoryService.recordMessage({
         identityId,
         threadId: thread.id,
-        role: "user",
+        role: 'user',
         content: message.text,
         sourceMessageId: message.id,
       }),
@@ -109,7 +111,7 @@ const respondToMessage = async ({
         messageId: message.id,
         contextMessageCount: contextMessages.length,
       },
-      "[TELEGRAM_AGENT]: context prepared",
+      '[TELEGRAM_AGENT]: context prepared',
     );
 
     const result = await withTypingIndicator(thread, () =>
@@ -122,7 +124,7 @@ const respondToMessage = async ({
         messageId: message.id,
         text: result.text,
       },
-      "[TELEGRAM_AGENT]: model output generated",
+      '[TELEGRAM_AGENT]: model output generated',
     );
 
     await thread.post({ markdown: result.text });
@@ -130,13 +132,13 @@ const respondToMessage = async ({
     await Promise.all([
       bot.transcripts.append(
         thread,
-        { role: "assistant", text: result.text },
+        { role: 'assistant', text: result.text },
         { userKey: identityId },
       ),
       AgentMemoryService.recordMessage({
         identityId,
         threadId: thread.id,
-        role: "assistant",
+        role: 'assistant',
         content: result.text,
       }),
     ]);
@@ -146,7 +148,7 @@ const respondToMessage = async ({
         threadId: thread.id,
         sourceMessageId: message.id,
       },
-      "[TELEGRAM_AGENT]: message sent",
+      '[TELEGRAM_AGENT]: message sent',
     );
 
     waitUntil(
@@ -162,21 +164,18 @@ const respondToMessage = async ({
         sourceMessageId: message.id,
         error,
       },
-      "[TELEGRAM_AGENT]: message failed",
+      '[TELEGRAM_AGENT]: message failed',
     );
 
     throw error;
   }
 };
 
-const withTypingIndicator = async <T>(
-  thread: Thread,
-  operation: () => Promise<T>,
-): Promise<T> => {
-  startTypingWithTimeout(thread, "typing_indicator_initial_timeout");
+const withTypingIndicator = async <T>(thread: Thread, operation: () => Promise<T>): Promise<T> => {
+  startTypingWithTimeout(thread, 'typing_indicator_initial_timeout');
 
   const interval = setInterval(() => {
-    startTypingWithTimeout(thread, "typing_indicator_refresh_timeout");
+    startTypingWithTimeout(thread, 'typing_indicator_refresh_timeout');
   }, TYPING_INDICATOR_REFRESH_MS);
 
   try {
@@ -198,7 +197,7 @@ const startTypingWithTimeout = (thread: Thread, timeoutEvent: string): void => {
         threadId: thread.id,
         error,
       },
-      "[TELEGRAM_AGENT]: typing indicator failed",
+      '[TELEGRAM_AGENT]: typing indicator failed',
     );
   });
 };

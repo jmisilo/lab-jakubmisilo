@@ -1,16 +1,15 @@
-"use client";
+'use client';
 
-import type { RefObject } from "react";
-import { useEffect } from "react";
+import type { RefObject } from 'react';
 
-export const useAIWidgetFocus = (
-  ref: RefObject<HTMLTextAreaElement | null>,
-) => {
+import { useEffect } from 'react';
+
+export const useAIWidgetFocus = (ref: RefObject<HTMLTextAreaElement | null>) => {
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
       ) {
         return;
       }
@@ -20,11 +19,11 @@ export const useAIWidgetFocus = (
       }
 
       if (
-        event.key === "Tab" ||
-        event.key === "Escape" ||
-        event.key === "Enter" ||
-        event.key.startsWith("Arrow") ||
-        event.key.startsWith("F")
+        event.key === 'Tab' ||
+        event.key === 'Escape' ||
+        event.key === 'Enter' ||
+        event.key.startsWith('Arrow') ||
+        event.key.startsWith('F')
       ) {
         return;
       }
@@ -34,10 +33,10 @@ export const useAIWidgetFocus = (
       }
     };
 
-    window.addEventListener("keydown", handleGlobalKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown);
 
     return () => {
-      window.removeEventListener("keydown", handleGlobalKeyDown);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, [ref]);
 };

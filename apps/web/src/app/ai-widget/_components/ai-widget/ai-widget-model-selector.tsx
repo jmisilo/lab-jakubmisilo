@@ -1,10 +1,11 @@
-"use client";
+'use client';
 
-import { motion, AnimatePresence, MotionConfig } from "motion/react";
-import type { FC } from "react";
-import useMeasure from "react-use-measure";
+import type { FC } from 'react';
 
-import type { ModelChoice } from "./types";
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
+import useMeasure from 'react-use-measure';
+
+import type { ModelChoice } from './types';
 
 type AIWidgetModelSelectorProps = {
   onSelectNextModel: () => void;
@@ -31,22 +32,17 @@ export const AIWidgetModelSelector: FC<AIWidgetModelSelectorProps> = ({
             : undefined
         }
         className="overflow-hidden"
-        transition={{ duration: 0.25, ease: "easeInOut" }}
+        transition={{ duration: 0.25, ease: 'easeInOut' }}
       >
-        <div
-          ref={modelIndicatorContentRef}
-          className="flex w-max items-center gap-x-1.5"
-        >
-          <MotionConfig
-            transition={{ duration: 0.15, type: "spring", bounce: 0 }}
-          >
+        <div ref={modelIndicatorContentRef} className="flex w-max items-center gap-x-1.5">
+          <MotionConfig transition={{ duration: 0.15, type: 'spring', bounce: 0 }}>
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
                 key={`${selectedModel.id}-icon`}
                 className="inline-flex shrink-0"
-                exit={{ opacity: 0, scale: 0.35, filter: "blur(6px)" }}
-                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                initial={{ opacity: 0.3, scale: 0.35, filter: "blur(6px)" }}
+                exit={{ opacity: 0, scale: 0.35, filter: 'blur(6px)' }}
+                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                initial={{ opacity: 0.3, scale: 0.35, filter: 'blur(6px)' }}
               >
                 <selectedModel.Icon />
               </motion.span>
@@ -56,9 +52,9 @@ export const AIWidgetModelSelector: FC<AIWidgetModelSelectorProps> = ({
               <motion.span
                 key={`${selectedModel.id}-label`}
                 className="text-xs leading-4 whitespace-nowrap text-black"
-                exit={{ opacity: 0, scale: 0.95, filter: "blur(6px)" }}
-                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                initial={{ opacity: 0.3, scale: 0.95, filter: "blur(6px)" }}
+                exit={{ opacity: 0, scale: 0.95, filter: 'blur(6px)' }}
+                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                initial={{ opacity: 0.3, scale: 0.95, filter: 'blur(6px)' }}
               >
                 {selectedModel.label}
               </motion.span>

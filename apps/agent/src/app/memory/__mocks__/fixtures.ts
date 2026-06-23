@@ -1,4 +1,4 @@
-const now = new Date("2026-01-01T00:00:00.000Z");
+const now = new Date('2026-01-01T00:00:00.000Z');
 
 export const createMessage = ({
   id,
@@ -7,13 +7,13 @@ export const createMessage = ({
   createdAt = now,
 }: {
   id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   createdAt?: Date;
 }) => ({
   id,
-  identityId: "identity-1",
-  threadId: "thread-1",
+  identityId: 'identity-1',
+  threadId: 'thread-1',
   role,
   content,
   sourceMessageId: null,
@@ -21,16 +21,10 @@ export const createMessage = ({
   createdAt,
 });
 
-export const createMemoryChunk = ({
+export const createMemoryChunk = ({ id, summary }: { id: string; summary: string }) => ({
   id,
-  summary,
-}: {
-  id: string;
-  summary: string;
-}) => ({
-  id,
-  identityId: "identity-1",
-  threadId: "thread-1",
+  identityId: 'identity-1',
+  threadId: 'thread-1',
   summary,
   metadata: {},
   sourceMessageIds: [],
@@ -40,7 +34,7 @@ export const createMemoryChunk = ({
 export const createNotedMemory = ({
   id,
   content,
-  kind = "note",
+  kind = 'note',
   importance = 1,
 }: {
   id: string;
@@ -49,7 +43,7 @@ export const createNotedMemory = ({
   importance?: number;
 }) => ({
   id,
-  identityId: "identity-1",
+  identityId: 'identity-1',
   kind,
   content,
   metadata: {},

@@ -1,35 +1,32 @@
-"use client";
+'use client';
 
-import { useChat } from "@ai-sdk/react";
-import { apiUrl } from "@labjm/utilities/url-composer";
-import { DefaultChatTransport } from "ai";
-import { motion } from "motion/react";
-import type { SubmitEvent } from "react";
-import { useCallback, useRef, useState } from "react";
+import type { SubmitEvent } from 'react';
 
-import { AIWidgetForm } from "./ai-widget-form";
-import { AIWidgetMessageList } from "./ai-widget-message-list";
-import {
-  MODEL_CHOICES,
-  THINKING_INTENSITIES,
-  WIDGET_TRANSITION,
-} from "./constants";
-import type { AIWidgetMessage } from "./types";
-import { useAIWidgetFocus } from "./use-ai-widget-focus";
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { motion } from 'motion/react';
+import { useCallback, useRef, useState } from 'react';
+
+import { apiUrl } from '@labjm/utilities/url-composer';
+
+import type { AIWidgetMessage } from './types';
+import { AIWidgetForm } from './ai-widget-form';
+import { AIWidgetMessageList } from './ai-widget-message-list';
+import { MODEL_CHOICES, THINKING_INTENSITIES, WIDGET_TRANSITION } from './constants';
+import { useAIWidgetFocus } from './use-ai-widget-focus';
 
 export const AIWidget = () => {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
   const [thinkingIntensityIndex, setThinkingIntensityIndex] = useState(1);
 
   const selectedModel = MODEL_CHOICES[selectedModelIndex] ?? MODEL_CHOICES[0];
-  const thinkingIntensity =
-    THINKING_INTENSITIES[thinkingIntensityIndex] ?? THINKING_INTENSITIES[1];
+  const thinkingIntensity = THINKING_INTENSITIES[thinkingIntensityIndex] ?? THINKING_INTENSITIES[1];
 
   const { messages, sendMessage, status } = useChat<AIWidgetMessage>({
     transport: new DefaultChatTransport({
-      api: apiUrl.compose({ pathSegments: ["/ai-widget"] }),
+      api: apiUrl.compose({ pathSegments: ['/ai-widget'] }),
     }),
   });
 
@@ -38,18 +35,15 @@ export const AIWidget = () => {
 
   useAIWidgetFocus(textareaRef);
 
-  const disabled = status === "streaming" || status === "submitted";
-  const shouldExpandForm =
-    messages.length > 0 || status === "submitted" || status === "streaming";
+  const disabled = status === 'streaming' || status === 'submitted';
+  const shouldExpandForm = messages.length > 0 || status === 'submitted' || status === 'streaming';
 
   const onSelectNextModel = useCallback(() => {
     setSelectedModelIndex((index) => (index + 1) % MODEL_CHOICES.length);
   }, []);
 
   const onSelectNextThinkingIntensity = useCallback(() => {
-    setThinkingIntensityIndex(
-      (index) => (index + 1) % THINKING_INTENSITIES.length,
-    );
+    setThinkingIntensityIndex((index) => (index + 1) % THINKING_INTENSITIES.length);
   }, []);
 
   const onSubmit = useCallback(
@@ -69,7 +63,7 @@ export const AIWidget = () => {
           },
         },
       );
-      setInput("");
+      setInput('');
 
       textareaRef.current?.focus();
     },

@@ -1,12 +1,13 @@
-"use client";
+'use client';
 
-import type { FC } from "react";
-import { Streamdown } from "streamdown";
+import type { FC } from 'react';
 
-import { LoadingText } from "../loading-text";
-import { MatchDetailWorkflow } from "./match-detail-workflow";
-import { AIWidgetReasoning } from "./ai-widget-reasoning";
-import type { AIWidgetMessage } from "./types";
+import { Streamdown } from 'streamdown';
+
+import type { AIWidgetMessage } from './types';
+import { LoadingText } from '../loading-text';
+import { AIWidgetReasoning } from './ai-widget-reasoning';
+import { MatchDetailWorkflow } from './match-detail-workflow';
 
 type AIWidgetAssistantMessageProps = {
   message: AIWidgetMessage;
@@ -24,30 +25,21 @@ export const AIWidgetAssistantMessage: FC<AIWidgetAssistantMessageProps> = ({
       ) : (
         <>
           {message.parts.map((part, index) => {
-            if (part.type === "text") {
-              return (
-                <Streamdown key={`${message.id}-${index}`}>
-                  {part.text}
-                </Streamdown>
-              );
+            if (part.type === 'text') {
+              return <Streamdown key={`${message.id}-${index}`}>{part.text}</Streamdown>;
             }
 
-            if (part.type === "reasoning") {
+            if (part.type === 'reasoning') {
               return (
                 <AIWidgetReasoning
                   key={`${message.id}-${index}`}
-                  isStreaming={part.state === "streaming"}
+                  isStreaming={part.state === 'streaming'}
                 />
               );
             }
 
-            if (part.type === "tool-retrieve-match-detail") {
-              return (
-                <MatchDetailWorkflow
-                  key={`${message.id}-${index}`}
-                  part={part}
-                />
-              );
+            if (part.type === 'tool-retrieve-match-detail') {
+              return <MatchDetailWorkflow key={`${message.id}-${index}`} part={part} />;
             }
 
             return null;

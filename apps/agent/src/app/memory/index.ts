@@ -1,15 +1,15 @@
-import dedent from "dedent";
+import type { MemoryMessageRole } from '@/app/memory/types';
 
-import { AIService } from "@/app/ai";
-import { AgentContextService } from "@/app/memory/context";
-import type { MemoryMessageRole } from "@/app/memory/types";
-import { AgentMemoryDbService } from "@/infrastructure/db/services/agent-memory";
-import { logger } from "@/infrastructure/logger";
+import dedent from 'dedent';
+
+import { AIService } from '@/app/ai';
+import { AgentContextService } from '@/app/memory/context';
+import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory';
+import { logger } from '@/infrastructure/logger';
 
 export class AgentMemoryService {
   static readonly compressionSourceMessageLimit = 200;
-  static buildContext =
-    AgentContextService.buildContext.bind(AgentContextService);
+  static buildContext = AgentContextService.buildContext.bind(AgentContextService);
 
   static async recordMessage({
     identityId,
@@ -36,7 +36,7 @@ export class AgentMemoryService {
   static async recordNotedInfo({
     identityId,
     content,
-    kind = "note",
+    kind = 'note',
     importance = 1,
     metadata = {},
   }: {
@@ -69,27 +69,21 @@ export class AgentMemoryService {
     threadId: string;
   }) {
     try {
-      const uncompressedMessages =
-        await AgentMemoryDbService.getUncompressedMessages({
-          identityId,
-          threadId,
-          limit: this.compressionSourceMessageLimit,
-        });
-      const totalUncompressedTokens =
-        AgentContextService.countMessagesTokens(uncompressedMessages);
-      const compressedChunks = await AgentMemoryDbService.getRecentMemoryChunks(
-        {
-          identityId,
-          threadId,
-          limit: AgentContextService.contextCompressedChunkFetchLimit,
-        },
-      );
-      const compressedTokensUsed =
-        AgentContextService.countCompressedTokens(compressedChunks);
-      const compressionTriggerTokenLimit =
-        AgentContextService.getCompressionTriggerTokenLimit({
-          compressedTokensUsed,
-        });
+      const uncompressedMessages = await AgentMemoryDbService.getUncompressedMessages({
+        identityId,
+        threadId,
+        limit: this.compressionSourceMessageLimit,
+      });
+      const totalUncompressedTokens = AgentContextService.countMessagesTokens(uncompressedMessages);
+      const compressedChunks = await AgentMemoryDbService.getRecentMemoryChunks({
+        identityId,
+        threadId,
+        limit: AgentContextService.contextCompressedChunkFetchLimit,
+      });
+      const compressedTokensUsed = AgentContextService.countCompressedTokens(compressedChunks);
+      const compressionTriggerTokenLimit = AgentContextService.getCompressionTriggerTokenLimit({
+        compressedTokensUsed,
+      });
 
       if (totalUncompressedTokens <= compressionTriggerTokenLimit) {
         logger.debug(
@@ -99,7 +93,7 @@ export class AgentMemoryService {
             totalUncompressedTokens,
             compressionTriggerTokenLimit,
           },
-          "[AGENT_MEMORY]: short-term memory under compression budget",
+          '[AGENT_MEMORY]: short-term memory under compression budget',
         );
 
         return;
@@ -119,16 +113,16 @@ export class AgentMemoryService {
           model: AIService.model,
           messageCount: messages.length,
         },
-        "[AGENT_MEMORY]: generating compressed memory summary",
+        '[AGENT_MEMORY]: generating compressed memory summary',
       );
 
       const transcript = messages
         .map((message) => `${message.role}: ${message.content}`)
-        .join("\n");
+        .join('\n');
       const summary = await AIService.generate({
         messages: [
           {
-            role: "user",
+            role: 'user',
             content: dedent`
               Compress this conversation window into a concise durable memory.
 
@@ -153,14 +147,12 @@ export class AgentMemoryService {
         summary,
         sourceMessageIds: messages.map((message) => message.id),
         metadata: {
-          strategy: "rolling_summary",
+          strategy: 'rolling_summary',
           sourceCount: messages.length,
         },
       });
 
-      await AgentMemoryDbService.markMessagesCompressed(
-        messages.map((message) => message.id),
-      );
+      await AgentMemoryDbService.markMessagesCompressed(messages.map((message) => message.id));
 
       logger.info(
         {
@@ -170,7 +162,7 @@ export class AgentMemoryService {
           totalUncompressedTokens,
           compressionTriggerTokenLimit,
         },
-        "[AGENT_MEMORY]: short-term memory compressed",
+        '[AGENT_MEMORY]: short-term memory compressed',
       );
     } catch (error) {
       logger.error(
@@ -179,7 +171,7 @@ export class AgentMemoryService {
           threadId,
           error,
         },
-        "[AGENT_MEMORY]: short-term memory compression failed",
+        '[AGENT_MEMORY]: short-term memory compression failed',
       );
     }
   }

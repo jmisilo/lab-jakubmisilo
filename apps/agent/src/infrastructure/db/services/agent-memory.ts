@@ -1,33 +1,14 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  sql,
-} from "drizzle-orm";
-import { cosineDistance } from "drizzle-orm/sql/functions/vector";
+import type { NewAgentMemoryChunk, NewAgentMessage, NewAgentNotedMemory } from '@/types';
 
-import {
-  agentMemoryChunks,
-  agentMessages,
-  agentNotedMemories,
-} from "@/infrastructure/db/schema";
-import { DbService } from "@/infrastructure/db/services";
-import type {
-  NewAgentMemoryChunk,
-  NewAgentMessage,
-  NewAgentNotedMemory,
-} from "@/types";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { cosineDistance } from 'drizzle-orm/sql/functions/vector';
+
+import { agentMemoryChunks, agentMessages, agentNotedMemories } from '@/infrastructure/db/schema';
+import { DbService } from '@/infrastructure/db/services';
 
 export class AgentMemoryDbService extends DbService {
   static async createMessage(input: NewAgentMessage) {
-    const [message] = await this.client
-      .insert(agentMessages)
-      .values(input)
-      .returning();
+    const [message] = await this.client.insert(agentMessages).values(input).returning();
 
     return message ?? null;
   }
@@ -114,10 +95,7 @@ export class AgentMemoryDbService extends DbService {
   }
 
   static async createMemoryChunk(input: NewAgentMemoryChunk) {
-    const [chunk] = await this.client
-      .insert(agentMemoryChunks)
-      .values(input)
-      .returning();
+    const [chunk] = await this.client.insert(agentMemoryChunks).values(input).returning();
 
     return chunk ?? null;
   }
@@ -135,10 +113,7 @@ export class AgentMemoryDbService extends DbService {
       .select()
       .from(agentMemoryChunks)
       .where(
-        and(
-          eq(agentMemoryChunks.identityId, identityId),
-          eq(agentMemoryChunks.threadId, threadId),
-        ),
+        and(eq(agentMemoryChunks.identityId, identityId), eq(agentMemoryChunks.threadId, threadId)),
       )
       .orderBy(desc(agentMemoryChunks.createdAt))
       .limit(limit);
@@ -148,29 +123,17 @@ export class AgentMemoryDbService extends DbService {
   }
 
   static async createNotedMemory(input: NewAgentNotedMemory) {
-    const [memory] = await this.client
-      .insert(agentNotedMemories)
-      .values(input)
-      .returning();
+    const [memory] = await this.client.insert(agentNotedMemories).values(input).returning();
 
     return memory ?? null;
   }
 
-  static async getNotedMemories({
-    identityId,
-    limit,
-  }: {
-    identityId: string;
-    limit: number;
-  }) {
+  static async getNotedMemories({ identityId, limit }: { identityId: string; limit: number }) {
     return this.client
       .select()
       .from(agentNotedMemories)
       .where(eq(agentNotedMemories.identityId, identityId))
-      .orderBy(
-        desc(agentNotedMemories.updatedAt),
-        desc(agentNotedMemories.importance),
-      )
+      .orderBy(desc(agentNotedMemories.updatedAt), desc(agentNotedMemories.importance))
       .limit(limit);
   }
 

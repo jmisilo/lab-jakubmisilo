@@ -1,17 +1,19 @@
-import { tool, type Tool } from "ai";
-import { z } from "zod/v4";
+import type { Tool } from 'ai';
 
-import { AgentMemoryService } from "@/app/memory";
-import { logger } from "@/infrastructure/logger";
-import { openai } from "@ai-sdk/openai";
+import { openai } from '@ai-sdk/openai';
+import { tool } from 'ai';
+import { z } from 'zod/v4';
+
+import { AgentMemoryService } from '@/app/memory';
+import { logger } from '@/infrastructure/logger';
 
 export const CreateNotedMemoryToolInputSchema = z.object({
-  content: z.string().describe("The concise durable memory to save."),
+  content: z.string().describe('The concise durable memory to save.'),
   kind: z
     .string()
     .optional()
     .describe(
-      "A short category for the memory, for example preference, fact, task, project, or note.",
+      'A short category for the memory, for example preference, fact, task, project, or note.',
     ),
   importance: z
     .number()
@@ -19,7 +21,7 @@ export const CreateNotedMemoryToolInputSchema = z.object({
     .min(1)
     .max(5)
     .optional()
-    .describe("Importance from 1 to 5. Use 1 by default."),
+    .describe('Importance from 1 to 5. Use 1 by default.'),
 });
 
 export const CreateNotedMemoryToolOutputSchema = z.object({
@@ -33,7 +35,7 @@ export const CreateNotedMemoryToolContextSchema = z.object({
 
 export type AgentTools = {
   webSearch: ReturnType<typeof openai.tools.webSearch>;
-  "create-noted-memory": Tool<
+  'create-noted-memory': Tool<
     z.infer<typeof CreateNotedMemoryToolInputSchema>,
     z.infer<typeof CreateNotedMemoryToolOutputSchema>,
     z.infer<typeof CreateNotedMemoryToolContextSchema>
@@ -43,10 +45,10 @@ export type AgentTools = {
 /** @todo defer loading tools, upon having multiple choices */
 export const agentTools: AgentTools = {
   webSearch: openai.tools.webSearch({
-    searchContextSize: "medium",
+    searchContextSize: 'medium',
   }),
 
-  "create-noted-memory": tool({
+  'create-noted-memory': tool({
     description:
       "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, and important project context. Do not use for transient conversation details. Examples: 'I really like X', 'I prefer concise implementation-focused updates', 'My birthday is on X', 'My favorite color is X', 'I am allergic to X', 'The project is called X and the deadline is Y'.",
     inputSchema: CreateNotedMemoryToolInputSchema,
@@ -55,23 +57,20 @@ export const agentTools: AgentTools = {
     inputExamples: [
       {
         input: {
-          content: "The user prefers concise implementation-focused updates.",
-          kind: "preference",
+          content: 'The user prefers concise implementation-focused updates.',
+          kind: 'preference',
           importance: 3,
         },
       },
     ],
-    execute: async (
-      { content, kind = "note", importance = 1 },
-      { context },
-    ) => {
+    execute: async ({ content, kind = 'note', importance = 1 }, { context }) => {
       const memory = await AgentMemoryService.recordNotedInfo({
         identityId: context.identityId,
         content,
         kind,
         importance,
         metadata: {
-          source: "agent_tool",
+          source: 'agent_tool',
         },
       });
 
@@ -82,7 +81,7 @@ export const agentTools: AgentTools = {
           kind,
           importance,
         },
-        "[AGENT_MEMORY]: noted memory created",
+        '[AGENT_MEMORY]: noted memory created',
       );
 
       return {
