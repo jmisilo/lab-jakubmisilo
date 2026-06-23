@@ -4,6 +4,7 @@
 
 ## Open Source projects
 
+- [Custom AI Agent](https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/agent)
 - [Extendable AI Widget](https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/web/src/app/ai-widget)
 - [CLIP x GPT Captioning](https://github.com/jmisilo/clip-gpt-captioning)
 
@@ -26,7 +27,7 @@ pnpm add -g vercel
 
 ## Environment
 
-Create local API env file:
+Create local API env files:
 
 ```sh
 cp apps/api/.env.local.example apps/api/.env.local
@@ -44,6 +45,7 @@ This starts:
 
 - web: http://localhost:3000
 - api: http://localhost:8080
+- agent: TUI
 
 Health check:
 
