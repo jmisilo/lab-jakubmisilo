@@ -5,8 +5,11 @@ import pino from "pino";
 import type { Logger as ChatLogger } from "chat";
 
 const logFile = process.env.AGENT_LOG_FILE;
+const defaultLogLevel =
+  process.env.NODE_ENV === "production" ? "debug" : "info";
 const loggerOptions = {
-  level: process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? "info",
+  level:
+    process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? defaultLogLevel,
 };
 
 if (logFile) {

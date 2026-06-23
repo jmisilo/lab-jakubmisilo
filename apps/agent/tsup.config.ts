@@ -6,6 +6,7 @@ export default defineConfig({
   dts: false,
   entry: ["src/index.ts", "src/app/tui/index.ts"],
   format: ["esm"],
+  noExternal: [/^@labjm\//],
   outDir: "dist",
   platform: "node",
   target: "node24",

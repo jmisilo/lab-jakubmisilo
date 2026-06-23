@@ -15,16 +15,16 @@
     "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
     },
     "resolveJsonModule": true,
-    "rootDir": "./src",
+    "rootDir": ".",
     "strict": true,
-    "types": ["node"],
+    "types": ["node", "jest"],
     "verbatimModuleSyntax": false,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
   },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+  "include": ["src", "jest.setup.ts"],
+  "exclude": ["node_modules"],
 }

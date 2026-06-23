@@ -9,8 +9,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "dev:server": "vercel dev --listen 2000 --yes",
-    "dev": "mkdir -p logs && AGENT_LOG_FILE=logs/agent.log tsup --watch --onSuccess \"node dist/app/tui/index.js\"",
+    "dev": "mkdir -p logs && LOG_LEVEL=info AGENT_LOG_FILE=logs/agent.log tsup --watch --onSuccess \"node dist/app/tui/index.js\"",
     "start": "node dist/index.js",
+    "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -35,9 +36,12 @@
     "ai": "7.0.0-beta.182"
   },
   "devDependencies": {
+    "@labjm/jest-config": "workspace:*",
+    "@types/jest": "^30.0.0",
     "@types/node": "24.x",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
+    "jest": "30.4.2",
     "tsup": "^8.5.1",
     "typescript": "6.0.3"
   },
