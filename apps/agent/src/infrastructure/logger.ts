@@ -1,15 +1,14 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import type { Logger as ChatLogger } from 'chat';
 
-import pino from "pino";
-import type { Logger as ChatLogger } from "chat";
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+import pino from 'pino';
 
 const logFile = process.env.AGENT_LOG_FILE;
-const defaultLogLevel =
-  process.env.NODE_ENV === "production" ? "debug" : "info";
+const defaultLogLevel = process.env.NODE_ENV === 'production' ? 'debug' : 'info';
 const loggerOptions = {
-  level:
-    process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? defaultLogLevel,
+  level: process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? defaultLogLevel,
 };
 
 if (logFile) {
@@ -42,4 +41,4 @@ const createChatLogger = (component: string): ChatLogger => {
   };
 };
 
-export const chatLogger = createChatLogger("chat-sdk");
+export const chatLogger = createChatLogger('chat-sdk');

@@ -1,22 +1,18 @@
-"use client";
+'use client';
 
-import { cn } from "@labjm/utilities/cn";
-import { AnimatePresence, motion } from "motion/react";
-import type {
-  Dispatch,
-  FC,
-  RefObject,
-  SetStateAction,
-  SubmitEventHandler,
-} from "react";
-import { useEffect, useState } from "react";
-import useMeasure from "react-use-measure";
+import type { Dispatch, FC, RefObject, SetStateAction, SubmitEventHandler } from 'react';
 
-import { FORM_TRANSITION } from "./constants";
-import type { ModelChoice, ThinkingIntensity } from "./types";
-import { AIWidgetSubmitButton } from "./ai-widget-submit-button";
-import { AIWidgetModelSelector } from "./ai-widget-model-selector";
-import { AIWidgetThinkingIntensitySelector } from "./ai-widget-thinking-intensity-selector";
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import useMeasure from 'react-use-measure';
+
+import { cn } from '@labjm/utilities/cn';
+
+import type { ModelChoice, ThinkingIntensity } from './types';
+import { AIWidgetModelSelector } from './ai-widget-model-selector';
+import { AIWidgetSubmitButton } from './ai-widget-submit-button';
+import { AIWidgetThinkingIntensitySelector } from './ai-widget-thinking-intensity-selector';
+import { FORM_TRANSITION } from './constants';
 
 type AIWidgetFormProps = {
   disabled: boolean;
@@ -50,8 +46,7 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
   const [isFocusedWithin, setIsFocusedWithin] = useState(false);
   const [formContentRef, formContentBounds] = useMeasure();
 
-  const isExpanded =
-    forceExpanded || isFocusedWithin || input.trim().length > 0;
+  const isExpanded = forceExpanded || isFocusedWithin || input.trim().length > 0;
 
   useEffect(() => {
     onExpandedChange?.(isExpanded);
@@ -70,7 +65,7 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
         }
       }}
       animate={{
-        height: formContentBounds.height ? formContentBounds.height : "auto",
+        height: formContentBounds.height ? formContentBounds.height : 'auto',
       }}
       className="relative overflow-hidden rounded-3xl border border-[#f2f2f2] bg-white"
       initial={false}
@@ -78,8 +73,8 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
     >
       <motion.div
         ref={formContentRef}
-        className={cn("flex flex-col px-4", {
-          "pr-2": !isExpanded,
+        className={cn('flex flex-col px-4', {
+          'pr-2': !isExpanded,
         })}
         transition={FORM_TRANSITION}
       >
@@ -88,12 +83,12 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
           animate={{ y: isExpanded ? 8 : 0 }}
           transition={FORM_TRANSITION}
         >
-          <div className="relative flex-1 w-full">
+          <div className="relative w-full flex-1">
             {/** @note native placeholder might get buggy on smaller devices, as it might occupy more than one line, causing height flickering on input expand */}
             {input.length === 0 && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 z-0 truncate  text-[#959595] h-full"
+                className="pointer-events-none absolute inset-x-0 top-0 z-0 h-full truncate text-[#959595]"
               >
                 Ask about this match - tactics, players, key moments...
               </span>
@@ -105,16 +100,16 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
               name="input"
               id="input"
               className={cn(
-                "relative z-10 w-full min-w-0 flex-1 h-auto resize-none caret-black focus-visible:ring-0 outline-none ring-0 disabled:invisible",
-                input.length === 0 ? "text-transparent" : "text-black",
+                'relative z-10 h-auto w-full min-w-0 flex-1 resize-none caret-black ring-0 outline-none focus-visible:ring-0 disabled:invisible',
+                input.length === 0 ? 'text-transparent' : 'text-black',
                 isExpanded
-                  ? "field-sizing-content max-h-[3lh]"
-                  : "min-h-5 max-h-5 overflow-hidden leading-5",
+                  ? 'field-sizing-content max-h-[3lh]'
+                  : 'max-h-5 min-h-5 overflow-hidden leading-5',
               )}
               value={input}
               onChange={(event) => onInputChange(event.currentTarget.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !disabled) {
+                if (event.key === 'Enter' && !event.shiftKey && !disabled) {
                   event.preventDefault();
 
                   formRef.current?.requestSubmit();
@@ -132,15 +127,15 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
             {isExpanded && (
               <motion.div
                 key="expanded-selectors"
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                 className="flex items-center gap-x-1.5 pt-6 pb-4"
                 exit={{
                   y: 6,
                   opacity: 0,
-                  filter: "blur(6px)",
-                  transition: { duration: 0.21, ease: "easeIn" },
+                  filter: 'blur(6px)',
+                  transition: { duration: 0.21, ease: 'easeIn' },
                 }}
-                initial={{ opacity: 0, y: 6, filter: "blur(6px)" }}
+                initial={{ opacity: 0, y: 6, filter: 'blur(6px)' }}
                 transition={{
                   duration: 0.36,
                   delay: 0.15,
@@ -163,9 +158,9 @@ export const AIWidgetForm: FC<AIWidgetFormProps> = ({
 
         <div
           className={cn(
-            "absolute right-2 bottom-1.5 transition-transform ease-in-out duration-350",
+            'absolute right-2 bottom-1.5 transition-transform duration-350 ease-in-out',
             {
-              "-translate-y-2.25 -translate-x-2": isExpanded,
+              '-translate-x-2 -translate-y-2.25': isExpanded,
             },
           )}
         >

@@ -1,16 +1,15 @@
-"use client";
+'use client';
 
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import type { FC } from "react";
-import { LuArrowUp, LuLoaderCircle } from "react-icons/lu";
+import type { FC } from 'react';
+
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
+import { LuArrowUp, LuLoaderCircle } from 'react-icons/lu';
 
 type AIWidgetSubmitButtonProps = {
   disabled: boolean;
 };
 
-export const AIWidgetSubmitButton: FC<AIWidgetSubmitButtonProps> = ({
-  disabled,
-}) => {
+export const AIWidgetSubmitButton: FC<AIWidgetSubmitButtonProps> = ({ disabled }) => {
   return (
     <motion.div
       layout="position"
@@ -30,7 +29,7 @@ export const AIWidgetSubmitButton: FC<AIWidgetSubmitButtonProps> = ({
           <MotionConfig
             transition={{
               duration: 0.22,
-              type: "spring",
+              type: 'spring',
               bounce: 0,
             }}
           >
@@ -38,20 +37,20 @@ export const AIWidgetSubmitButton: FC<AIWidgetSubmitButtonProps> = ({
               {disabled ? (
                 <motion.span
                   key="loading"
-                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
                   className="inline-flex"
-                  exit={{ opacity: 0, scale: 0.35, filter: "blur(6px)" }}
-                  initial={{ opacity: 0.3, scale: 0.35, filter: "blur(6px)" }}
+                  exit={{ opacity: 0, scale: 0.35, filter: 'blur(6px)' }}
+                  initial={{ opacity: 0.3, scale: 0.35, filter: 'blur(6px)' }}
                 >
                   <LuLoaderCircle className="size-4 animate-spin text-white" />
                 </motion.span>
               ) : (
                 <motion.span
                   key="submit"
-                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
                   className="inline-flex"
-                  exit={{ opacity: 0, scale: 0.35, filter: "blur(6px)" }}
-                  initial={{ opacity: 0.3, scale: 0.35, filter: "blur(6px)" }}
+                  exit={{ opacity: 0, scale: 0.35, filter: 'blur(6px)' }}
+                  initial={{ opacity: 0.3, scale: 0.35, filter: 'blur(6px)' }}
                 >
                   <LuArrowUp className="size-4 text-white" />
                 </motion.span>

@@ -1,16 +1,15 @@
-import type { Config } from "jest";
+import type { Config } from 'jest';
 
-const nextJest = require("next/jest.js")
-  .default as typeof import("next/jest.js").default;
+const nextJest = require('next/jest.js').default as typeof import('next/jest.js').default;
 
 const createJestConfig = nextJest({
-  dir: "./",
+  dir: './',
 });
 
 const config: Config = {
   clearMocks: true,
-  coverageProvider: "v8",
-  testEnvironment: "jsdom",
+  coverageProvider: 'v8',
+  testEnvironment: 'jsdom',
 };
 
 export = createJestConfig(config);

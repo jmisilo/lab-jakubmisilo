@@ -1,32 +1,28 @@
-"use client";
+'use client';
 
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import type { FC } from "react";
-import { LuCheck, LuLoaderCircle } from "react-icons/lu";
+import type { FC } from 'react';
 
-import { LoadingText } from "../loading-text";
-import type { AIWidgetMessage } from "./types";
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
+import { LuCheck, LuLoaderCircle } from 'react-icons/lu';
+
+import type { AIWidgetMessage } from './types';
+import { LoadingText } from '../loading-text';
 
 type MatchDetailWorkflowProps = {
-  part: Extract<
-    AIWidgetMessage["parts"][number],
-    { type: "tool-retrieve-match-detail" }
-  >;
+  part: Extract<AIWidgetMessage['parts'][number], { type: 'tool-retrieve-match-detail' }>;
 };
 
 const MATCH_DETAIL_WORKFLOW_STEP_LABELS: Record<
-  NonNullable<
-    MatchDetailWorkflowProps["part"]["output"]
-  >["steps"][number]["step"],
+  NonNullable<MatchDetailWorkflowProps['part']['output']>['steps'][number]['step'],
   string
 > = {
-  "analyze-query": "Analyzing the query",
-  "locate-event": "Locating the event",
-  "retrieve-action-chain": "Retrieving action chain",
+  'analyze-query': 'Analyzing the query',
+  'locate-event': 'Locating the event',
+  'retrieve-action-chain': 'Retrieving action chain',
 };
 
 export const MatchDetailWorkflow: FC<MatchDetailWorkflowProps> = ({ part }) => {
-  if (part.state !== "output-available") {
+  if (part.state !== 'output-available') {
     return <LoadingText>Loading</LoadingText>;
   }
 
@@ -49,22 +45,22 @@ export const MatchDetailWorkflow: FC<MatchDetailWorkflowProps> = ({ part }) => {
               <MotionConfig
                 transition={{
                   duration: 0.22,
-                  type: "spring",
+                  type: 'spring',
                   bounce: 0,
                 }}
               >
                 <AnimatePresence mode="popLayout" initial={false}>
-                  {status === "done" ? (
+                  {status === 'done' ? (
                     <motion.span
                       key="done"
                       className="inline-flex"
                       initial={{
                         opacity: 0.3,
                         scale: 0.35,
-                        filter: "blur(6px)",
+                        filter: 'blur(6px)',
                       }}
-                      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, scale: 0.35, filter: "blur(6px)" }}
+                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, scale: 0.35, filter: 'blur(6px)' }}
                     >
                       <LuCheck className="size-4 text-[#52B371]" />
                     </motion.span>
@@ -75,10 +71,10 @@ export const MatchDetailWorkflow: FC<MatchDetailWorkflowProps> = ({ part }) => {
                       initial={{
                         opacity: 0.3,
                         scale: 0.35,
-                        filter: "blur(6px)",
+                        filter: 'blur(6px)',
                       }}
-                      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, scale: 0.35, filter: "blur(6px)" }}
+                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, scale: 0.35, filter: 'blur(6px)' }}
                     >
                       <LuLoaderCircle className="size-4 animate-spin" />
                     </motion.span>

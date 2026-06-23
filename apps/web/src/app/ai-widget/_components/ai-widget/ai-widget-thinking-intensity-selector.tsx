@@ -1,21 +1,23 @@
-"use client";
+'use client';
 
-import { cn } from "@labjm/utilities/cn";
-import type { FC } from "react";
+import type { FC } from 'react';
 
-import { THINKING_INTENSITIES } from "./constants";
-import type { ThinkingIntensity } from "./types";
+import { cn } from '@labjm/utilities/cn';
+
+import type { ThinkingIntensity } from './types';
+import { THINKING_INTENSITIES } from './constants';
 
 type AIWidgetThinkingIntensitySelectorProps = {
   onSelectNextThinkingIntensity: () => void;
   thinkingIntensity: ThinkingIntensity;
 };
 
-export const AIWidgetThinkingIntensitySelector: FC<
-  AIWidgetThinkingIntensitySelectorProps
-> = ({ onSelectNextThinkingIntensity, thinkingIntensity }) => {
+export const AIWidgetThinkingIntensitySelector: FC<AIWidgetThinkingIntensitySelectorProps> = ({
+  onSelectNextThinkingIntensity,
+  thinkingIntensity,
+}) => {
   const activeBars = THINKING_INTENSITIES.indexOf(thinkingIntensity) + 1;
-  const barHeights = ["h-1", "h-2", "h-3"] as const;
+  const barHeights = ['h-1', 'h-2', 'h-3'] as const;
 
   return (
     <button
@@ -32,11 +34,9 @@ export const AIWidgetThinkingIntensitySelector: FC<
             <span
               key={bar}
               className={cn(
-                "w-1 rounded-full transition-colors duration-150 ease-out",
+                'w-1 rounded-full transition-colors duration-150 ease-out',
                 barHeights[bar - 1],
-                isActive
-                  ? "bg-[#111111] opacity-100"
-                  : "bg-[#d8d8d8] opacity-55",
+                isActive ? 'bg-[#111111] opacity-100' : 'bg-[#d8d8d8] opacity-55',
               )}
             />
           );

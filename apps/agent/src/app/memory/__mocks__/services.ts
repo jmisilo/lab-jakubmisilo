@@ -10,9 +10,9 @@ export const agentMemoryDbServiceMock = {
 };
 
 export const aiServiceMock = {
-  model: "gpt-5.4-nano",
+  model: 'gpt-5.4-nano',
   timeout: 30_000,
-  embeddingModel: "text-embedding-3-small",
+  embeddingModel: 'text-embedding-3-small',
   embeddingDimensions: 1536,
   embeddingTimeout: 10_000,
   embed: jest.fn(),

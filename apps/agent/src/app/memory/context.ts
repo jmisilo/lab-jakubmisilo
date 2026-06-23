@@ -1,15 +1,13 @@
-import Tokenizer from "ai-tokenizer";
-import * as o200kBase from "ai-tokenizer/encoding/o200k_base";
-import type { ModelMessage } from "ai";
-import dedent from "dedent";
+import type { MemoryMessageForCompression, ShortTermMemory } from '@/app/memory/types';
+import type { ModelMessage } from 'ai';
 
-import { AIService } from "@/app/ai";
-import type {
-  MemoryMessageForCompression,
-  ShortTermMemory,
-} from "@/app/memory/types";
-import { AgentMemoryDbService } from "@/infrastructure/db/services/agent-memory";
-import { logger } from "@/infrastructure/logger";
+import Tokenizer from 'ai-tokenizer';
+import * as o200kBase from 'ai-tokenizer/encoding/o200k_base';
+import dedent from 'dedent';
+
+import { AIService } from '@/app/ai';
+import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory';
+import { logger } from '@/infrastructure/logger';
 
 export class AgentContextService {
   static readonly contextSourceMessageLimit = 200;
@@ -26,9 +24,7 @@ export class AgentContextService {
   private static readonly tokenizer = new Tokenizer(o200kBase);
 
   private static get compressedMemoryTokenBudget() {
-    return Math.floor(
-      this.contextTokenLimit * this.contextCompressedMemoryRatio,
-    );
+    return Math.floor(this.contextTokenLimit * this.contextCompressedMemoryRatio);
   }
 
   private static get shortMemoryBaseTokenBudget() {
@@ -36,9 +32,7 @@ export class AgentContextService {
   }
 
   private static get enhancementMemoryTokenBudget() {
-    return Math.floor(
-      this.contextTokenLimit * this.contextEnhancementMemoryRatio,
-    );
+    return Math.floor(this.contextTokenLimit * this.contextEnhancementMemoryRatio);
   }
 
   static async buildContext({
@@ -51,30 +45,27 @@ export class AgentContextService {
     shortTermMemory: ShortTermMemory[];
   }): Promise<ModelMessage[]> {
     const currentQuery = this.getCurrentQuery(shortTermMemory);
-    const queryEmbedding = currentQuery
-      ? await AIService.embed(currentQuery)
-      : null;
+    const queryEmbedding = currentQuery ? await AIService.embed(currentQuery) : null;
 
-    const [notedMemories, semanticNotedMemories, compressedChunks] =
-      await Promise.all([
-        AgentMemoryDbService.getNotedMemories({
-          identityId,
-          limit: this.contextNotedMemoryFetchLimit,
-        }),
-        queryEmbedding
-          ? AgentMemoryDbService.searchNotedMemories({
-              identityId,
-              embedding: queryEmbedding,
-              limit: this.contextSemanticNotedMemoryLimit,
-              maxDistance: this.semanticNotedMemoryMaxCosineDistance,
-            })
-          : [],
-        AgentMemoryDbService.getRecentMemoryChunks({
-          identityId,
-          threadId,
-          limit: this.contextCompressedChunkFetchLimit,
-        }),
-      ]);
+    const [notedMemories, semanticNotedMemories, compressedChunks] = await Promise.all([
+      AgentMemoryDbService.getNotedMemories({
+        identityId,
+        limit: this.contextNotedMemoryFetchLimit,
+      }),
+      queryEmbedding
+        ? AgentMemoryDbService.searchNotedMemories({
+            identityId,
+            embedding: queryEmbedding,
+            limit: this.contextSemanticNotedMemoryLimit,
+            maxDistance: this.semanticNotedMemoryMaxCosineDistance,
+          })
+        : [],
+      AgentMemoryDbService.getRecentMemoryChunks({
+        identityId,
+        threadId,
+        limit: this.contextCompressedChunkFetchLimit,
+      }),
+    ]);
 
     const memoryContext = this.createMemoryContextMessage({
       notedMemories: this.rankNotedMemories({
@@ -85,16 +76,13 @@ export class AgentContextService {
     });
     const shortMemoryTokenBudget =
       this.shortMemoryBaseTokenBudget +
-      Math.max(
-        this.compressedMemoryTokenBudget - memoryContext.compressedTokensUsed,
-        0,
-      );
+      Math.max(this.compressedMemoryTokenBudget - memoryContext.compressedTokensUsed, 0);
 
     const context: ModelMessage[] = [];
 
     if (memoryContext.content) {
       context.push({
-        role: "user",
+        role: 'user',
         content: memoryContext.content,
       });
     }
@@ -122,19 +110,14 @@ export class AgentContextService {
         selectedCompressedChunkCount: memoryContext.compressedChunkCount,
         selectedCompressedTokens: memoryContext.compressedTokensUsed,
       },
-      "[AGENT_MEMORY]: context assembled",
+      '[AGENT_MEMORY]: context assembled',
     );
 
     return context;
   }
 
-  static countMessagesTokens(
-    messages: Array<{ role: string; content: string }>,
-  ) {
-    return messages.reduce(
-      (total, message) => total + this.countMemoryMessageTokens(message),
-      0,
-    );
+  static countMessagesTokens(messages: Array<{ role: string; content: string }>) {
+    return messages.reduce((total, message) => total + this.countMemoryMessageTokens(message), 0);
   }
 
   static countCompressedTokens(compressedChunks: MemoryChunk[]) {
@@ -161,8 +144,7 @@ export class AgentContextService {
   }) {
     return this.selectOldestMessagesWithinBudget({
       messages,
-      tokenBudget:
-        totalUncompressedTokens * this.contextShortMemoryCompressionRatio,
+      tokenBudget: totalUncompressedTokens * this.contextShortMemoryCompressionRatio,
     });
   }
 
@@ -174,22 +156,21 @@ export class AgentContextService {
     compressedChunks: MemoryChunk[];
   }) {
     const notedSelection = this.selectNotedMemoriesForContext(notedMemories);
-    const chunkSelection =
-      this.selectCompressedMemoryForContext(compressedChunks);
+    const chunkSelection = this.selectCompressedMemoryForContext(compressedChunks);
 
     const sections: string[] = [];
 
     if (notedSelection.items.length > 0) {
       sections.push(dedent`
         Noted information:
-        ${notedSelection.items.join("\n")}
+        ${notedSelection.items.join('\n')}
       `);
     }
 
     if (chunkSelection.items.length > 0) {
       sections.push(dedent`
         Compressed conversation memory:
-        ${chunkSelection.items.join("\n")}
+        ${chunkSelection.items.join('\n')}
       `);
     }
 
@@ -207,7 +188,7 @@ export class AgentContextService {
       content: dedent`
         User context assembled from durable notes and AI-compressed conversation memory. Treat this as user-provided background context. Do not mention it unless it is relevant.
 
-        ${sections.join("\n\n")}
+        ${sections.join('\n\n')}
       `,
       compressedChunkCount: chunkSelection.items.length,
       compressedTokensUsed: chunkSelection.usedTokens,
@@ -271,22 +252,16 @@ export class AgentContextService {
 
   private static selectNotedMemoriesForContext(notedMemories: NotedMemory[]) {
     return this.selectTextItems({
-      sectionTitle: "Noted information:",
-      items: notedMemories.map(
-        (memory) => `- [${memory.kind}] ${memory.content}`,
-      ),
+      sectionTitle: 'Noted information:',
+      items: notedMemories.map((memory) => `- [${memory.kind}] ${memory.content}`),
       tokenBudget: this.enhancementMemoryTokenBudget,
     });
   }
 
-  private static selectCompressedMemoryForContext(
-    compressedChunks: MemoryChunk[],
-  ) {
+  private static selectCompressedMemoryForContext(compressedChunks: MemoryChunk[]) {
     return this.selectTextItems({
-      sectionTitle: "Compressed conversation memory:",
-      items: compressedChunks.map(
-        (chunk) => `- [AI-compressed] ${chunk.summary}`,
-      ),
+      sectionTitle: 'Compressed conversation memory:',
+      items: compressedChunks.map((chunk) => `- [AI-compressed] ${chunk.summary}`),
       tokenBudget: this.compressedMemoryTokenBudget,
     });
   }
@@ -350,43 +325,33 @@ export class AgentContextService {
     );
   }
 
-  private static countMemoryMessageTokens(message: {
-    role: string;
-    content: string;
-  }) {
+  private static countMemoryMessageTokens(message: { role: string; content: string }) {
     return this.tokenizer.count(`${message.role}: ${message.content}`);
   }
 
-  private static stringifyModelMessageContent(
-    content: ModelMessage["content"],
-  ) {
-    if (typeof content === "string") {
+  private static stringifyModelMessageContent(content: ModelMessage['content']) {
+    if (typeof content === 'string') {
       return content;
     }
 
     return content
       .map((part) => {
-        if (part.type === "text") {
+        if (part.type === 'text') {
           return part.text;
         }
 
         return `[${part.type}]`;
       })
-      .join("\n");
+      .join('\n');
   }
 
   private static getCurrentQuery(shortTermMemory: ShortTermMemory[]) {
-    return [...shortTermMemory].reverse().find((entry) => entry.role === "user")
-      ?.text;
+    return [...shortTermMemory].reverse().find((entry) => entry.role === 'user')?.text;
   }
 }
 
-type NotedMemory = Awaited<
-  ReturnType<typeof AgentMemoryDbService.getNotedMemories>
->[number];
+type NotedMemory = Awaited<ReturnType<typeof AgentMemoryDbService.getNotedMemories>>[number];
 type SemanticNotedMemory = Awaited<
   ReturnType<typeof AgentMemoryDbService.searchNotedMemories>
 >[number];
-type MemoryChunk = Awaited<
-  ReturnType<typeof AgentMemoryDbService.getRecentMemoryChunks>
->[number];
+type MemoryChunk = Awaited<ReturnType<typeof AgentMemoryDbService.getRecentMemoryChunks>>[number];

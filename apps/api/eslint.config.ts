@@ -1,9 +1,11 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import type { Linter } from 'eslint';
 
-import type { Linter } from "eslint";
-import globals from "globals";
-import { config } from "@labjm/eslint-config/base";
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import globals from 'globals';
+
+import { config } from '@labjm/eslint-config/base';
 
 const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 

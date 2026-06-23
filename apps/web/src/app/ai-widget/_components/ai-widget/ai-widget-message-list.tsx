@@ -1,25 +1,23 @@
-"use client";
+'use client';
 
-import type { ChatStatus } from "ai";
-import { AnimatePresence, motion } from "motion/react";
-import type { FC } from "react";
-import { useCallback, useEffect, useRef } from "react";
-import useMeasure from "react-use-measure";
+import type { ChatStatus } from 'ai';
+import type { FC } from 'react';
 
-import { AIWidgetAssistantMessage } from "./ai-widget-assistant-message";
-import { LoadingText } from "../loading-text";
-import type { AIWidgetMessage } from "./types";
-import { AIWidgetUserMessage } from "./ai-widget-user-message";
+import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useRef } from 'react';
+import useMeasure from 'react-use-measure';
+
+import type { AIWidgetMessage } from './types';
+import { LoadingText } from '../loading-text';
+import { AIWidgetAssistantMessage } from './ai-widget-assistant-message';
+import { AIWidgetUserMessage } from './ai-widget-user-message';
 
 type AIWidgetMessageListProps = {
   messages: AIWidgetMessage[];
   status: ChatStatus;
 };
 
-export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
-  messages,
-  status,
-}) => {
+export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({ messages, status }) => {
   const listRef = useRef<HTMLDivElement>(null);
   const [chatContentRef, chatContentBounds] = useMeasure();
 
@@ -27,21 +25,20 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
   const lastMessagePartCount = lastMessage?.parts.length ?? 0;
   const hasRenderableMessageParts = useCallback((message: AIWidgetMessage) => {
     return message.parts.some((part) => {
-      if (part.type === "text") {
+      if (part.type === 'text') {
         return part.text.trim().length > 0;
       }
 
-      if (part.type === "tool-retrieve-match-detail") {
+      if (part.type === 'tool-retrieve-match-detail') {
         return true;
       }
 
-      return part.type === "reasoning";
+      return part.type === 'reasoning';
     });
   }, []);
 
   const shouldShowLoader =
-    status === "submitted" ||
-    (status === "streaming" && lastMessage?.role !== "assistant");
+    status === 'submitted' || (status === 'streaming' && lastMessage?.role !== 'assistant');
 
   useEffect(() => {
     const list = listRef.current;
@@ -53,20 +50,14 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
     const animationFrame = window.requestAnimationFrame(() => {
       list.scrollTo({
         top: list.scrollHeight,
-        behavior: "smooth",
+        behavior: 'smooth',
       });
     });
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [
-    chatContentBounds.height,
-    lastMessage?.id,
-    lastMessagePartCount,
-    messages.length,
-    status,
-  ]);
+  }, [chatContentBounds.height, lastMessage?.id, lastMessagePartCount, messages.length, status]);
 
   if (messages.length === 0) {
     return null;
@@ -75,10 +66,10 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
   return (
     <motion.div
       animate={{ height: chatContentBounds.height }}
-      className="overflow-hidden "
+      className="overflow-hidden"
       initial={{ height: 0 }}
       transition={{
-        type: "spring",
+        type: 'spring',
         duration: 0.34,
         bounce: 0,
       }}
@@ -88,17 +79,15 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
 
         <div
           ref={listRef}
-          className="scrollbar-thin flex max-h-[min(37.5rem,45vh)] flex-col gap-y-3 overflow-x-hidden overflow-y-auto px-3 text-sm"
+          className="flex max-h-[min(37.5rem,45vh)] scrollbar-thin flex-col gap-y-3 overflow-x-hidden overflow-y-auto px-3 text-sm"
         >
           <AnimatePresence initial={false}>
             {messages.map((message) => {
-              if (message.role === "user") {
-                return (
-                  <AIWidgetUserMessage key={message.id} message={message} />
-                );
+              if (message.role === 'user') {
+                return <AIWidgetUserMessage key={message.id} message={message} />;
               }
 
-              if (message.role === "system") {
+              if (message.role === 'system') {
                 return null;
               }
 
@@ -106,10 +95,7 @@ export const AIWidgetMessageList: FC<AIWidgetMessageListProps> = ({
                 <AIWidgetAssistantMessage
                   key={message.id}
                   message={message}
-                  showLoader={
-                    !hasRenderableMessageParts(message) &&
-                    status === "streaming"
-                  }
+                  showLoader={!hasRenderableMessageParts(message) && status === 'streaming'}
                 />
               );
             })}

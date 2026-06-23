@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import type { FC } from "react";
+import type { FC } from 'react';
 
 type GeminiIconProps = {
   className?: string;
