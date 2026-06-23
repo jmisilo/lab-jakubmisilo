@@ -16,9 +16,7 @@ export class AIAgentService {
     step: 20_000,
   };
 
-  private static get model() {
-    return "gpt-5.4-nano";
-  }
+  private static model = "gpt-5.4-nano";
 
   static readonly agent = new ToolLoopAgent({
     model: openai(this.model),
