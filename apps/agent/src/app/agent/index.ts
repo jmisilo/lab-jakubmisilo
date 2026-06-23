@@ -43,7 +43,7 @@ export class AIAgentService {
     maxRetries: 1,
     stopWhen: isStepCount(5),
     onStart: (event) => {
-      logger.debug(
+      logger.info(
         { model: this.model, lastMessage: event.messages.at(-1) },
         "[AI_AGENT]: agent process started",
       );
@@ -61,7 +61,7 @@ export class AIAgentService {
       );
     },
     onEnd: (event) => {
-      logger.debug({ result: event.text }, "[AI_AGENT]: agent process ended");
+      logger.info({ result: event.text }, "[AI_AGENT]: agent process ended");
     },
   });
 
