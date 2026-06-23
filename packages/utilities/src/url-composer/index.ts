@@ -1,6 +1,6 @@
-import { UrlSchema } from "@labjm/schemas";
+import { UrlSchema } from '@labjm/schemas';
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === 'production';
 
 export class UrlComposer {
   origin: string;
@@ -8,9 +8,8 @@ export class UrlComposer {
   protocol: string;
 
   constructor(
-    /** @todo consume environment variables */
-    domain: string = isProduction ? "lab.jakubmisilo.com" : "localhost:3000",
-    protocol: "https" | "http" = isProduction ? "https" : "http",
+    domain: string = isProduction ? 'lab.jakubmisilo.com' : 'localhost:3000',
+    protocol: 'https' | 'http' = isProduction ? 'https' : 'http',
   ) {
     this.protocol = protocol;
     this.domain = domain;
@@ -21,8 +20,8 @@ export class UrlComposer {
   composePathname(...segments: (string | null | undefined)[]): `/${string}` {
     return `/${segments
       .filter(Boolean)
-      .map((segment) => segment!.replace(/^\/|\/$/g, ""))
-      .join("/")}`;
+      .map((segment) => segment!.replace(/^\/|\/$/g, ''))
+      .join('/')}`;
   }
 
   private createQueryString(
@@ -42,7 +41,7 @@ export class UrlComposer {
       return queryParams.toString();
     }
 
-    return "";
+    return '';
   }
 
   compose({
@@ -52,8 +51,7 @@ export class UrlComposer {
     pathSegments?: string[];
     queryParams?: Record<string, string | number | boolean | null | undefined>;
   }): string {
-    const pathSegments =
-      !_pathSegments || _pathSegments.length === 0 ? ["/"] : _pathSegments;
+    const pathSegments = !_pathSegments || _pathSegments.length === 0 ? ['/'] : _pathSegments;
     const url = new URL(this.composePathname(...pathSegments), this.origin);
     url.search = this.createQueryString(queryParams);
 
@@ -62,6 +60,4 @@ export class UrlComposer {
 }
 
 export const url = new UrlComposer();
-export const apiUrl = new UrlComposer(
-  isProduction ? "api.lab.jakubmisilo.com" : "localhost:8080",
-);
+export const apiUrl = new UrlComposer(isProduction ? 'api.lab.jakubmisilo.com' : 'localhost:8080');
