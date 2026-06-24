@@ -115,7 +115,12 @@ const respondToMessage = async ({
     );
 
     const result = await withTypingIndicator(thread, () =>
-      AIAgentService.generate({ messages: contextMessages, identityId }),
+      AIAgentService.generate({
+        messages: contextMessages,
+        identityId,
+        threadId: thread.id,
+        sourceMessageId: message.id,
+      }),
     );
 
     logger.debug(

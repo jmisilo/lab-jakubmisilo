@@ -18,10 +18,13 @@ export class UrlComposer {
   }
 
   composePathname(...segments: (string | null | undefined)[]): `/${string}` {
-    return `/${segments
+    const pathname = segments
       .filter(Boolean)
       .map((segment) => segment!.replace(/^\/|\/$/g, ''))
-      .join('/')}`;
+      .filter(Boolean)
+      .join('/');
+
+    return pathname ? `/${pathname}` : '/';
   }
 
   private createQueryString(

@@ -55,6 +55,17 @@ describe('UrlComposer', () => {
     expect(pathname).toBe('/path/to/complex/resource/ab2/c3/test');
   });
 
+  it('should ignore root-only path segments', () => {
+    const urlComposer = new UrlComposer();
+
+    expect(urlComposer.composePathname('/', '/get/games')).toBe('/get/games');
+    expect(
+      urlComposer.compose({
+        pathSegments: ['/', '/get/games'],
+      }),
+    ).toBe(`${SITE_URL}/get/games`);
+  });
+
   it('should create query string correctly', () => {
     const urlComposer = new UrlComposer();
     const queryString = urlComposer['createQueryString']({

@@ -1,4 +1,4 @@
-import { z } from 'zod/v4';
+import { z } from 'zod';
 
 export const UrlSchema = z.url().refine((value) => {
   const { hostname } = new URL(value);

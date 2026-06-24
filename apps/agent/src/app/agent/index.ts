@@ -1,8 +1,9 @@
+import type { AgentTools } from '@/app/agent/tools';
 import type { ModelMessage } from 'ai';
 
 import { openai } from '@ai-sdk/openai';
 import { isStepCount, ToolLoopAgent } from 'ai';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 
 import { agentTools } from '@/app/agent/tools';
 import { instruction } from '@/app/instruction';
@@ -10,7 +11,12 @@ import { logger } from '@/infrastructure/logger';
 
 const AgentRuntimeContextSchema = z.object({
   identityId: z.string(),
+  threadId: z.string().optional(),
+  sourceMessageId: z.string().optional(),
 });
+
+const LOCAL_AGENT_IDENTITY_ID = 'local-agent';
+const LOCAL_AGENT_THREAD_ID = 'local-tui';
 
 export class AIAgentService {
   private static timeout = {
@@ -26,7 +32,11 @@ export class AIAgentService {
     tools: agentTools,
     toolsContext: {
       'create-noted-memory': {
-        identityId: '123',
+        identityId: LOCAL_AGENT_IDENTITY_ID,
+      },
+      'manage-world-cup-subscription': {
+        identityId: LOCAL_AGENT_IDENTITY_ID,
+        threadId: LOCAL_AGENT_THREAD_ID,
       },
     },
     callOptionsSchema: AgentRuntimeContextSchema,
@@ -35,6 +45,15 @@ export class AIAgentService {
       toolsContext: {
         'create-noted-memory': {
           identityId: options?.identityId ?? input.toolsContext['create-noted-memory'].identityId,
+        },
+        'manage-world-cup-subscription': {
+          identityId:
+            options?.identityId ?? input.toolsContext['manage-world-cup-subscription'].identityId,
+          threadId:
+            options?.threadId ?? input.toolsContext['manage-world-cup-subscription'].threadId,
+          sourceMessageId:
+            options?.sourceMessageId ??
+            input.toolsContext['manage-world-cup-subscription'].sourceMessageId,
         },
       },
     }),
@@ -65,10 +84,14 @@ export class AIAgentService {
 
   static async generate({
     identityId,
+    threadId,
+    sourceMessageId,
     messages,
   }: {
     messages: ModelMessage[];
     identityId: string;
+    threadId?: string;
+    sourceMessageId?: string;
   }): Promise<{ text: string }> {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
@@ -80,7 +103,7 @@ export class AIAgentService {
 
       const result = await this.agent.generate({
         messages,
-        options: { identityId },
+        options: { identityId, threadId, sourceMessageId },
         abortSignal: abortController.signal,
         timeout: { totalMs: this.timeout.total, stepMs: this.timeout.step },
       });

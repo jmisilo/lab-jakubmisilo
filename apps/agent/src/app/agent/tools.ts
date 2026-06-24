@@ -1,10 +1,12 @@
+import type { ManageWorldCupSubscriptionTool } from '@/app/world-cup/tools';
 import type { Tool } from 'ai';
 
 import { openai } from '@ai-sdk/openai';
 import { tool } from 'ai';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 
 import { AgentMemoryService } from '@/app/memory';
+import { manageWorldCupSubscriptionTool } from '@/app/world-cup/tools';
 import { logger } from '@/infrastructure/logger';
 
 export const CreateNotedMemoryToolInputSchema = z.object({
@@ -40,6 +42,7 @@ export type AgentTools = {
     z.infer<typeof CreateNotedMemoryToolOutputSchema>,
     z.infer<typeof CreateNotedMemoryToolContextSchema>
   >;
+  'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
 };
 
 /** @todo defer loading tools, upon having multiple choices */
@@ -90,4 +93,6 @@ export const agentTools: AgentTools = {
       };
     },
   }),
+
+  'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
 };
