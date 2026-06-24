@@ -71,6 +71,38 @@ describe('WorldCupPollingService', () => {
     notificationMock.postNotification.mockResolvedValue();
   });
 
+  it('creates deliveries for newly recorded events', async () => {
+    dbMock.createDetectedEvent.mockResolvedValue(recordedEvent);
+    dbMock.createPendingDelivery.mockResolvedValue({
+      delivery,
+      created: true,
+      deliverable: true,
+    });
+
+    const result = await WorldCupPollingService.pollAndDeliver({ bot });
+
+    expect(subscriptionMock.findNotificationTargets).toHaveBeenCalledWith(event);
+    expect(dbMock.createPendingDelivery).toHaveBeenCalledWith({
+      deliveryKey: `${event.eventKey}:thread-1`,
+      eventKey: event.eventKey,
+      subscriptionId: '00000000-0000-0000-0000-000000000001',
+      threadId: 'thread-1',
+    });
+    expect(notificationMock.postNotification).toHaveBeenCalledWith({
+      bot,
+      event,
+      identityId: 'identity-1',
+      threadId: 'thread-1',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        eventsCreated: 1,
+        deliveriesCreated: 1,
+        notificationsSent: 1,
+      }),
+    );
+  });
+
   it('creates missing deliveries even when the detected event was already recorded', async () => {
     dbMock.createDetectedEvent.mockResolvedValue(null);
     dbMock.createPendingDelivery.mockResolvedValue({
@@ -103,31 +135,10 @@ describe('WorldCupPollingService', () => {
     );
   });
 
-  it('sends retryable existing deliveries without counting them as newly created', async () => {
+  it('does not resend existing deliveries', async () => {
     dbMock.createDetectedEvent.mockResolvedValue(null);
     dbMock.createPendingDelivery.mockResolvedValue({
       delivery: { ...delivery, status: 'failed' },
-      created: false,
-      deliverable: true,
-    });
-
-    const result = await WorldCupPollingService.pollAndDeliver({ bot });
-
-    expect(notificationMock.postNotification).toHaveBeenCalledTimes(1);
-    expect(dbMock.markDeliverySent).toHaveBeenCalledWith(delivery.id);
-    expect(result).toEqual(
-      expect.objectContaining({
-        deliveriesCreated: 0,
-        deliveriesSkipped: 0,
-        notificationsSent: 1,
-      }),
-    );
-  });
-
-  it('does not resend completed deliveries', async () => {
-    dbMock.createDetectedEvent.mockResolvedValue(null);
-    dbMock.createPendingDelivery.mockResolvedValue({
-      delivery: { ...delivery, status: 'sent' },
       created: false,
       deliverable: false,
     });
@@ -228,6 +239,16 @@ const event: WorldCupDetectedEvent = {
       goalMinute: '10',
     },
   },
+};
+
+const recordedEvent = {
+  id: '00000000-0000-0000-0000-000000000020',
+  eventKey: event.eventKey,
+  eventType: event.eventType,
+  gameId: event.gameId,
+  teamIds: event.teamIds,
+  payload: event.payload,
+  createdAt: new Date('2026-06-17T18:00:00.000Z'),
 };
 
 const delivery = {
