@@ -92,7 +92,12 @@ export class AIAgentService {
   });
 
   private static getActiveTools(options?: AgentRuntimeContext): (keyof AgentTools & string)[] {
-    const activeTools: (keyof AgentTools)[] = ['webSearch', 'get-world-cup-context'];
+    const activeTools: (keyof AgentTools)[] = [
+      'webSearch',
+      'get-world-cup-context',
+      'get-weather',
+      'get-local-time',
+    ];
 
     if (options?.identityId) {
       activeTools.push('create-noted-memory');

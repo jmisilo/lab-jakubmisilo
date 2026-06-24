@@ -2,7 +2,7 @@ import { waitUntil } from '@vercel/functions';
 import { Hono } from 'hono';
 
 import { bot } from '@/app/channels';
-import { WorldCupRouter } from '@/app/world-cup';
+import { WorldCupRouter } from '@/app/features/world-cup';
 
 const app = new Hono()
   .get('/', (c) => c.json({ ok: true, service: 'agent' }))
