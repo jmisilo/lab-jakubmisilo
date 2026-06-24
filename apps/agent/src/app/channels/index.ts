@@ -13,6 +13,14 @@ import { chatLogger, logger } from '@/infrastructure/logger';
 const TYPING_INDICATOR_REFRESH_MS = 3_000;
 const EMPTY_AGENT_RESPONSE_ERROR_CODE = 'EMPTY_AGENT_RESPONSE';
 
+/** @todo [TEMP] remove */
+const TELEGRAM_ALLOWED_USER_IDS = new Set(
+  (process.env.TELEGRAM_ALLOWED_USER_IDS ?? '')
+    .split(',')
+    .map((userId) => userId.trim())
+    .filter(Boolean),
+);
+
 class UserVisibleAgentError extends Error {
   constructor(
     message: string,
@@ -55,6 +63,11 @@ bot.onDirectMessage(async (thread, message) => {
 });
 
 bot.onNewMention(async (thread, message) => {
+  /** @todo [TEMP] remove */
+  if (!isMessageAuthorAllowed({ event: 'new_mention', thread, message })) {
+    return;
+  }
+
   await thread.subscribe();
   await respondToMessage({ event: 'new_mention', thread, message });
 });
@@ -81,6 +94,11 @@ const respondToMessage = async ({
     },
     '[TELEGRAM_AGENT]: message received',
   );
+
+  /** @todo [TEMP] remove */
+  if (!isMessageAuthorAllowed({ event, thread, message })) {
+    return;
+  }
 
   try {
     logger.debug(
@@ -199,6 +217,38 @@ const respondToMessage = async ({
 
     await postFailureMessage({ thread, sourceMessageId: message.id, failureDetails });
   }
+};
+
+/** @todo [TEMP] remove */
+const isMessageAuthorAllowed = ({
+  event,
+  thread,
+  message,
+}: {
+  event: string;
+  thread: Thread;
+  message: Message;
+}) => {
+  if (TELEGRAM_ALLOWED_USER_IDS.size === 0) {
+    return true;
+  }
+
+  if (TELEGRAM_ALLOWED_USER_IDS.has(message.author.userId)) {
+    return true;
+  }
+
+  logger.warn(
+    {
+      messageEvent: event,
+      threadId: thread.id,
+      messageId: message.id,
+      authorId: message.author.userId,
+      allowedUserCount: TELEGRAM_ALLOWED_USER_IDS.size,
+    },
+    '[TELEGRAM_AGENT]: message ignored because author is not allowlisted',
+  );
+
+  return false;
 };
 
 const postFailureMessage = async ({
