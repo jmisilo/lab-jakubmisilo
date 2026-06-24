@@ -13,16 +13,16 @@ export class WorldCupApiClient {
   static url = new UrlComposer('worldcup26.ir', 'https');
 
   static async getTeams() {
-    const response = await this.fetch(this.url.compose({ pathSegments: ['/get', '/teams'] }));
+    const response = await this.#fetch(this.url.compose({ pathSegments: ['/get', '/teams'] }));
     return WorldCupTeamsResponseSchema.parse(response).teams;
   }
 
   static async getGames() {
-    const response = await this.fetch(this.url.compose({ pathSegments: ['/get', '/games'] }));
+    const response = await this.#fetch(this.url.compose({ pathSegments: ['/get', '/games'] }));
     return WorldCupGamesResponseSchema.parse(response).games;
   }
 
-  private static async fetch(path: string) {
+  static async #fetch(path: string): Promise<unknown> {
     const abortController = new AbortController();
     const timeout = setTimeout(
       () => abortController.abort(new Error('world_cup_api_timeout')),

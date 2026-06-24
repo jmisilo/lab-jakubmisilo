@@ -109,10 +109,10 @@ export type WorldCupTeamFifaCode = (typeof WORLD_CUP_TEAM_FIFA_CODES)[number];
 
 export class WorldCupTeamRegistry {
   static resolve(query: string) {
-    const normalizedQuery = this.normalizeQuery(query);
+    const normalizedQuery = this.#normalizeQuery(query);
 
     const exactMatches = WORLD_CUP_TEAMS.filter((team) =>
-      this.getSearchValues(team).some((value) => this.normalizeQuery(value) === normalizedQuery),
+      this.#getSearchValues(team).some((value) => this.#normalizeQuery(value) === normalizedQuery),
     );
     const [exactMatch] = exactMatches;
 
@@ -125,8 +125,8 @@ export class WorldCupTeamRegistry {
     }
 
     const fuzzyMatches = WORLD_CUP_TEAMS.filter((team) =>
-      this.getSearchValues(team).some((value) =>
-        this.normalizeQuery(value).includes(normalizedQuery),
+      this.#getSearchValues(team).some((value) =>
+        this.#normalizeQuery(value).includes(normalizedQuery),
       ),
     );
     const [fuzzyMatch] = fuzzyMatches;
@@ -162,7 +162,7 @@ export class WorldCupTeamRegistry {
       .join('');
   }
 
-  private static normalizeQuery(value: string) {
+  static #normalizeQuery(value: string) {
     return value
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -173,7 +173,7 @@ export class WorldCupTeamRegistry {
       .replace(/s$/, '');
   }
 
-  private static getSearchValues(team: WorldCupTeam) {
+  static #getSearchValues(team: WorldCupTeam) {
     return [team.id, team.name, team.fifaCode, team.iso2, ...(team.aliases ?? [])];
   }
 }

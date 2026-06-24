@@ -71,7 +71,7 @@ export class WorldCupContextService {
     teamCodes,
     date,
   }: Omit<WorldCupContextInput, 'games'>) {
-    return this.createContext({
+    return WorldCupContextService.createContext({
       games: await WorldCupApiClient.getGames(),
       timeZone,
       now,
@@ -91,38 +91,38 @@ export class WorldCupContextService {
   }: WorldCupContextInput): WorldCupContext {
     const safeTimeZone = WorldCupTimeService.resolveTimeZone(timeZone);
     const contextGames = games
-      .map((game) => this.createContextGame({ game, timeZone: safeTimeZone }))
-      .sort((gameA, gameB) => this.compareGames(gameA, gameB));
-    const requestedTeamIds = this.getRequestedTeamIds(teamCodes);
+      .map((game) => this.#createContextGame({ game, timeZone: safeTimeZone }))
+      .sort((gameA, gameB) => this.#compareGames(gameA, gameB));
+    const requestedTeamIds = this.#getRequestedTeamIds(teamCodes);
     const requestedDate = date ?? WorldCupTimeService.formatDateKey(now, safeTimeZone);
-    const focusedGames = this.filterGames({
+    const focusedGames = this.#filterGames({
       games: contextGames,
       focus,
       requestedTeamIds,
       requestedDate,
     });
-    const groupTables = this.createGroupTables(contextGames);
-    const currentStage = this.getCurrentStage(contextGames, now);
+    const groupTables = this.#createGroupTables(contextGames);
+    const currentStage = this.#getCurrentStage(contextGames, now);
 
     return {
       timeZone: safeTimeZone,
       generatedAt: WorldCupTimeService.formatDateTime(now, safeTimeZone),
       today: requestedDate,
       currentStage,
-      summaryMarkdown: this.renderSummary({
+      summaryMarkdown: this.#renderSummary({
         games: contextGames,
         currentStage,
         requestedDate,
         timeZone: safeTimeZone,
       }),
-      scheduleMarkdown: this.renderSchedule(focusedGames),
-      groupTablesMarkdown: this.renderGroupTables(groupTables),
-      knockoutLadderMarkdown: this.renderKnockoutLadder(contextGames),
+      scheduleMarkdown: this.#renderSchedule(focusedGames),
+      groupTablesMarkdown: this.#renderGroupTables(groupTables),
+      knockoutLadderMarkdown: this.#renderKnockoutLadder(contextGames),
       games: focusedGames,
     };
   }
 
-  private static createContextGame({
+  static #createContextGame({
     game,
     timeZone,
   }: {
@@ -130,12 +130,12 @@ export class WorldCupContextService {
     timeZone: string;
   }): WorldCupContextGame {
     const kickoffAt = WorldCupTimeService.getKickoffAt(game);
-    const homeTeam = this.createContextTeam({
+    const homeTeam = this.#createContextTeam({
       id: game.homeTeamId,
       name: game.homeTeamName,
       score: game.homeScore,
     });
-    const awayTeam = this.createContextTeam({
+    const awayTeam = this.#createContextTeam({
       id: game.awayTeamId,
       name: game.awayTeamName,
       score: game.awayScore,
@@ -143,10 +143,10 @@ export class WorldCupContextService {
 
     return {
       gameId: game.gameId,
-      stage: this.normalizeStage(String(game.raw.type ?? '')),
+      stage: this.#normalizeStage(String(game.raw.type ?? '')),
       group: String(game.raw.group ?? ''),
       matchday: String(game.raw.matchday ?? ''),
-      status: this.getGameStatus(game),
+      status: this.#getGameStatus(game),
       kickoffAt,
       kickoffDate: kickoffAt ? WorldCupTimeService.formatDateKey(kickoffAt, timeZone) : null,
       kickoffTime: kickoffAt
@@ -155,11 +155,11 @@ export class WorldCupContextService {
       homeTeam,
       awayTeam,
       score: `${game.homeScore}-${game.awayScore}`,
-      winnerTeamId: this.getWinnerTeamId({ game, homeTeam, awayTeam }),
+      winnerTeamId: this.#getWinnerTeamId({ game, homeTeam, awayTeam }),
     };
   }
 
-  private static createContextTeam({
+  static #createContextTeam({
     id,
     name,
     score,
@@ -179,7 +179,7 @@ export class WorldCupContextService {
     };
   }
 
-  private static getGameStatus(game: WorldCupGameSnapshot): WorldCupContextGame['status'] {
+  static #getGameStatus(game: WorldCupGameSnapshot): WorldCupContextGame['status'] {
     if (game.finished) {
       return 'finished';
     }
@@ -191,7 +191,7 @@ export class WorldCupContextService {
     return 'active';
   }
 
-  private static getWinnerTeamId({
+  static #getWinnerTeamId({
     game,
     homeTeam,
     awayTeam,
@@ -207,13 +207,13 @@ export class WorldCupContextService {
     return game.homeScore > game.awayScore ? homeTeam.id : awayTeam.id;
   }
 
-  private static createGroupTables(games: WorldCupContextGame[]) {
+  static #createGroupTables(games: WorldCupContextGame[]) {
     const tables = new Map<string, WorldCupGroupTableRow[]>();
 
     for (const team of WORLD_CUP_TEAMS) {
       const table = tables.get(team.group) ?? [];
       table.push({
-        team: this.createContextTeam({ id: team.id, name: team.name, score: 0 }),
+        team: this.#createContextTeam({ id: team.id, name: team.name, score: 0 }),
         played: 0,
         won: 0,
         drawn: 0,
@@ -227,7 +227,7 @@ export class WorldCupContextService {
     }
 
     for (const game of games) {
-      if (game.status !== 'finished' || !this.isGroupStage(game) || !game.group) {
+      if (game.status !== 'finished' || !this.#isGroupStage(game) || !game.group) {
         continue;
       }
 
@@ -244,12 +244,12 @@ export class WorldCupContextService {
         continue;
       }
 
-      this.applyResult({
+      this.#applyResult({
         row: homeRow,
         goalsFor: game.homeTeam.score,
         goalsAgainst: game.awayTeam.score,
       });
-      this.applyResult({
+      this.#applyResult({
         row: awayRow,
         goalsFor: game.awayTeam.score,
         goalsAgainst: game.homeTeam.score,
@@ -259,12 +259,12 @@ export class WorldCupContextService {
     return new Map(
       [...tables.entries()].map(([group, rows]) => [
         group,
-        rows.sort((rowA, rowB) => this.compareTableRows(rowA, rowB)),
+        rows.sort((rowA, rowB) => this.#compareTableRows(rowA, rowB)),
       ]),
     );
   }
 
-  private static applyResult({
+  static #applyResult({
     row,
     goalsFor,
     goalsAgainst,
@@ -293,7 +293,7 @@ export class WorldCupContextService {
     row.points += 1;
   }
 
-  private static renderSummary({
+  static #renderSummary({
     games,
     currentStage,
     requestedDate,
@@ -317,15 +317,15 @@ export class WorldCupContextService {
     ].join('\n');
   }
 
-  private static renderSchedule(games: WorldCupContextGame[]) {
+  static #renderSchedule(games: WorldCupContextGame[]) {
     if (games.length === 0) {
       return 'No games match the requested World Cup context.';
     }
 
     return games
       .map((game) => {
-        const home = this.renderTeam(game.homeTeam);
-        const away = this.renderTeam(game.awayTeam);
+        const home = this.#renderTeam(game.homeTeam);
+        const away = this.#renderTeam(game.awayTeam);
         const status =
           game.status === 'finished'
             ? `FT ${game.score}`
@@ -333,12 +333,12 @@ export class WorldCupContextService {
               ? `LIVE ${game.score}`
               : game.kickoffTime;
 
-        return `- ${status} | ${this.renderGameStage(game)} | ${home} vs ${away}`;
+        return `- ${status} | ${this.#renderGameStage(game)} | ${home} vs ${away}`;
       })
       .join('\n');
   }
 
-  private static renderGroupTables(tables: Map<string, WorldCupGroupTableRow[]>) {
+  static #renderGroupTables(tables: Map<string, WorldCupGroupTableRow[]>) {
     return [...tables.entries()]
       .sort(([groupA], [groupB]) => groupA.localeCompare(groupB))
       .map(([group, rows]) =>
@@ -348,15 +348,15 @@ export class WorldCupContextService {
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
           ...rows.map(
             (row) =>
-              `| ${this.renderTeam(row.team)} | ${row.played} | ${row.won} | ${row.drawn} | ${row.lost} | ${row.goalsFor} | ${row.goalsAgainst} | ${row.goalDifference} | ${row.points} |`,
+              `| ${this.#renderTeam(row.team)} | ${row.played} | ${row.won} | ${row.drawn} | ${row.lost} | ${row.goalsFor} | ${row.goalsAgainst} | ${row.goalDifference} | ${row.points} |`,
           ),
         ].join('\n'),
       )
       .join('\n\n');
   }
 
-  private static renderKnockoutLadder(games: WorldCupContextGame[]) {
-    const knockoutGames = games.filter((game) => !this.isGroupStage(game));
+  static #renderKnockoutLadder(games: WorldCupContextGame[]) {
+    const knockoutGames = games.filter((game) => !this.#isGroupStage(game));
 
     if (knockoutGames.length === 0) {
       return 'Knockout ladder is not available yet.';
@@ -371,15 +371,15 @@ export class WorldCupContextService {
     }
 
     return [...gamesByStage.entries()]
-      .sort(([stageA], [stageB]) => this.getStageRank(stageA) - this.getStageRank(stageB))
+      .sort(([stageA], [stageB]) => this.#getStageRank(stageA) - this.#getStageRank(stageB))
       .map(([stage, stageGames]) =>
         [
           stage,
           ...stageGames
-            .sort((gameA, gameB) => this.compareGames(gameA, gameB))
+            .sort((gameA, gameB) => this.#compareGames(gameA, gameB))
             .map((game) => {
               const winner = game.winnerTeamId
-                ? ` -> winner ${this.renderTeam(
+                ? ` -> winner ${this.#renderTeam(
                     game.winnerTeamId === game.homeTeam.id ? game.homeTeam : game.awayTeam,
                   )}`
                 : '';
@@ -390,14 +390,14 @@ export class WorldCupContextService {
                     ? `LIVE ${game.score}`
                     : game.kickoffTime;
 
-              return `- ${status} | ${this.renderTeam(game.homeTeam)} vs ${this.renderTeam(game.awayTeam)}${winner}`;
+              return `- ${status} | ${this.#renderTeam(game.homeTeam)} vs ${this.#renderTeam(game.awayTeam)}${winner}`;
             }),
         ].join('\n'),
       )
       .join('\n\n');
   }
 
-  private static filterGames({
+  static #filterGames({
     games,
     focus,
     requestedTeamIds,
@@ -425,13 +425,13 @@ export class WorldCupContextService {
     }
 
     if (focus === 'knockout') {
-      return relevantGames.filter((game) => !this.isGroupStage(game));
+      return relevantGames.filter((game) => !this.#isGroupStage(game));
     }
 
     return relevantGames;
   }
 
-  private static getRequestedTeamIds(teamCodes?: WorldCupTeamFifaCode[]): Set<string> {
+  static #getRequestedTeamIds(teamCodes?: WorldCupTeamFifaCode[]): Set<string> {
     return new Set(
       (teamCodes ?? [])
         .map((teamCode): string | undefined => WorldCupTeamRegistry.getByFifaCode(teamCode)?.id)
@@ -439,7 +439,7 @@ export class WorldCupContextService {
     );
   }
 
-  private static getCurrentStage(games: WorldCupContextGame[], now: Date) {
+  static #getCurrentStage(games: WorldCupContextGame[], now: Date) {
     const activeGame = games.find((game) => game.status === 'active');
 
     if (activeGame) {
@@ -461,25 +461,25 @@ export class WorldCupContextService {
     return lastFinishedGame ? `${lastFinishedGame.stage} completed` : 'Not started';
   }
 
-  private static renderTeam(team: WorldCupContextTeam) {
+  static #renderTeam(team: WorldCupContextTeam) {
     return [team.flagEmoji, team.name, team.fifaCode ? `(${team.fifaCode})` : undefined]
       .filter(Boolean)
       .join(' ');
   }
 
-  private static renderGameStage(game: WorldCupContextGame) {
-    if (this.isGroupStage(game) && game.group) {
+  static #renderGameStage(game: WorldCupContextGame) {
+    if (this.#isGroupStage(game) && game.group) {
       return `Group ${game.group}`;
     }
 
     return game.stage;
   }
 
-  private static isGroupStage(game: WorldCupContextGame) {
+  static #isGroupStage(game: WorldCupContextGame) {
     return game.stage.toLowerCase().includes('group');
   }
 
-  private static normalizeStage(value: string) {
+  static #normalizeStage(value: string) {
     const normalized = value.trim();
 
     if (!normalized) {
@@ -493,7 +493,7 @@ export class WorldCupContextService {
       .join(' ');
   }
 
-  private static compareGames(gameA: WorldCupContextGame, gameB: WorldCupContextGame) {
+  static #compareGames(gameA: WorldCupContextGame, gameB: WorldCupContextGame) {
     if (!gameA.kickoffAt && !gameB.kickoffAt) {
       return Number(gameA.gameId) - Number(gameB.gameId);
     }
@@ -509,7 +509,7 @@ export class WorldCupContextService {
     return gameA.kickoffAt.getTime() - gameB.kickoffAt.getTime();
   }
 
-  private static compareTableRows(rowA: WorldCupGroupTableRow, rowB: WorldCupGroupTableRow) {
+  static #compareTableRows(rowA: WorldCupGroupTableRow, rowB: WorldCupGroupTableRow) {
     return (
       rowB.points - rowA.points ||
       rowB.goalDifference - rowA.goalDifference ||
@@ -518,7 +518,7 @@ export class WorldCupContextService {
     );
   }
 
-  private static getStageRank(stage: string) {
+  static #getStageRank(stage: string) {
     const normalized = stage.toLowerCase();
 
     if (normalized.includes('round') || normalized.includes('16')) {

@@ -7,13 +7,13 @@ type WorldCupStadiumTimeZone = {
 };
 
 export class WorldCupTimeService {
-  private static defaultUserTimeZone = 'Europe/Warsaw';
+  static #defaultUserTimeZone = 'Europe/Warsaw';
 
   /**
    * @note `stadium_id` comes from the World Cup API `/get/stadiums` endpoint.
    * The API's `local_date` is venue-local wall-clock time, but stadium data does not expose IANA zones.
    */
-  private static stadiums: Record<string, WorldCupStadiumTimeZone> = {
+  static #stadiums: Record<string, WorldCupStadiumTimeZone> = {
     '1': {
       name: 'Estadio Azteca',
       city: 'Mexico City',
@@ -97,13 +97,13 @@ export class WorldCupTimeService {
   };
 
   static getKickoffAt(game: Pick<WorldCupGameSnapshot, 'localDate' | 'raw'>) {
-    const timeZone = this.getStadiumTimeZone(game.raw.stadium_id);
+    const timeZone = this.#getStadiumTimeZone(game.raw.stadium_id);
 
     if (!timeZone) {
       return null;
     }
 
-    return this.parseApiLocalDate({
+    return this.#parseApiLocalDate({
       value: game.localDate,
       timeZone,
     });
@@ -131,15 +131,15 @@ export class WorldCupTimeService {
       new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
       return timeZone;
     } catch {
-      return this.defaultUserTimeZone;
+      return this.#defaultUserTimeZone;
     }
   }
 
-  private static getStadiumTimeZone(stadiumId: string) {
-    return this.stadiums[stadiumId]?.timeZone ?? null;
+  static #getStadiumTimeZone(stadiumId: string) {
+    return this.#stadiums[stadiumId]?.timeZone ?? null;
   }
 
-  private static parseApiLocalDate({ value, timeZone }: { value: string; timeZone: string }) {
+  static #parseApiLocalDate({ value, timeZone }: { value: string; timeZone: string }) {
     const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/.exec(value.trim());
 
     if (!match) {
@@ -152,7 +152,7 @@ export class WorldCupTimeService {
       return null;
     }
 
-    return this.zonedTimeToDate({
+    return this.#zonedTimeToDate({
       year: Number(year),
       month: Number(month),
       day: Number(day),
@@ -162,7 +162,7 @@ export class WorldCupTimeService {
     });
   }
 
-  private static zonedTimeToDate({
+  static #zonedTimeToDate({
     year,
     month,
     day,
@@ -178,14 +178,14 @@ export class WorldCupTimeService {
     timeZone: string;
   }) {
     const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
-    const firstOffset = this.getTimeZoneOffsetMs(timeZone, utcGuess);
+    const firstOffset = this.#getTimeZoneOffsetMs(timeZone, utcGuess);
     const firstPass = new Date(utcGuess.getTime() - firstOffset);
-    const correctedOffset = this.getTimeZoneOffsetMs(timeZone, firstPass);
+    const correctedOffset = this.#getTimeZoneOffsetMs(timeZone, firstPass);
 
     return new Date(utcGuess.getTime() - correctedOffset);
   }
 
-  private static getTimeZoneOffsetMs(timeZone: string, date: Date) {
+  static #getTimeZoneOffsetMs(timeZone: string, date: Date) {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,
       year: 'numeric',
