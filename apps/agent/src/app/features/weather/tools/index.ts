@@ -98,6 +98,15 @@ export type GetLocalTimeTool = Tool<
   z.infer<typeof GetLocalTimeToolOutputSchema>
 >;
 
+const getProviderStatus = (result: object) =>
+  'providerStatus' in result && typeof result.providerStatus === 'number'
+    ? result.providerStatus
+    : undefined;
+const getProviderMessage = (result: object) =>
+  'providerMessage' in result && typeof result.providerMessage === 'string'
+    ? result.providerMessage
+    : undefined;
+
 export const getWeatherTool: GetWeatherTool = tool({
   description:
     'Get current weather or a 5-day / 3-hour forecast for a specific city using OpenWeather. Use forecast mode for future weather questions such as tomorrow, in 3 days, tonight, or this weekend. Forecast data is available for about 5 days ahead in 3-hour steps. Use this only after resolving a city from the user message or remembered default weather city. Do not ask for ZIP/post code. Do not guess home/native location. If no location is known, ask the user which city to use before calling this tool.',
@@ -123,8 +132,8 @@ export const getWeatherTool: GetWeatherTool = tool({
           ok: result.ok,
           reason: result.ok ? undefined : result.reason,
           message: result.ok ? undefined : result.message,
-          providerStatus: result.ok ? undefined : result.providerStatus,
-          providerMessage: result.ok ? undefined : result.providerMessage,
+          providerStatus: result.ok ? undefined : getProviderStatus(result),
+          providerMessage: result.ok ? undefined : getProviderMessage(result),
         },
         '[WEATHER]: tool executed',
       );
@@ -135,8 +144,8 @@ export const getWeatherTool: GetWeatherTool = tool({
           requestType,
           message: result.message,
           reason: result.reason,
-          providerStatus: result.providerStatus,
-          providerMessage: result.providerMessage,
+          providerStatus: getProviderStatus(result),
+          providerMessage: getProviderMessage(result),
         };
       }
 
@@ -158,8 +167,8 @@ export const getWeatherTool: GetWeatherTool = tool({
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
         message: result.ok ? undefined : result.message,
-        providerStatus: result.ok ? undefined : result.providerStatus,
-        providerMessage: result.ok ? undefined : result.providerMessage,
+        providerStatus: result.ok ? undefined : getProviderStatus(result),
+        providerMessage: result.ok ? undefined : getProviderMessage(result),
       },
       '[WEATHER]: tool executed',
     );
@@ -170,8 +179,8 @@ export const getWeatherTool: GetWeatherTool = tool({
         requestType,
         message: result.message,
         reason: result.reason,
-        providerStatus: result.providerStatus,
-        providerMessage: result.providerMessage,
+        providerStatus: getProviderStatus(result),
+        providerMessage: getProviderMessage(result),
       };
     }
 
@@ -198,8 +207,8 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
         message: result.ok ? undefined : result.message,
-        providerStatus: result.ok ? undefined : result.providerStatus,
-        providerMessage: result.ok ? undefined : result.providerMessage,
+        providerStatus: result.ok ? undefined : getProviderStatus(result),
+        providerMessage: result.ok ? undefined : getProviderMessage(result),
       },
       '[LOCAL_TIME]: tool executed',
     );
@@ -209,8 +218,8 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
         ok: false,
         message: result.message,
         reason: result.reason,
-        providerStatus: result.providerStatus,
-        providerMessage: result.providerMessage,
+        providerStatus: getProviderStatus(result),
+        providerMessage: getProviderMessage(result),
       };
     }
 

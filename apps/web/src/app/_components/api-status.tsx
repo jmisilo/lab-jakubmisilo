@@ -31,7 +31,7 @@ const ApiStatusSkeleton = () => {
 
 ApiStatus.Skeleton = ApiStatusSkeleton;
 
-const getApiStatus = async (): Promise<'failed' | 'ok'> => {
+const getApiStatus = async () => {
   try {
     const response = await apiClient.health.$get();
 
