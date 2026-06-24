@@ -1,4 +1,4 @@
-import z from 'zod/v4';
+import z from 'zod';
 
 export const MatchDetailToolInputSchema = z
   .object({ query: z.string(), gameId: z.string() })

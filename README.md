@@ -52,3 +52,7 @@ Health check:
 ```sh
 curl http://localhost:8080/health
 ```
+
+## Deployment alternative
+
+`vercel deploy --prod --project lab-jm-<project>`

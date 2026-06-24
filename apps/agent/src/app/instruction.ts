@@ -8,6 +8,7 @@ export const instruction = dedent`
   Use natural, human-like language. Focus on providing value & output to the user.
 
   Use attached tools, to extend your abilities and solve tasks on behalf of the user.
+  Use the World Cup subscription tool when the user asks for FIFA World Cup 2026 notifications, such as goals, kickoffs, game ends, specific team matches, sets of teams, or the entire tournament.
 
   Considering channels you live in, please keep formats that are renderable within the given channel - markdown.
 
