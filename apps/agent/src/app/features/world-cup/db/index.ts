@@ -122,7 +122,6 @@ export class WorldCupDbService extends DbService {
     subscriptionId: string;
     threadId: string;
   }) {
-    const pendingThreshold = Date.now() - 2 * 60 * 1000;
     const [delivery] = await this.client
       .insert(worldCup2026EventDeliveries)
       .values({
@@ -151,40 +150,10 @@ export class WorldCupDbService extends DbService {
       .where(eq(worldCup2026EventDeliveries.deliveryKey, deliveryKey))
       .limit(1);
 
-    if (!existingDelivery || existingDelivery.status === 'sent') {
-      return {
-        delivery: existingDelivery ?? null,
-        created: false as const,
-        deliverable: false as const,
-      };
-    }
-
-    const canRetry =
-      existingDelivery.status === 'failed' ||
-      existingDelivery.createdAt.getTime() < pendingThreshold;
-
-    if (!canRetry) {
-      return {
-        delivery: existingDelivery,
-        created: false as const,
-        deliverable: false as const,
-      };
-    }
-
-    const [retryDelivery] = await this.client
-      .update(worldCup2026EventDeliveries)
-      .set({
-        status: 'pending',
-        error: null,
-        deliveredAt: null,
-      })
-      .where(eq(worldCup2026EventDeliveries.id, existingDelivery.id))
-      .returning();
-
     return {
-      delivery: retryDelivery ?? existingDelivery,
+      delivery: existingDelivery ?? null,
       created: false as const,
-      deliverable: true as const,
+      deliverable: false as const,
     };
   }
 
