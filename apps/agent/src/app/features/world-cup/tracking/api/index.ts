@@ -1,6 +1,3 @@
-import type { WorldCupTeam } from '@/app/features/world-cup/teams';
-import type { WorldCupGameSnapshot } from '@/app/features/world-cup/types';
-
 import { UrlComposer } from '@labjm/utilities/url-composer';
 
 import {
@@ -21,7 +18,7 @@ export class WorldCupApiClient {
     const response = await this.#fetch(this.url.compose({ pathSegments: ['/get', '/games'] }));
     return WorldCupGamesResponseSchema.parse(response).games;
   }
-
+  /** @todo provide better, typesafe solution for interactions with 3rd party apis */
   static async #fetch(path: string): Promise<unknown> {
     const abortController = new AbortController();
     const timeout = setTimeout(

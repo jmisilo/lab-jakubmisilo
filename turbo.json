@@ -1,7 +1,20 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalEnv": ["NODE_ENV", "PORT"],
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "AGENT_LOG_FILE",
+    "CHAT_SDK_LOG_LEVEL",
+    "DATABASE_URL",
+    "LOG_LEVEL",
+    "OPENWEATHER_API_KEY",
+    "QSTASH_CURRENT_SIGNING_KEY",
+    "QSTASH_NEXT_SIGNING_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_BOT_USERNAME",
+    "TELEGRAM_WEBHOOK_SECRET_TOKEN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -30,6 +30,16 @@ class OpenWeatherApiError extends Error {
   }
 }
 
+class WeatherForecastTargetUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly details: { targetLocalDate: string; fromLocal: string; toLocal: string },
+  ) {
+    super(message);
+    this.name = 'WeatherForecastTargetUnavailableError';
+  }
+}
+
 export class WeatherService {
   static #timeout = 10_000;
   static #geocodingUrl = new UrlComposer('api.openweathermap.org', 'https');
@@ -272,6 +282,17 @@ export class WeatherService {
         }),
       };
     } catch (error) {
+      if (error instanceof WeatherForecastTargetUnavailableError) {
+        return {
+          ok: false as const,
+          reason: 'forecast_target_unavailable' as const,
+          message: [
+            `Forecast for "${location}" is not available on ${error.details.targetLocalDate}.`,
+            `Available forecast range is ${error.details.fromLocal} to ${error.details.toLocal}.`,
+          ].join(' '),
+        };
+      }
+
       const providerDetails = this.#getProviderErrorDetails(error);
 
       return {
@@ -335,7 +356,7 @@ export class WeatherService {
       };
     }
   }
-
+  /** @todo provide better, typesafe solution for interactions with 3rd party apis */
   static async #fetch(url: string): Promise<unknown> {
     const abortController = new AbortController();
     const timeout = setTimeout(
@@ -350,7 +371,7 @@ export class WeatherService {
       });
 
       if (!response.ok) {
-        throw new OpenWeatherApiError(`openweather_api_error_${response.status}`, {
+        throw new OpenWeatherApiError('openweather_api_error', {
           status: response.status,
           providerMessage: await this.#readProviderErrorMessage(response),
         });
@@ -446,6 +467,15 @@ export class WeatherService {
     const matchingDayPoints = targetLocalDate
       ? points.filter((point) => point.localDate === targetLocalDate)
       : [];
+
+    if (targetLocalDate && matchingDayPoints.length === 0) {
+      throw new WeatherForecastTargetUnavailableError('openweather_forecast_target_unavailable', {
+        targetLocalDate,
+        fromLocal: firstPoint.forecastedAtLocal,
+        toLocal: lastPoint.forecastedAtLocal,
+      });
+    }
+
     const candidatePoints = matchingDayPoints.length > 0 ? matchingDayPoints : points;
     const selectedPoint = this.#selectClosestForecastPoint({
       points: candidatePoints,
