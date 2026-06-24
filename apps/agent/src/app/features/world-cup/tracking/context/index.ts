@@ -70,7 +70,7 @@ export class WorldCupContextService {
     focus = 'all',
     teamCodes,
     date,
-  }: Omit<WorldCupContextInput, 'games'>): Promise<WorldCupContext> {
+  }: Omit<WorldCupContextInput, 'games'>) {
     return this.createContext({
       games: await WorldCupApiClient.getGames(),
       timeZone,

@@ -122,7 +122,7 @@ export class AIAgentService {
     threadId?: string;
     sourceMessageId?: string;
     timeZone?: string;
-  }): Promise<{ text: string }> {
+  }) {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
       abortController.abort(new Error(`assistant_generate_timeout_${this.timeout.total}ms`));

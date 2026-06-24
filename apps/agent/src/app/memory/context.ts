@@ -43,7 +43,7 @@ export class AgentContextService {
     identityId: string;
     threadId: string;
     shortTermMemory: ShortTermMemory[];
-  }): Promise<ModelMessage[]> {
+  }) {
     const currentQuery = this.getCurrentQuery(shortTermMemory);
     const queryEmbedding = currentQuery ? await AIService.embed(currentQuery) : null;
 

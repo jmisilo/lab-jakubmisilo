@@ -128,9 +128,7 @@ export class WorldCupSubscriptionService {
     return { ok: true as const, deactivatedCount };
   }
 
-  static async findNotificationTargets(
-    event: WorldCupDetectedEvent,
-  ): Promise<WorldCupNotificationTarget[]> {
+  static async findNotificationTargets(event: WorldCupDetectedEvent) {
     /**
      * @note Current fanout loads active subscriptions and filters in memory. This is fine for
      * current personal-agent scale (hundreds of subscriptions), but should move matching into SQL
