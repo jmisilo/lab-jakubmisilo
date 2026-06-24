@@ -150,6 +150,18 @@ export class WorldCupTeamRegistry {
     return WORLD_CUP_TEAMS.find((team) => team.fifaCode === fifaCode.trim().toUpperCase());
   }
 
+  static getFlagEmojiById(id: string) {
+    const team = this.getById(id);
+
+    if (!team || team.iso2.length !== 2) {
+      return undefined;
+    }
+
+    return [...team.iso2.toUpperCase()]
+      .map((letter) => String.fromCodePoint(letter.charCodeAt(0) + 127_397))
+      .join('');
+  }
+
   private static normalizeQuery(value: string) {
     return value
       .normalize('NFD')

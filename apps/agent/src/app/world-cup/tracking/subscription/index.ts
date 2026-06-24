@@ -176,7 +176,7 @@ export class WorldCupSubscriptionService {
   }
 
   private static toSubscriptionEventType(eventType: WorldCupDetectedEvent['eventType']) {
-    return eventType === 'kickoff_reminder' ? 'kickoff' : eventType;
+    return eventType === 'kickoff-reminder' ? 'kickoff' : eventType;
   }
 
   private static normalizeEventTypes(eventTypes: WorldCupEventType[]) {
@@ -243,7 +243,7 @@ export class WorldCupSubscriptionService {
     teams: readonly WorldCupTeam[];
     eventTypes: WorldCupEventType[];
   }) {
-    const events = eventTypes.map((eventType) => eventType.replace('_', ' ')).join(', ');
+    const events = eventTypes.map((eventType) => eventType.replace('-', ' ')).join(', ');
 
     if (trackingMode === 'all_teams') {
       return `Subscribed to ${events} for all ${teams.length} World Cup teams.`;

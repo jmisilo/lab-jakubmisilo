@@ -4,12 +4,12 @@ import { z } from 'zod';
 
 import { WorldCupTeamRegistry } from '@/app/world-cup/teams';
 
-export const WORLD_CUP_EVENT_TYPES = ['kickoff', 'goal', 'game_end'] as const;
+export const WORLD_CUP_EVENT_TYPES = ['kickoff', 'goal', 'game-end'] as const;
 export const WORLD_CUP_DETECTED_EVENT_TYPES = [
   'kickoff',
   'goal',
-  'game_end',
-  'kickoff_reminder',
+  'game-end',
+  'kickoff-reminder',
 ] as const;
 export const WORLD_CUP_TRACKING_MODES = ['all_teams', 'teams', 'team'] as const;
 
@@ -100,6 +100,8 @@ export const WorldCupGameSnapshotSchema = WorldCupApiGameSchema.transform((game)
 const WorldCupEventTeamSchema = z.object({
   id: z.string(),
   name: z.string(),
+  fifaCode: z.string().optional(),
+  flagEmoji: z.string().optional(),
   score: z.number(),
   scorers: z.string(),
 });
@@ -107,6 +109,8 @@ const WorldCupEventTeamSchema = z.object({
 const WorldCupScoringTeamSchema = z.object({
   id: z.string(),
   name: z.string(),
+  fifaCode: z.string().optional(),
+  flagEmoji: z.string().optional(),
   scoreAfterGoal: z.number(),
   goalsDetected: z.number(),
   scorers: z.string(),

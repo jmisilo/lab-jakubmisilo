@@ -12,7 +12,7 @@ import {
   vector,
 } from 'drizzle-orm/pg-core';
 
-type WorldCup2026EventType = 'kickoff' | 'goal' | 'game_end';
+type WorldCup2026EventType = 'kickoff' | 'goal' | 'game-end';
 
 /**
  * Chat SDK owns chat_state_* tables. Drizzle excludes those tables from db:push,
@@ -97,7 +97,7 @@ export const worldCup2026Subscriptions = pgTable(
     scope: text('scope', { enum: ['team'] }).notNull(),
     teamId: text('team_id'),
     teamName: text('team_name'),
-    eventTypes: text('event_types', { enum: ['kickoff', 'goal', 'game_end'] })
+    eventTypes: text('event_types', { enum: ['kickoff', 'goal', 'game-end'] })
       .array()
       .notNull()
       .default([])
@@ -137,7 +137,7 @@ export const worldCup2026DetectedEvents = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     eventKey: text('event_key').notNull(),
     eventType: text('event_type', {
-      enum: ['kickoff_reminder', 'kickoff', 'goal', 'game_end'],
+      enum: ['kickoff-reminder', 'kickoff', 'goal', 'game-end'],
     }).notNull(),
     gameId: text('game_id').notNull(),
     teamIds: text('team_ids').array().notNull().default([]),

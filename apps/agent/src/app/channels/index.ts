@@ -11,6 +11,17 @@ import { AgentContextService } from '@/app/memory/context';
 import { chatLogger, logger } from '@/infrastructure/logger';
 
 const TYPING_INDICATOR_REFRESH_MS = 3_000;
+const EMPTY_AGENT_RESPONSE_ERROR_CODE = 'EMPTY_AGENT_RESPONSE';
+
+class UserVisibleAgentError extends Error {
+  constructor(
+    message: string,
+    readonly details: { code: string; reason: string },
+  ) {
+    super(message);
+    this.name = 'UserVisibleAgentError';
+  }
+}
 
 export const bot = new Chat({
   userName: process.env.TELEGRAM_BOT_USERNAME ?? 'labjm_assistant_bot',
@@ -132,19 +143,29 @@ const respondToMessage = async ({
       '[TELEGRAM_AGENT]: model output generated',
     );
 
-    await thread.post({ markdown: result.text });
+    const responseText = result.text.trim();
+
+    if (!responseText) {
+      throw new UserVisibleAgentError('Agent generated an empty response', {
+        code: EMPTY_AGENT_RESPONSE_ERROR_CODE,
+        reason:
+          'The model returned an empty response after tool calls, so Telegram would reject the message.',
+      });
+    }
+
+    await thread.post({ markdown: responseText });
 
     await Promise.all([
       bot.transcripts.append(
         thread,
-        { role: 'assistant', text: result.text },
+        { role: 'assistant', text: responseText },
         { userKey: identityId },
       ),
       AgentMemoryService.recordMessage({
         identityId,
         threadId: thread.id,
         role: 'assistant',
-        content: result.text,
+        content: responseText,
       }),
     ]);
 
@@ -163,17 +184,93 @@ const respondToMessage = async ({
       }),
     );
   } catch (error) {
+    const failureDetails = getUserFacingFailureDetails(error);
+
     logger.error(
       {
         threadId: thread.id,
         sourceMessageId: message.id,
         error,
+        userFacingCode: failureDetails.code,
+        userFacingReason: failureDetails.reason,
       },
       '[TELEGRAM_AGENT]: message failed',
     );
 
-    throw error;
+    await postFailureMessage({ thread, sourceMessageId: message.id, failureDetails });
   }
+};
+
+const postFailureMessage = async ({
+  thread,
+  sourceMessageId,
+  failureDetails,
+}: {
+  thread: Thread;
+  sourceMessageId: string;
+  failureDetails: { code: string; reason: string; name?: string };
+}) => {
+  try {
+    await thread.post({
+      markdown: '⚠️ I hit a failure while handling that request. Please retry.',
+    });
+
+    logger.info(
+      {
+        threadId: thread.id,
+        sourceMessageId,
+        userFacingCode: failureDetails.code,
+        userFacingReason: failureDetails.reason,
+        userFacingName: failureDetails.name,
+      },
+      '[TELEGRAM_AGENT]: failure message sent',
+    );
+  } catch (postError) {
+    logger.error(
+      {
+        threadId: thread.id,
+        sourceMessageId,
+        originalFailureCode: failureDetails.code,
+        error: postError,
+      },
+      '[TELEGRAM_AGENT]: failure message failed',
+    );
+  }
+};
+
+const getUserFacingFailureDetails = (
+  error: unknown,
+): { code: string; reason: string; name?: string } => {
+  if (error instanceof UserVisibleAgentError) {
+    return {
+      code: error.details.code,
+      reason: error.details.reason,
+      name: error.name,
+    };
+  }
+
+  const code = getErrorField(error, 'code') ?? 'AGENT_MESSAGE_FAILED';
+  const name = getErrorField(error, 'name') ?? (error instanceof Error ? error.name : undefined);
+  const message = error instanceof Error ? error.message : undefined;
+  const adapter = getErrorField(error, 'adapter');
+  const adapterContext = adapter ? `${adapter} adapter failed` : 'The agent failed';
+  const reason = message?.trim() ? `${adapterContext}: ${message}` : `${adapterContext}.`;
+
+  return {
+    code,
+    reason,
+    name,
+  };
+};
+
+const getErrorField = (error: unknown, field: string) => {
+  if (!error || typeof error !== 'object' || !(field in error)) {
+    return undefined;
+  }
+
+  const value = (error as Record<string, unknown>)[field];
+
+  return typeof value === 'string' && value.trim() ? value : undefined;
 };
 
 const withTypingIndicator = async <T>(thread: Thread, operation: () => Promise<T>): Promise<T> => {

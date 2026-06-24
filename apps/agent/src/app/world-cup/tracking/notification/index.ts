@@ -90,7 +90,9 @@ export class WorldCupNotificationService {
               Write a short Telegram notification for a FIFA World Cup 2026 event.
               Use the prior conversation only to match the user's tone and preferences.
               Do not invent football facts, times, scorers, teams, or scores.
-              Use markdown only when helpful. Keep it direct and concise.
+              Use country flag emojis from the payload when they are available.
+              Vary wording, sentence rhythm, and openings between notifications so the message does not read like a fixed template.
+              Keep it natural, direct, and concise. Use markdown only when helpful.
             `,
           },
           ...context,
@@ -112,23 +114,30 @@ export class WorldCupNotificationService {
 
   private static createFallbackNotification(event: WorldCupDetectedEvent) {
     const { payload } = event;
+    const homeTeam = this.renderPayloadTeam(payload.homeTeam);
+    const awayTeam = this.renderPayloadTeam(payload.awayTeam);
 
-    if (payload.eventType === 'kickoff_reminder') {
-      return `${payload.homeTeam.name} vs ${payload.awayTeam.name} kicks off in ${payload.minutesUntilKickoff ?? 15} minutes.`;
+    if (payload.eventType === 'kickoff-reminder') {
+      return `${homeTeam} vs ${awayTeam} kicks off in ${payload.minutesUntilKickoff ?? 15} minutes.`;
     }
 
     if (payload.eventType === 'kickoff') {
-      return `Kickoff: ${payload.homeTeam.name} vs ${payload.awayTeam.name} has started.`;
+      return `Kickoff: ${homeTeam} vs ${awayTeam} has started.`;
     }
 
     if (payload.eventType === 'goal' && payload.scoringTeam) {
+      const scoringTeam = this.renderPayloadTeam(payload.scoringTeam);
       const scorer = payload.scoringTeam.scorerName
         ? ` ${payload.scoringTeam.scorerName}${payload.scoringTeam.goalMinute ? ` ${payload.scoringTeam.goalMinute}'` : ''}.`
         : '';
 
-      return `Goal for ${payload.scoringTeam.name}.${scorer} ${payload.matchLabel}.`;
+      return `Goal for ${scoringTeam}.${scorer} ${payload.matchLabel}.`;
     }
 
     return `Full time: ${payload.matchLabel}.`;
+  }
+
+  private static renderPayloadTeam(team: { flagEmoji?: string; name: string }) {
+    return [team.flagEmoji, team.name].filter(Boolean).join(' ');
   }
 }
