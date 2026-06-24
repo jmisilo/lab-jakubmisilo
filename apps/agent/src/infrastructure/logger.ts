@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 import pino from 'pino';
 
 const logFile = process.env.AGENT_LOG_FILE;
-const defaultLogLevel = process.env.NODE_ENV === 'production' ? 'debug' : 'info';
+const defaultLogLevel = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
 const loggerOptions = {
   level: process.env.LOG_LEVEL ?? process.env.CHAT_SDK_LOG_LEVEL ?? defaultLogLevel,
 };

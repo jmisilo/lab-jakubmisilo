@@ -299,6 +299,51 @@ describe('WeatherService', () => {
     });
   });
 
+  it('returns forecast_target_unavailable when the requested forecast date is outside the available range', async () => {
+    process.env.OPENWEATHER_API_KEY = 'test-api-key';
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            name: 'Warsaw',
+            lat: 52.2297,
+            lon: 21.0122,
+            country: 'PL',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cnt: 2,
+          city: {
+            name: 'Warsaw',
+            country: 'PL',
+            timezone: 7200,
+          },
+          list: [
+            createForecastPoint({ dt: 1782316800, temp: 20, description: 'clear sky' }),
+            createForecastPoint({ dt: 1782403200, temp: 27, description: 'hot' }),
+          ],
+        }),
+      });
+
+    await expect(
+      WeatherService.getForecastWeather({
+        location: 'Warsaw',
+        targetLocalDate: '2026-07-10',
+        hour: 12,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'forecast_target_unavailable',
+      message:
+        'Forecast for "Warsaw" is not available on 2026-07-10. Available forecast range is 2026-06-24 18:00 UTC+02:00 to 2026-06-25 18:00 UTC+02:00.',
+    });
+  });
+
   it('returns provider diagnostics when geocoding request fails', async () => {
     process.env.OPENWEATHER_API_KEY = 'bad-api-key';
     global.fetch = jest.fn().mockResolvedValueOnce({

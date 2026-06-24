@@ -96,6 +96,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@labjm/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@labjm/jest-config':
         specifier: workspace:*
         version: link:../../packages/jest-config
@@ -111,6 +114,12 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+      eslint:
+        specifier: 9.39.4
+        version: 9.39.4(jiti@2.7.0)
+      globals:
+        specifier: 17.6.0
+        version: 17.6.0
       jest:
         specifier: 30.4.2
         version: 30.4.2(@types/node@24.13.2)(ts-node@10.9.2(@types/node@24.13.2)(typescript@6.0.3))

@@ -31,7 +31,7 @@ export class WorldCupPollingService {
     logger.info({ pollRunId, gamesChecked: games.length }, '[WORLD_CUP]: games fetched');
 
     for (const current of games) {
-      const previous = await WorldCupDbService.getSnapshot(current.gameId);
+      const previous = await WorldCupDbService.getGameSnapshot(current.gameId);
       const events = WorldCupEventDetector.detect({ previous, current });
       result.eventsDetected += events.length;
 
@@ -51,25 +51,24 @@ export class WorldCupPollingService {
       for (const event of events) {
         const created = await WorldCupDbService.createDetectedEvent(event);
 
-        if (!created) {
+        if (created) {
+          result.eventsCreated += 1;
+          logger.info(
+            {
+              pollRunId,
+              eventKey: event.eventKey,
+              eventType: event.eventType,
+              gameId: event.gameId,
+              teamIds: event.teamIds,
+            },
+            '[WORLD_CUP]: detected event recorded',
+          );
+        } else {
           logger.debug(
             { pollRunId, eventKey: event.eventKey, eventType: event.eventType },
             '[WORLD_CUP]: detected event already recorded',
           );
-          continue;
         }
-
-        result.eventsCreated += 1;
-        logger.info(
-          {
-            pollRunId,
-            eventKey: event.eventKey,
-            eventType: event.eventType,
-            gameId: event.gameId,
-            teamIds: event.teamIds,
-          },
-          '[WORLD_CUP]: detected event recorded',
-        );
 
         const targets = await WorldCupSubscriptionService.findNotificationTargets(event);
         result.notificationTargets += targets.length;
@@ -85,14 +84,14 @@ export class WorldCupPollingService {
         );
 
         for (const target of targets) {
-          const delivery = await WorldCupDbService.createPendingDelivery({
+          const deliveryResult = await WorldCupDbService.createPendingDelivery({
             deliveryKey: `${event.eventKey}:${target.threadId}`,
             eventKey: event.eventKey,
             subscriptionId: target.subscriptionId,
             threadId: target.threadId,
           });
 
-          if (!delivery) {
+          if (!deliveryResult.deliverable || !deliveryResult.delivery) {
             result.deliveriesSkipped += 1;
             logger.debug(
               {
@@ -106,7 +105,12 @@ export class WorldCupPollingService {
             continue;
           }
 
-          result.deliveriesCreated += 1;
+          const { delivery } = deliveryResult;
+
+          if (deliveryResult.created) {
+            result.deliveriesCreated += 1;
+          }
+
           logger.info(
             {
               pollRunId,
@@ -115,8 +119,11 @@ export class WorldCupPollingService {
               subscriptionId: target.subscriptionId,
               identityId: target.identityId,
               threadId: target.threadId,
+              deliveryCreated: deliveryResult.created,
             },
-            '[WORLD_CUP]: delivery created',
+            deliveryResult.created
+              ? '[WORLD_CUP]: delivery created'
+              : '[WORLD_CUP]: delivery retry prepared',
           );
 
           try {

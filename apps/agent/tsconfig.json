@@ -25,6 +25,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "jest.setup.ts"],
+  "include": ["src", "jest.setup.ts", "eslint.config.ts"],
   "exclude": ["node_modules"]
 }

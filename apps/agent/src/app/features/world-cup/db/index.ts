@@ -17,7 +17,7 @@ import { DbService } from '@/infrastructure/db/services';
 export type WorldCupSubscription = typeof worldCup2026Subscriptions.$inferSelect;
 
 export class WorldCupDbService extends DbService {
-  static async getSnapshot(gameId: string) {
+  static async getGameSnapshot(gameId: string) {
     const [snapshot] = await this.client
       .select()
       .from(worldCup2026GameSnapshots)
@@ -122,6 +122,7 @@ export class WorldCupDbService extends DbService {
     subscriptionId: string;
     threadId: string;
   }) {
+    const pendingThreshold = Date.now() - 2 * 60 * 1000;
     const [delivery] = await this.client
       .insert(worldCup2026EventDeliveries)
       .values({
@@ -136,7 +137,55 @@ export class WorldCupDbService extends DbService {
       })
       .returning();
 
-    return delivery ?? null;
+    if (delivery) {
+      return {
+        delivery,
+        created: true as const,
+        deliverable: true as const,
+      };
+    }
+
+    const [existingDelivery] = await this.client
+      .select()
+      .from(worldCup2026EventDeliveries)
+      .where(eq(worldCup2026EventDeliveries.deliveryKey, deliveryKey))
+      .limit(1);
+
+    if (!existingDelivery || existingDelivery.status === 'sent') {
+      return {
+        delivery: existingDelivery ?? null,
+        created: false as const,
+        deliverable: false as const,
+      };
+    }
+
+    const canRetry =
+      existingDelivery.status === 'failed' ||
+      existingDelivery.createdAt.getTime() < pendingThreshold;
+
+    if (!canRetry) {
+      return {
+        delivery: existingDelivery,
+        created: false as const,
+        deliverable: false as const,
+      };
+    }
+
+    const [retryDelivery] = await this.client
+      .update(worldCup2026EventDeliveries)
+      .set({
+        status: 'pending',
+        error: null,
+        deliveredAt: null,
+      })
+      .where(eq(worldCup2026EventDeliveries.id, existingDelivery.id))
+      .returning();
+
+    return {
+      delivery: retryDelivery ?? existingDelivery,
+      created: false as const,
+      deliverable: true as const,
+    };
   }
 
   static async markDeliverySent(deliveryId: string) {

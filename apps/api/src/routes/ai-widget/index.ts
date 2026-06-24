@@ -48,7 +48,10 @@ export const AIWidgetRouter = new Hono().post(
     });
 
     return createUIMessageStreamResponse({
-      stream: toUIMessageStream({ stream: result.stream }),
+      stream: toUIMessageStream({
+        stream: result.stream,
+        originalMessages: messages,
+      }),
     });
   },
 );

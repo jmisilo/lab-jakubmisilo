@@ -170,4 +170,5 @@ export const WeatherFailureReasonSchema = z.enum([
   'location_not_found',
   'geocoding_failed',
   'weather_fetch_failed',
+  'forecast_target_unavailable',
 ]);
