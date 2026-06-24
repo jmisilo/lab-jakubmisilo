@@ -31,9 +31,9 @@ class OpenWeatherApiError extends Error {
 }
 
 export class WeatherService {
-  private static timeout = 10_000;
-  private static geocodingUrl = new UrlComposer('api.openweathermap.org', 'https');
-  private static weatherUrl = new UrlComposer('api.openweathermap.org', 'https');
+  static #timeout = 10_000;
+  static #geocodingUrl = new UrlComposer('api.openweathermap.org', 'https');
+  static #weatherUrl = new UrlComposer('api.openweathermap.org', 'https');
 
   static async getCurrentWeather({
     location,
@@ -51,13 +51,13 @@ export class WeatherService {
     }
 
     const unitSystem = WeatherUnitsSchema.parse(units);
-    const geocodingResult = await this.findLocation({ location });
+    const geocodingResult = await this.#findLocation({ location });
 
     if (!geocodingResult.ok) {
       return geocodingResult;
     }
 
-    const weatherResult = await this.fetchCurrentWeather({
+    const weatherResult = await this.#fetchCurrentWeather({
       location,
       resolvedLocation: geocodingResult.location,
       units: unitSystem,
@@ -92,13 +92,13 @@ export class WeatherService {
     }
 
     const unitSystem = WeatherUnitsSchema.parse(units);
-    const geocodingResult = await this.findLocation({ location });
+    const geocodingResult = await this.#findLocation({ location });
 
     if (!geocodingResult.ok) {
       return geocodingResult;
     }
 
-    return this.fetchForecastWeather({
+    return this.#fetchForecastWeather({
       location,
       resolvedLocation: geocodingResult.location,
       units: unitSystem,
@@ -121,23 +121,23 @@ export class WeatherService {
       };
     }
 
-    const geocodingResult = await this.findLocation({ location });
+    const geocodingResult = await this.#findLocation({ location });
 
     if (!geocodingResult.ok) {
       return geocodingResult;
     }
 
-    return this.fetchLocalTime({
+    return this.#fetchLocalTime({
       location,
       resolvedLocation: geocodingResult.location,
       now,
     });
   }
 
-  private static async findLocation({ location }: { location: string }) {
+  static async #findLocation({ location }: { location: string }) {
     try {
-      const response = await this.fetchJson(
-        this.geocodingUrl.compose({
+      const response = await this.#fetch(
+        this.#geocodingUrl.compose({
           pathSegments: ['/geo', '/1.0', '/direct'],
           queryParams: {
             q: location.trim(),
@@ -161,12 +161,12 @@ export class WeatherService {
         location: matchedLocation,
       };
     } catch (error) {
-      const providerDetails = this.getProviderErrorDetails(error);
+      const providerDetails = this.#getProviderErrorDetails(error);
 
       return {
         ok: false as const,
         reason: 'geocoding_failed' as const,
-        message: this.createFailureMessage({
+        message: this.#createFailureMessage({
           fallback: `Could not resolve weather location "${location}".`,
           operation: 'OpenWeather geocoding request',
           providerDetails,
@@ -177,7 +177,7 @@ export class WeatherService {
     }
   }
 
-  private static async fetchCurrentWeather({
+  static async #fetchCurrentWeather({
     location,
     resolvedLocation,
     units,
@@ -187,8 +187,8 @@ export class WeatherService {
     units: WeatherUnits;
   }) {
     try {
-      const response = await this.fetchJson(
-        this.weatherUrl.compose({
+      const response = await this.#fetch(
+        this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/weather'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -203,7 +203,7 @@ export class WeatherService {
 
       return {
         ok: true as const,
-        weather: this.toCurrentWeather({
+        weather: this.#toCurrentWeather({
           requestedLocation: location,
           resolvedLocation,
           weather,
@@ -211,12 +211,12 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      const providerDetails = this.getProviderErrorDetails(error);
+      const providerDetails = this.#getProviderErrorDetails(error);
 
       return {
         ok: false as const,
         reason: 'weather_fetch_failed' as const,
-        message: this.createFailureMessage({
+        message: this.#createFailureMessage({
           fallback: `Could not fetch current weather for "${location}".`,
           operation: 'OpenWeather weather request',
           providerDetails,
@@ -227,7 +227,7 @@ export class WeatherService {
     }
   }
 
-  private static async fetchForecastWeather({
+  static async #fetchForecastWeather({
     location,
     resolvedLocation,
     units,
@@ -246,8 +246,8 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.fetchJson(
-        this.weatherUrl.compose({
+      const response = await this.#fetch(
+        this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/forecast'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -262,7 +262,7 @@ export class WeatherService {
 
       return {
         ok: true as const,
-        forecast: this.toWeatherForecast({
+        forecast: this.#toWeatherForecast({
           requestedLocation: location,
           resolvedLocation,
           forecast,
@@ -272,12 +272,12 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      const providerDetails = this.getProviderErrorDetails(error);
+      const providerDetails = this.#getProviderErrorDetails(error);
 
       return {
         ok: false as const,
         reason: 'weather_fetch_failed' as const,
-        message: this.createFailureMessage({
+        message: this.#createFailureMessage({
           fallback: `Could not fetch weather forecast for "${location}".`,
           operation: 'OpenWeather forecast request',
           providerDetails,
@@ -288,7 +288,7 @@ export class WeatherService {
     }
   }
 
-  private static async fetchLocalTime({
+  static async #fetchLocalTime({
     location,
     resolvedLocation,
     now,
@@ -298,8 +298,8 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.fetchJson(
-        this.weatherUrl.compose({
+      const response = await this.#fetch(
+        this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/weather'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -312,7 +312,7 @@ export class WeatherService {
 
       return {
         ok: true as const,
-        localTime: this.toLocalTime({
+        localTime: this.#toLocalTime({
           requestedLocation: location,
           resolvedLocation,
           timezoneOffsetSeconds: weather.timezone,
@@ -320,12 +320,12 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      const providerDetails = this.getProviderErrorDetails(error);
+      const providerDetails = this.#getProviderErrorDetails(error);
 
       return {
         ok: false as const,
         reason: 'weather_fetch_failed' as const,
-        message: this.createFailureMessage({
+        message: this.#createFailureMessage({
           fallback: `Could not fetch local time for "${location}".`,
           operation: 'OpenWeather local time request',
           providerDetails,
@@ -336,11 +336,11 @@ export class WeatherService {
     }
   }
 
-  private static async fetchJson(url: string): Promise<unknown> {
+  static async #fetch(url: string): Promise<unknown> {
     const abortController = new AbortController();
     const timeout = setTimeout(
       () => abortController.abort(new Error('openweather_api_timeout')),
-      this.timeout,
+      this.#timeout,
     );
 
     try {
@@ -352,7 +352,7 @@ export class WeatherService {
       if (!response.ok) {
         throw new OpenWeatherApiError(`openweather_api_error_${response.status}`, {
           status: response.status,
-          providerMessage: await this.readProviderErrorMessage(response),
+          providerMessage: await this.#readProviderErrorMessage(response),
         });
       }
 
@@ -362,7 +362,7 @@ export class WeatherService {
     }
   }
 
-  private static toCurrentWeather({
+  static #toCurrentWeather({
     requestedLocation,
     resolvedLocation,
     weather,
@@ -381,7 +381,7 @@ export class WeatherService {
 
     return {
       requestedLocation,
-      resolvedLocation: this.formatResolvedLocation(resolvedLocation),
+      resolvedLocation: this.#formatResolvedLocation(resolvedLocation),
       country: resolvedLocation.country,
       coordinates: {
         lat: resolvedLocation.lat,
@@ -403,7 +403,7 @@ export class WeatherService {
     };
   }
 
-  private static toWeatherForecast({
+  static #toWeatherForecast({
     requestedLocation,
     resolvedLocation,
     forecast,
@@ -424,7 +424,7 @@ export class WeatherService {
     now: Date;
   }): WeatherForecast {
     const points = forecast.list.map((point) =>
-      this.toWeatherForecastPoint(point, forecast.city.timezone),
+      this.#toWeatherForecastPoint(point, forecast.city.timezone),
     );
     const [firstPoint] = points;
     const lastPoint = points.at(-1);
@@ -437,24 +437,24 @@ export class WeatherService {
       target.targetLocalDate ??
       (target.daysFromNow === undefined
         ? undefined
-        : this.addDaysToLocalDate({
+        : this.#addDaysToLocalDate({
             date: now,
             timezoneOffsetSeconds: forecast.city.timezone,
             days: target.daysFromNow,
           }));
-    const targetHour = target.hour ?? this.getPreferredForecastHour(target.timeOfDay);
+    const targetHour = target.hour ?? this.#getPreferredForecastHour(target.timeOfDay);
     const matchingDayPoints = targetLocalDate
       ? points.filter((point) => point.localDate === targetLocalDate)
       : [];
     const candidatePoints = matchingDayPoints.length > 0 ? matchingDayPoints : points;
-    const selectedPoint = this.selectClosestForecastPoint({
+    const selectedPoint = this.#selectClosestForecastPoint({
       points: candidatePoints,
       preferredHour: targetHour,
     });
 
     return {
       requestedLocation,
-      resolvedLocation: this.formatResolvedLocation(resolvedLocation),
+      resolvedLocation: this.#formatResolvedLocation(resolvedLocation),
       country: resolvedLocation.country,
       coordinates: {
         lat: resolvedLocation.lat,
@@ -476,7 +476,7 @@ export class WeatherService {
     };
   }
 
-  private static toWeatherForecastPoint(
+  static #toWeatherForecastPoint(
     point: OpenWeatherForecastPoint,
     timezoneOffsetSeconds: number,
   ): WeatherForecastPoint {
@@ -486,7 +486,7 @@ export class WeatherService {
       throw new Error('openweather_forecast_weather_condition_missing');
     }
 
-    const localDateTime = this.toOffsetDateTime({
+    const localDateTime = this.#toOffsetDateTime({
       timestampSeconds: point.dt,
       timezoneOffsetSeconds,
     });
@@ -511,7 +511,7 @@ export class WeatherService {
     };
   }
 
-  private static toLocalTime({
+  static #toLocalTime({
     requestedLocation,
     resolvedLocation,
     timezoneOffsetSeconds,
@@ -522,14 +522,14 @@ export class WeatherService {
     timezoneOffsetSeconds: number;
     now: Date;
   }): LocalTime {
-    const localDateTime = this.toOffsetDateTime({
+    const localDateTime = this.#toOffsetDateTime({
       timestampSeconds: Math.floor(now.getTime() / 1000),
       timezoneOffsetSeconds,
     });
 
     return {
       requestedLocation,
-      resolvedLocation: this.formatResolvedLocation(resolvedLocation),
+      resolvedLocation: this.#formatResolvedLocation(resolvedLocation),
       country: resolvedLocation.country,
       coordinates: {
         lat: resolvedLocation.lat,
@@ -544,7 +544,7 @@ export class WeatherService {
     };
   }
 
-  private static selectClosestForecastPoint({
+  static #selectClosestForecastPoint({
     points,
     preferredHour,
   }: {
@@ -564,7 +564,7 @@ export class WeatherService {
     );
   }
 
-  private static getPreferredForecastHour(timeOfDay?: WeatherForecastTimeOfDay) {
+  static #getPreferredForecastHour(timeOfDay?: WeatherForecastTimeOfDay) {
     if (timeOfDay === 'morning') {
       return 9;
     }
@@ -584,7 +584,7 @@ export class WeatherService {
     return 12;
   }
 
-  private static addDaysToLocalDate({
+  static #addDaysToLocalDate({
     date,
     timezoneOffsetSeconds,
     days,
@@ -596,10 +596,10 @@ export class WeatherService {
     const shifted = new Date(date.getTime() + timezoneOffsetSeconds * 1000);
     shifted.setUTCDate(shifted.getUTCDate() + days);
 
-    return this.formatUtcDate(shifted);
+    return this.#formatUtcDate(shifted);
   }
 
-  private static toOffsetDateTime({
+  static #toOffsetDateTime({
     timestampSeconds,
     timezoneOffsetSeconds,
   }: {
@@ -607,11 +607,11 @@ export class WeatherService {
     timezoneOffsetSeconds: number;
   }) {
     const shifted = new Date((timestampSeconds + timezoneOffsetSeconds) * 1000);
-    const date = this.formatUtcDate(shifted);
+    const date = this.#formatUtcDate(shifted);
     const time = [shifted.getUTCHours(), shifted.getUTCMinutes()]
       .map((value) => value.toString().padStart(2, '0'))
       .join(':');
-    const offset = this.formatTimezoneOffset(timezoneOffsetSeconds);
+    const offset = this.#formatTimezoneOffset(timezoneOffsetSeconds);
 
     return {
       date,
@@ -622,13 +622,13 @@ export class WeatherService {
     };
   }
 
-  private static formatUtcDate(date: Date) {
+  static #formatUtcDate(date: Date) {
     return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
       .map((value, index) => (index === 0 ? value.toString() : value.toString().padStart(2, '0')))
       .join('-');
   }
 
-  private static formatTimezoneOffset(timezoneOffsetSeconds: number) {
+  static #formatTimezoneOffset(timezoneOffsetSeconds: number) {
     const sign = timezoneOffsetSeconds >= 0 ? '+' : '-';
     const absoluteSeconds = Math.abs(timezoneOffsetSeconds);
     const hours = Math.floor(absoluteSeconds / 3600)
@@ -641,11 +641,11 @@ export class WeatherService {
     return `UTC${sign}${hours}:${minutes}`;
   }
 
-  private static formatResolvedLocation(location: OpenWeatherGeocodingResult) {
+  static #formatResolvedLocation(location: OpenWeatherGeocodingResult) {
     return [location.name, location.state, location.country].filter(Boolean).join(', ');
   }
 
-  private static async readProviderErrorMessage(response: Response) {
+  static async #readProviderErrorMessage(response: Response) {
     const text = await response.text().catch(() => '');
 
     if (!text) {
@@ -663,7 +663,7 @@ export class WeatherService {
     }
   }
 
-  private static getProviderErrorDetails(error: unknown) {
+  static #getProviderErrorDetails(error: unknown) {
     if (error instanceof OpenWeatherApiError) {
       return error.details;
     }
@@ -671,7 +671,7 @@ export class WeatherService {
     return undefined;
   }
 
-  private static createFailureMessage({
+  static #createFailureMessage({
     fallback,
     operation,
     providerDetails,

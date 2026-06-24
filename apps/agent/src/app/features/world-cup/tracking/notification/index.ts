@@ -32,7 +32,12 @@ export class WorldCupNotificationService {
       { eventKey: event.eventKey, identityId, threadId },
       '[WORLD_CUP]: composing notification',
     );
-    const message = await this.composeNotification({ bot, event, identityId, threadId });
+    const message = await this.#composeNotification({
+      bot,
+      event,
+      identityId,
+      threadId,
+    });
     logger.info(
       { eventKey: event.eventKey, threadId, messageLength: message.length },
       '[WORLD_CUP]: posting notification',
@@ -40,7 +45,7 @@ export class WorldCupNotificationService {
     await bot.thread(threadId).post({ markdown: message });
   }
 
-  private static async composeNotification({
+  static async #composeNotification({
     bot,
     event,
     identityId,
@@ -108,14 +113,14 @@ export class WorldCupNotificationService {
       });
     } catch (error) {
       logger.error({ error, eventKey: event.eventKey }, '[WORLD_CUP]: AI notification failed');
-      return this.createFallbackNotification(event);
+      return this.#createFallbackNotification(event);
     }
   }
 
-  private static createFallbackNotification(event: WorldCupDetectedEvent) {
+  static #createFallbackNotification(event: WorldCupDetectedEvent) {
     const { payload } = event;
-    const homeTeam = this.renderPayloadTeam(payload.homeTeam);
-    const awayTeam = this.renderPayloadTeam(payload.awayTeam);
+    const homeTeam = this.#renderPayloadTeam(payload.homeTeam);
+    const awayTeam = this.#renderPayloadTeam(payload.awayTeam);
 
     if (payload.eventType === 'kickoff-reminder') {
       return `${homeTeam} vs ${awayTeam} kicks off in ${payload.minutesUntilKickoff ?? 15} minutes.`;
@@ -126,7 +131,7 @@ export class WorldCupNotificationService {
     }
 
     if (payload.eventType === 'goal' && payload.scoringTeam) {
-      const scoringTeam = this.renderPayloadTeam(payload.scoringTeam);
+      const scoringTeam = this.#renderPayloadTeam(payload.scoringTeam);
       const scorer = payload.scoringTeam.scorerName
         ? ` ${payload.scoringTeam.scorerName}${payload.scoringTeam.goalMinute ? ` ${payload.scoringTeam.goalMinute}'` : ''}.`
         : '';
@@ -137,7 +142,7 @@ export class WorldCupNotificationService {
     return `Full time: ${payload.matchLabel}.`;
   }
 
-  private static renderPayloadTeam(team: { flagEmoji?: string; name: string }) {
+  static #renderPayloadTeam(team: { flagEmoji?: string; name: string }) {
     return [team.flagEmoji, team.name].filter(Boolean).join(' ');
   }
 }

@@ -32,8 +32,11 @@ export class WorldCupSubscriptionService {
     teamCodes?: string[];
     eventTypes: WorldCupEventType[];
   }) {
-    const normalizedEventTypes = this.normalizeEventTypes(eventTypes);
-    const resolvedTeams = this.resolveTrackedTeams({ trackingMode, teamCodes });
+    const normalizedEventTypes = this.#normalizeEventTypes(eventTypes);
+    const resolvedTeams = this.#resolveTrackedTeams({
+      trackingMode,
+      teamCodes,
+    });
 
     if (!resolvedTeams.ok) {
       return resolvedTeams;
@@ -79,7 +82,7 @@ export class WorldCupSubscriptionService {
     return {
       ok: true as const,
       subscriptions,
-      message: this.describeSubscription({
+      message: this.#describeSubscription({
         trackingMode,
         teams: resolvedTeams.teams,
         eventTypes: normalizedEventTypes,
@@ -98,7 +101,10 @@ export class WorldCupSubscriptionService {
     trackingMode: WorldCupTrackingMode;
     teamCodes?: string[];
   }) {
-    const resolvedTeams = this.resolveTrackedTeams({ trackingMode, teamCodes });
+    const resolvedTeams = this.#resolveTrackedTeams({
+      trackingMode,
+      teamCodes,
+    });
 
     if (!resolvedTeams.ok) {
       return resolvedTeams;
@@ -136,7 +142,7 @@ export class WorldCupSubscriptionService {
      */
     const subscriptions = await WorldCupDbService.getActiveSubscriptions();
     const matchingSubscriptions = subscriptions.filter((subscription) =>
-      this.subscriptionMatchesEvent(subscription, event),
+      WorldCupSubscriptionService.subscriptionMatchesEvent(subscription, event),
     );
     const targets = new Map<string, WorldCupNotificationTarget>();
 
@@ -159,7 +165,7 @@ export class WorldCupSubscriptionService {
     subscription: Pick<WorldCupSubscription, 'eventTypes' | 'teamId'>,
     event: WorldCupDetectedEvent,
   ) {
-    if (!subscription.eventTypes.includes(this.toSubscriptionEventType(event.eventType))) {
+    if (!subscription.eventTypes.includes(this.#toSubscriptionEventType(event.eventType))) {
       return false;
     }
 
@@ -173,16 +179,16 @@ export class WorldCupSubscriptionService {
     );
   }
 
-  private static toSubscriptionEventType(eventType: WorldCupDetectedEvent['eventType']) {
+  static #toSubscriptionEventType(eventType: WorldCupDetectedEvent['eventType']) {
     return eventType === 'kickoff-reminder' ? 'kickoff' : eventType;
   }
 
-  private static normalizeEventTypes(eventTypes: WorldCupEventType[]) {
+  static #normalizeEventTypes(eventTypes: WorldCupEventType[]) {
     const values = eventTypes.length > 0 ? eventTypes : [...WORLD_CUP_EVENT_TYPES];
     return [...new Set(values)];
   }
 
-  private static resolveTrackedTeams({
+  static #resolveTrackedTeams({
     trackingMode,
     teamCodes,
   }: {
@@ -232,7 +238,7 @@ export class WorldCupSubscriptionService {
     return { ok: true as const, teams: [...teams.values()] };
   }
 
-  private static describeSubscription({
+  static #describeSubscription({
     trackingMode,
     teams,
     eventTypes,

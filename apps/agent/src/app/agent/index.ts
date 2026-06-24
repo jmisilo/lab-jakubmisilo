@@ -22,15 +22,15 @@ const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
 const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
 
 export class AIAgentService {
-  private static timeout = {
+  static #timeout = {
     total: 30_000,
     step: 20_000,
   };
 
-  private static model = 'gpt-5.4-nano';
+  static #model = 'gpt-5.4-nano';
 
   static readonly agent = new ToolLoopAgent({
-    model: openai(this.model),
+    model: openai(this.#model),
     instructions: instruction,
     tools: agentTools,
     /**
@@ -51,7 +51,7 @@ export class AIAgentService {
     callOptionsSchema: AgentRuntimeContextSchema,
     prepareCall: ({ options, ...input }) => ({
       ...input,
-      activeTools: this.getActiveTools(options),
+      activeTools: this.#getActiveTools(options),
       toolsContext: {
         'create-noted-memory': {
           identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
@@ -70,7 +70,7 @@ export class AIAgentService {
     stopWhen: isStepCount(5),
     onStart: (event) => {
       logger.info(
-        { model: this.model, lastMessage: event.messages.at(-1) },
+        { model: this.#model, lastMessage: event.messages.at(-1) },
         '[AI_AGENT]: agent process started',
       );
     },
@@ -91,7 +91,7 @@ export class AIAgentService {
     },
   });
 
-  private static getActiveTools(options?: AgentRuntimeContext): (keyof AgentTools & string)[] {
+  static #getActiveTools(options?: AgentRuntimeContext): (keyof AgentTools & string)[] {
     const activeTools: (keyof AgentTools)[] = [
       'webSearch',
       'get-world-cup-context',
@@ -125,20 +125,23 @@ export class AIAgentService {
   }) {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
-      abortController.abort(new Error(`assistant_generate_timeout_${this.timeout.total}ms`));
-    }, this.timeout.total);
+      abortController.abort(new Error(`assistant_generate_timeout_${this.#timeout.total}ms`));
+    }, this.#timeout.total);
 
     try {
-      logger.debug({ model: this.model }, '[AI_AGENT]: generating response');
+      logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
 
       const result = await this.agent.generate({
         messages,
         options: { identityId, threadId, sourceMessageId, timeZone },
         abortSignal: abortController.signal,
-        timeout: { totalMs: this.timeout.total, stepMs: this.timeout.step },
+        timeout: {
+          totalMs: this.#timeout.total,
+          stepMs: this.#timeout.step,
+        },
       });
 
-      logger.info({ model: this.model }, '[AI_AGENT]: response generated');
+      logger.info({ model: this.#model }, '[AI_AGENT]: response generated');
 
       return { text: result.text };
     } catch (error) {

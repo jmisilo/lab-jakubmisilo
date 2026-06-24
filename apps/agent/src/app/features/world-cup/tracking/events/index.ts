@@ -9,7 +9,7 @@ import { WorldCupTeamRegistry } from '@/app/features/world-cup/teams';
 import { WorldCupTimeService } from '@/app/features/world-cup/tracking/time';
 
 export class WorldCupEventDetector {
-  private static kickoffReminderMinutes = 15;
+  static #kickoffReminderMinutes = 15;
 
   static detect({
     previous,
@@ -22,39 +22,39 @@ export class WorldCupEventDetector {
   }): WorldCupDetectedEvent[] {
     const events: WorldCupDetectedEvent[] = [];
 
-    if (this.shouldSendKickoffReminder({ current, now })) {
-      const minutesUntilKickoff = this.getMinutesUntilKickoff({ current, now });
+    if (this.#shouldSendKickoffReminder({ current, now })) {
+      const minutesUntilKickoff = this.#getMinutesUntilKickoff({ current, now });
 
       events.push({
         eventKey: `world-cup-2026:kickoff-reminder:${current.gameId}`,
         eventType: 'kickoff-reminder',
         gameId: current.gameId,
-        teamIds: this.getParticipantTeamIds(current),
-        payload: this.createPayload(current, 'kickoff-reminder', undefined, {
+        teamIds: this.#getParticipantTeamIds(current),
+        payload: this.#createPayload(current, 'kickoff-reminder', undefined, {
           minutesUntilKickoff: minutesUntilKickoff ?? undefined,
         }),
       });
     }
 
-    if (previous && this.isGameNotStarted(previous) && this.isGameActive(current)) {
+    if (previous && this.#isGameNotStarted(previous) && this.#isGameActive(current)) {
       events.push({
         eventKey: `world-cup-2026:kickoff:${current.gameId}`,
         eventType: 'kickoff',
         gameId: current.gameId,
-        teamIds: this.getParticipantTeamIds(current),
-        payload: this.createPayload(current, 'kickoff'),
+        teamIds: this.#getParticipantTeamIds(current),
+        payload: this.#createPayload(current, 'kickoff'),
       });
     }
 
     if (previous) {
       events.push(
-        ...this.detectGoals({
+        ...this.#detectGoals({
           previousScore: previous.homeScore,
           currentScore: current.homeScore,
           current,
           side: 'home',
         }),
-        ...this.detectGoals({
+        ...this.#detectGoals({
           previousScore: previous.awayScore,
           currentScore: current.awayScore,
           current,
@@ -68,15 +68,15 @@ export class WorldCupEventDetector {
         eventKey: `world-cup-2026:game-end:${current.gameId}`,
         eventType: 'game-end',
         gameId: current.gameId,
-        teamIds: this.getParticipantTeamIds(current),
-        payload: this.createPayload(current, 'game-end'),
+        teamIds: this.#getParticipantTeamIds(current),
+        payload: this.#createPayload(current, 'game-end'),
       });
     }
 
     return events;
   }
 
-  private static detectGoals({
+  static #detectGoals({
     previousScore,
     currentScore,
     current,
@@ -106,18 +106,18 @@ export class WorldCupEventDetector {
 
     return Array.from({ length: currentScore - previousScore }, (_, index) => {
       const scoreAfterGoal = previousScore + index + 1;
-      const goalScorer = this.parseGoalScorer(scoringTeam.scorers, scoreAfterGoal);
+      const goalScorer = this.#parseGoalScorer(scoringTeam.scorers, scoreAfterGoal);
 
       return {
         eventKey: `world-cup-2026:goal:${current.gameId}:${scoringTeam.id}:${scoreAfterGoal}`,
         eventType: 'goal',
         gameId: current.gameId,
         teamIds: [scoringTeam.id],
-        payload: this.createPayload(current, 'goal', {
+        payload: this.#createPayload(current, 'goal', {
           id: scoringTeam.id,
           name: scoringTeam.name,
-          fifaCode: this.getTeamFifaCode(scoringTeam.id),
-          flagEmoji: this.getTeamFlagEmoji(scoringTeam.id),
+          fifaCode: this.#getTeamFifaCode(scoringTeam.id),
+          flagEmoji: this.#getTeamFlagEmoji(scoringTeam.id),
           scorers: scoringTeam.scorers,
           scoreAfterGoal,
           goalsDetected: currentScore - previousScore,
@@ -128,7 +128,7 @@ export class WorldCupEventDetector {
     });
   }
 
-  private static createPayload(
+  static #createPayload(
     game: WorldCupGameSnapshot,
     eventType: WorldCupEventPayload['eventType'],
     scoringTeam?: WorldCupEventPayload['scoringTeam'],
@@ -138,13 +138,13 @@ export class WorldCupEventDetector {
       eventType,
       gameId: game.gameId,
       matchLabel: `${game.homeTeamName} ${game.homeScore}-${game.awayScore} ${game.awayTeamName}`,
-      homeTeam: this.createPayloadTeam({
+      homeTeam: this.#createPayloadTeam({
         id: game.homeTeamId,
         name: game.homeTeamName,
         score: game.homeScore,
         scorers: game.homeScorers,
       }),
-      awayTeam: this.createPayloadTeam({
+      awayTeam: this.#createPayloadTeam({
         id: game.awayTeamId,
         name: game.awayTeamName,
         score: game.awayScore,
@@ -157,7 +157,7 @@ export class WorldCupEventDetector {
     };
   }
 
-  private static createPayloadTeam({
+  static #createPayloadTeam({
     id,
     name,
     score,
@@ -171,64 +171,58 @@ export class WorldCupEventDetector {
     return {
       id,
       name,
-      fifaCode: this.getTeamFifaCode(id),
-      flagEmoji: this.getTeamFlagEmoji(id),
+      fifaCode: this.#getTeamFifaCode(id),
+      flagEmoji: this.#getTeamFlagEmoji(id),
       score,
       scorers,
     };
   }
 
-  private static getTeamFifaCode(teamId: string) {
+  static #getTeamFifaCode(teamId: string) {
     return WorldCupTeamRegistry.getById(teamId)?.fifaCode;
   }
 
-  private static getTeamFlagEmoji(teamId: string) {
+  static #getTeamFlagEmoji(teamId: string) {
     return WorldCupTeamRegistry.getFlagEmojiById(teamId);
   }
 
-  private static getParticipantTeamIds(game: WorldCupGameSnapshot) {
+  static #getParticipantTeamIds(game: WorldCupGameSnapshot) {
     return [game.homeTeamId, game.awayTeamId].filter((teamId) => teamId !== '0');
   }
 
-  private static isGameNotStarted(game: Pick<WorldCupGameSnapshot, 'timeElapsed' | 'finished'>) {
-    return !game.finished && this.normalizeStatus(game.timeElapsed) === 'notstarted';
+  static #isGameNotStarted(game: Pick<WorldCupGameSnapshot, 'timeElapsed' | 'finished'>) {
+    return !game.finished && this.#normalizeStatus(game.timeElapsed) === 'notstarted';
   }
 
-  private static isGameActive(game: Pick<WorldCupGameSnapshot, 'timeElapsed' | 'finished'>) {
-    return !game.finished && !this.isGameNotStarted(game);
+  static #isGameActive(game: Pick<WorldCupGameSnapshot, 'timeElapsed' | 'finished'>) {
+    return !game.finished && !this.#isGameNotStarted(game);
   }
 
-  private static normalizeStatus(value: string) {
+  static #normalizeStatus(value: string) {
     return WorldCupGameStatusSchema.parse(value);
   }
 
-  private static shouldSendKickoffReminder({
+  static #shouldSendKickoffReminder({
     current,
     now,
   }: {
     current: WorldCupGameSnapshot;
     now: Date;
   }) {
-    if (!this.isGameNotStarted(current)) {
+    if (!this.#isGameNotStarted(current)) {
       return false;
     }
 
-    const minutesUntilKickoff = this.getMinutesUntilKickoff({ current, now });
+    const minutesUntilKickoff = this.#getMinutesUntilKickoff({ current, now });
 
     return (
       minutesUntilKickoff !== null &&
       minutesUntilKickoff >= 0 &&
-      minutesUntilKickoff <= this.kickoffReminderMinutes
+      minutesUntilKickoff <= this.#kickoffReminderMinutes
     );
   }
 
-  private static getMinutesUntilKickoff({
-    current,
-    now,
-  }: {
-    current: WorldCupGameSnapshot;
-    now: Date;
-  }) {
+  static #getMinutesUntilKickoff({ current, now }: { current: WorldCupGameSnapshot; now: Date }) {
     const kickoffAt = WorldCupTimeService.getKickoffAt(current);
 
     if (!kickoffAt) {
@@ -238,8 +232,8 @@ export class WorldCupEventDetector {
     return Math.ceil((kickoffAt.getTime() - now.getTime()) / 60_000);
   }
 
-  private static parseGoalScorer(scorers: string, scoreAfterGoal: number) {
-    const entries = this.parseScorerEntries(scorers);
+  static #parseGoalScorer(scorers: string, scoreAfterGoal: number) {
+    const entries = this.#parseScorerEntries(scorers);
     const entry = entries[scoreAfterGoal - 1];
 
     if (!entry) {
@@ -269,7 +263,7 @@ export class WorldCupEventDetector {
     return { name: entry, minute: undefined };
   }
 
-  private static parseScorerEntries(value: string) {
+  static #parseScorerEntries(value: string) {
     const trimmed = value.trim();
 
     if (!trimmed || trimmed.toLowerCase() === 'null') {
