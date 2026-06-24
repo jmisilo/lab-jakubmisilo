@@ -19,6 +19,7 @@ Fill the provider and integration keys:
 - `OPENAI_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_WEBHOOK_SECRET_TOKEN`
+- `TELEGRAM_ALLOWED_USER_IDS` — [TEMP] optional comma-separated Telegram numeric user IDs allowed to use the bot
 - `DATABASE_URL`
 - `QSTASH_CURRENT_SIGNING_KEY`
 - `QSTASH_NEXT_SIGNING_KEY`
@@ -56,6 +57,14 @@ Telegram webhook endpoint:
 ```txt
 POST /webhooks/telegram
 ```
+
+To restrict bot usage during development, set `TELEGRAM_ALLOWED_USER_IDS`:
+
+```sh
+TELEGRAM_ALLOWED_USER_IDS="123456789,987654321"
+```
+
+Leave it empty to allow all Telegram users.
 
 World Cup polling endpoint, called by QStash schedules:
 
