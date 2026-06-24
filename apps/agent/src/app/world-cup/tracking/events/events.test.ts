@@ -40,16 +40,16 @@ describe('WorldCupEventDetector.detect', () => {
     const events = WorldCupEventDetector.detect({
       previous: createSnapshot(),
       current: createSnapshot(),
-      now: new Date(Date.UTC(2026, 5, 17, 9, 45)),
+      now: new Date(Date.UTC(2026, 5, 17, 16, 45)),
     });
 
     expect(events).toEqual([
       expect.objectContaining({
         eventKey: 'world-cup-2026:kickoff-reminder:21',
-        eventType: 'kickoff_reminder',
+        eventType: 'kickoff-reminder',
         teamIds: ['41', '42'],
         payload: expect.objectContaining({
-          eventType: 'kickoff_reminder',
+          eventType: 'kickoff-reminder',
           minutesUntilKickoff: 15,
         }),
       }),
@@ -60,13 +60,13 @@ describe('WorldCupEventDetector.detect', () => {
     const events = WorldCupEventDetector.detect({
       previous: null,
       current: createSnapshot(),
-      now: new Date(Date.UTC(2026, 5, 17, 9, 50)),
+      now: new Date(Date.UTC(2026, 5, 17, 16, 50)),
     });
 
     expect(events).toEqual([
       expect.objectContaining({
         eventKey: 'world-cup-2026:kickoff-reminder:21',
-        eventType: 'kickoff_reminder',
+        eventType: 'kickoff-reminder',
         payload: expect.objectContaining({
           minutesUntilKickoff: 10,
         }),
@@ -74,17 +74,24 @@ describe('WorldCupEventDetector.detect', () => {
     ]);
   });
 
-  it('interprets kickoff reminder times in Europe/Warsaw regardless of runtime timezone', () => {
+  it('interprets kickoff reminder times from the match venue timezone', () => {
     const events = WorldCupEventDetector.detect({
       previous: createSnapshot(),
-      current: createSnapshot({ localDate: '06/27/2026 19:00' }),
-      now: new Date(Date.UTC(2026, 5, 27, 16, 45)),
+      current: createSnapshot({
+        localDate: '06/24/2026 12:00',
+        raw: {
+          ...createSnapshot().raw,
+          local_date: '06/24/2026 12:00',
+          stadium_id: '16',
+        },
+      }),
+      now: new Date(Date.UTC(2026, 5, 24, 18, 45)),
     });
 
     expect(events).toEqual([
       expect.objectContaining({
         eventKey: 'world-cup-2026:kickoff-reminder:21',
-        eventType: 'kickoff_reminder',
+        eventType: 'kickoff-reminder',
         payload: expect.objectContaining({
           minutesUntilKickoff: 15,
         }),
@@ -96,7 +103,7 @@ describe('WorldCupEventDetector.detect', () => {
     const events = WorldCupEventDetector.detect({
       previous: createSnapshot(),
       current: createSnapshot(),
-      now: new Date(Date.UTC(2026, 5, 17, 9, 44)),
+      now: new Date(Date.UTC(2026, 5, 17, 16, 44)),
     });
 
     expect(events).toEqual([]);
@@ -193,7 +200,7 @@ describe('WorldCupEventDetector.detect', () => {
     expect(events).toEqual([
       expect.objectContaining({
         eventKey: 'world-cup-2026:game-end:21',
-        eventType: 'game_end',
+        eventType: 'game-end',
         teamIds: ['41', '42'],
       }),
     ]);
