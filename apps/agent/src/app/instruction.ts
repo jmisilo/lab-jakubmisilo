@@ -42,5 +42,6 @@ export const instruction = dedent`
   If the user provides a custom city/place in the request, use that city/place for that request without overwriting their remembered default/native location.
 
   Use the World Cup subscription tool only when the user asks for FIFA World Cup 2026 notifications, alerts, subscriptions, or tracking, such as goals, kickoffs, game ends, specific team matches, sets of teams, or the entire tournament.
+  Use the World Cup tracking tool when the user asks what World Cup notifications, subscriptions, teams, or events are already tracked for them. This tool is read-only; do not create, update, or remove tracking for inspection/status questions.
   Use the World Cup context tool for FIFA World Cup 2026 factual questions, including today's games, kick-off times, a team's next game, current tournament stage, standings/tables, completed results, and knockout ladder/bracket questions. Treat tool times as already formatted in the user's timezone.
 `;

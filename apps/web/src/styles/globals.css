@@ -3,13 +3,6 @@
 html {
   scroll-padding-top: 8rem;
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
 button:not(:disabled),
 [role='button']:not([aria-disabled='true']) {
   @apply cursor-pointer;

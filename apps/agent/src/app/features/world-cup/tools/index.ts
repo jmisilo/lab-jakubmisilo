@@ -63,6 +63,37 @@ export type ManageWorldCupSubscriptionTool = Tool<
   z.infer<typeof ManageWorldCupSubscriptionToolContextSchema>
 >;
 
+export const GetWorldCupTrackingToolInputSchema = z.object({});
+
+const WorldCupTrackedSubscriptionToolOutputSchema = z.object({
+  subscriptionId: z.string(),
+  teamId: z.string().nullable(),
+  teamName: z.string(),
+  fifaCode: z.string().optional(),
+  flagEmoji: z.string().optional(),
+  eventTypes: z.array(z.enum(WORLD_CUP_EVENT_TYPES)),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const GetWorldCupTrackingToolOutputSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  summaryMarkdown: z.string(),
+  subscriptions: z.array(WorldCupTrackedSubscriptionToolOutputSchema),
+});
+
+export const GetWorldCupTrackingToolContextSchema = z.object({
+  identityId: z.string(),
+  threadId: z.string(),
+});
+
+export type GetWorldCupTrackingTool = Tool<
+  z.infer<typeof GetWorldCupTrackingToolInputSchema>,
+  z.infer<typeof GetWorldCupTrackingToolOutputSchema>,
+  z.infer<typeof GetWorldCupTrackingToolContextSchema>
+>;
+
 export const GetWorldCupContextToolInputSchema = z.object({
   focus: z
     .enum(WORLD_CUP_CONTEXT_FOCUSES)
@@ -184,6 +215,59 @@ export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = to
         ? result.subscriptions.map((subscription) => subscription.id)
         : undefined,
     };
+  },
+});
+
+export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
+  description:
+    'Read the active FIFA World Cup 2026 notification tracking configured for this chat. Use this when the user asks what teams, events, subscriptions, alerts, or notifications are already being tracked for them. This is read-only; do not use the mutating subscription tool for inspection/status questions.',
+  inputSchema: GetWorldCupTrackingToolInputSchema,
+  outputSchema: GetWorldCupTrackingToolOutputSchema,
+  contextSchema: GetWorldCupTrackingToolContextSchema,
+  execute: async (_input, { context }) => {
+    try {
+      const result = await WorldCupSubscriptionService.listTrackedSubscriptions({
+        identityId: context.identityId,
+        threadId: context.threadId,
+      });
+
+      logger.info(
+        {
+          identityId: context.identityId,
+          threadId: context.threadId,
+          subscriptionCount: result.subscriptions.length,
+        },
+        '[WORLD_CUP]: tracking tool executed',
+      );
+
+      return {
+        ok: result.ok,
+        message: result.message,
+        summaryMarkdown: result.summaryMarkdown,
+        subscriptions: result.subscriptions.map((subscription) => ({
+          subscriptionId: subscription.subscriptionId,
+          teamId: subscription.teamId,
+          teamName: subscription.teamName,
+          fifaCode: subscription.fifaCode,
+          flagEmoji: subscription.flagEmoji,
+          eventTypes: subscription.eventTypes,
+          createdAt: subscription.createdAt.toISOString(),
+          updatedAt: subscription.updatedAt.toISOString(),
+        })),
+      };
+    } catch (error) {
+      logger.error(
+        { error, identityId: context.identityId, threadId: context.threadId },
+        '[WORLD_CUP]: tracking tool failed',
+      );
+
+      return {
+        ok: false,
+        message: 'World Cup tracking status is temporarily unavailable.',
+        summaryMarkdown: 'World Cup tracking status is temporarily unavailable.',
+        subscriptions: [],
+      };
+    }
   },
 });
 
