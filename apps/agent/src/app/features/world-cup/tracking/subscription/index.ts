@@ -10,12 +10,6 @@ import { WorldCupDbService } from '@/app/features/world-cup/db';
 import { WORLD_CUP_TEAMS, WorldCupTeamRegistry } from '@/app/features/world-cup/teams';
 import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
 
-export type WorldCupNotificationTarget = {
-  identityId: string;
-  threadId: string;
-  subscriptionId: string;
-};
-
 export class WorldCupSubscriptionService {
   static async subscribe({
     identityId,
@@ -134,6 +128,29 @@ export class WorldCupSubscriptionService {
     return { ok: true as const, deactivatedCount };
   }
 
+  static async listTrackedSubscriptions({
+    identityId,
+    threadId,
+  }: {
+    identityId: string;
+    threadId: string;
+  }) {
+    const subscriptions = await WorldCupDbService.getActiveSubscriptionsForThread({
+      identityId,
+      threadId,
+    });
+    const trackedSubscriptions = subscriptions.map((subscription) =>
+      this.#toTrackedSubscription(subscription),
+    );
+
+    return {
+      ok: true as const,
+      subscriptions: trackedSubscriptions,
+      message: this.#describeTrackedSubscriptions(trackedSubscriptions),
+      summaryMarkdown: this.#renderTrackedSubscriptions(trackedSubscriptions),
+    };
+  }
+
   static async findNotificationTargets(event: WorldCupDetectedEvent) {
     /**
      * @note Current fanout loads active subscriptions and filters in memory. This is fine for
@@ -183,9 +200,34 @@ export class WorldCupSubscriptionService {
     return eventType === 'kickoff-reminder' ? 'kickoff' : eventType;
   }
 
-  static #normalizeEventTypes(eventTypes: WorldCupEventType[]) {
-    const values = eventTypes.length > 0 ? eventTypes : [...WORLD_CUP_EVENT_TYPES];
+  static #normalizeEventTypes(eventTypes: readonly string[]) {
+    const allowedEventTypes = new Set<string>(WORLD_CUP_EVENT_TYPES);
+    const knownEventTypes = eventTypes.filter((eventType): eventType is WorldCupEventType =>
+      allowedEventTypes.has(eventType),
+    );
+    const values = knownEventTypes.length > 0 ? knownEventTypes : [...WORLD_CUP_EVENT_TYPES];
+
     return [...new Set(values)];
+  }
+
+  static #toTrackedSubscription(subscription: WorldCupSubscription) {
+    const team = subscription.teamId
+      ? WorldCupTeamRegistry.getById(subscription.teamId)
+      : undefined;
+    const teamName = team?.name ?? subscription.teamName ?? 'Unknown team';
+
+    return {
+      subscriptionId: subscription.id,
+      teamId: subscription.teamId,
+      teamName,
+      fifaCode: team?.fifaCode,
+      flagEmoji: subscription.teamId
+        ? WorldCupTeamRegistry.getFlagEmojiById(subscription.teamId)
+        : undefined,
+      eventTypes: this.#normalizeEventTypes(subscription.eventTypes),
+      createdAt: subscription.createdAt,
+      updatedAt: subscription.updatedAt,
+    };
   }
 
   static #resolveTrackedTeams({
@@ -257,4 +299,52 @@ export class WorldCupSubscriptionService {
 
     return `Subscribed to ${events} for ${teamLabels} World Cup matches.`;
   }
+
+  static #describeTrackedSubscriptions(subscriptions: WorldCupTrackedSubscription[]) {
+    if (subscriptions.length === 0) {
+      return 'No active World Cup tracking subscriptions for this chat.';
+    }
+
+    return `Tracking ${subscriptions.length} active World Cup subscription(s) for this chat.`;
+  }
+
+  static #renderTrackedSubscriptions(subscriptions: WorldCupTrackedSubscription[]) {
+    if (subscriptions.length === 0) {
+      return 'No active World Cup tracking subscriptions for this chat.';
+    }
+
+    const lines = subscriptions.map((subscription) => {
+      const teamLabel = [
+        subscription.flagEmoji,
+        subscription.teamName,
+        subscription.fifaCode ? `(${subscription.fifaCode})` : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const eventLabels = subscription.eventTypes
+        .map((eventType) => eventType.replace('-', ' '))
+        .join(', ');
+
+      return `- ${teamLabel}: ${eventLabels}`;
+    });
+
+    return ['Active World Cup tracking:', ...lines].join('\n');
+  }
 }
+
+type WorldCupNotificationTarget = {
+  identityId: string;
+  threadId: string;
+  subscriptionId: string;
+};
+
+type WorldCupTrackedSubscription = {
+  subscriptionId: string;
+  teamId: string | null;
+  teamName: string;
+  fifaCode?: string;
+  flagEmoji?: string;
+  eventTypes: WorldCupEventType[];
+  createdAt: Date;
+  updatedAt: Date;
+};

@@ -1,6 +1,7 @@
 import type { GetLocalTimeTool, GetWeatherTool } from '@/app/features/weather/tools';
 import type {
   GetWorldCupContextTool,
+  GetWorldCupTrackingTool,
   ManageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
 import type { Tool } from 'ai';
@@ -12,6 +13,7 @@ import { z } from 'zod';
 import { getLocalTimeTool, getWeatherTool } from '@/app/features/weather/tools';
 import {
   getWorldCupContextTool,
+  getWorldCupTrackingTool,
   manageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
 import { AgentMemoryService } from '@/app/memory';
@@ -51,6 +53,7 @@ export type AgentTools = {
     z.infer<typeof CreateNotedMemoryToolContextSchema>
   >;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
+  'get-world-cup-tracking': GetWorldCupTrackingTool;
   'get-world-cup-context': GetWorldCupContextTool;
   'get-weather': GetWeatherTool;
   'get-local-time': GetLocalTimeTool;
@@ -64,7 +67,7 @@ export const agentTools: AgentTools = {
 
   'create-noted-memory': tool({
     description:
-      "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, privacy preferences, and important project context. Do not use for transient conversation details. Examples: 'I really like X', 'I prefer concise implementation-focused updates', 'My birthday is on X', 'My favorite color is X', 'I am allergic to X', 'The project is called X and the deadline is Y', 'My default weather location is Warsaw', 'Do not ask me for my home/default weather location'.",
+      "Persist durable information the assistant should remember for future conversations. Use for explicit remember/note requests, stable user preferences, durable personal facts, privacy preferences, and important project context. Do not use for transient conversation details. Examples: 'I really like X', 'I prefer concise implementation-focused updates', 'My birthday is on X', 'My favorite color is X', 'I am allergic to X', 'The project is called X and the deadline is Y', 'My default weather location is Warsaw', 'Do not ask me for my home/default weather location'. Do not hesitate to use this tool, as it's better to remember vague information, than to not remember important one.",
     inputSchema: CreateNotedMemoryToolInputSchema,
     outputSchema: CreateNotedMemoryToolOutputSchema,
     contextSchema: CreateNotedMemoryToolContextSchema,
@@ -106,6 +109,7 @@ export const agentTools: AgentTools = {
   }),
 
   'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
+  'get-world-cup-tracking': getWorldCupTrackingTool,
   'get-world-cup-context': getWorldCupContextTool,
   'get-weather': getWeatherTool,
   'get-local-time': getLocalTimeTool,

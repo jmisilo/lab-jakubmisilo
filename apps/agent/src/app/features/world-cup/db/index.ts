@@ -64,6 +64,25 @@ export class WorldCupDbService extends DbService {
       .where(eq(worldCup2026Subscriptions.active, true));
   }
 
+  static async getActiveSubscriptionsForThread({
+    identityId,
+    threadId,
+  }: {
+    identityId: string;
+    threadId: string;
+  }) {
+    return this.client
+      .select()
+      .from(worldCup2026Subscriptions)
+      .where(
+        and(
+          eq(worldCup2026Subscriptions.identityId, identityId),
+          eq(worldCup2026Subscriptions.threadId, threadId),
+          eq(worldCup2026Subscriptions.active, true),
+        ),
+      );
+  }
+
   static async deactivateMatchingSubscriptions({
     identityId,
     threadId,

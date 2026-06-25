@@ -44,6 +44,10 @@ export class AIAgentService {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
         threadId: UNAVAILABLE_TOOL_CONTEXT,
       },
+      'get-world-cup-tracking': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+        threadId: UNAVAILABLE_TOOL_CONTEXT,
+      },
       'get-world-cup-context': {
         timeZone: DEFAULT_USER_TIME_ZONE,
       },
@@ -60,6 +64,10 @@ export class AIAgentService {
           identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
           threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
           sourceMessageId: options?.sourceMessageId,
+        },
+        'get-world-cup-tracking': {
+          identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+          threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
         },
         'get-world-cup-context': {
           timeZone: options?.timeZone ?? DEFAULT_USER_TIME_ZONE,
@@ -105,6 +113,7 @@ export class AIAgentService {
 
     if (options?.identityId && options.threadId) {
       activeTools.push('manage-world-cup-subscription');
+      activeTools.push('get-world-cup-tracking');
     }
 
     return activeTools;
