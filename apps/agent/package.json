@@ -16,15 +16,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "4.0.0-beta.74",
-    "@ai-sdk/tui": "1.0.0-beta.18",
+    "@ai-sdk/openai": "4.0.0",
+    "@ai-sdk/tui": "1.0.0",
     "@chat-adapter/state-pg": "4.31.0",
     "@chat-adapter/telegram": "4.31.0",
     "@labjm/utilities": "workspace:*",
     "@neondatabase/serverless": "^1.1.0",
     "@upstash/qstash": "^2.11.1",
     "@vercel/functions": "3.7.1",
-    "ai": "7.0.0-beta.182",
+    "ai": "7.0.0",
     "ai-tokenizer": "^1.0.6",
     "chat": "4.31.0",
     "dedent": "1.7.2",
@@ -34,9 +34,6 @@
     "pg": "^8.22.0",
     "pino": "10.3.1",
     "zod": "^4.4.3"
-  },
-  "overrides": {
-    "ai": "7.0.0-beta.182"
   },
   "devDependencies": {
     "@labjm/eslint-config": "workspace:*",

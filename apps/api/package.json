@@ -14,15 +14,15 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.0-beta.67",
-    "@ai-sdk/google": "4.0.0-beta.83",
-    "@ai-sdk/openai": "4.0.0-beta.74",
+    "@ai-sdk/anthropic": "4.0.0",
+    "@ai-sdk/google": "4.0.0",
+    "@ai-sdk/openai": "4.0.0",
     "@hono/node-server": "2.0.5",
     "@hono/zod-validator": "^0.8.0",
     "@labjm/ai": "workspace:^",
     "@labjm/schemas": "workspace:^",
     "@labjm/types": "workspace:^",
-    "ai": "7.0.0-beta.182",
+    "ai": "7.0.0",
     "hono": "4.12.25"
   },
   "devDependencies": {
