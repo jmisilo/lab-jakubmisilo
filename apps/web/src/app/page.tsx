@@ -6,6 +6,12 @@ import { ApiStatus } from './_components/api-status';
 
 const PROJECTS = [
   {
+    title: 'Telegram AI Agent',
+    headline: 'Personal AI agent with World Cup 2026 events tracking!',
+    href: 'https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/agent',
+    tag: 'track the WC!',
+  },
+  {
     title: 'Extendable AI Widget',
     headline: 'Extendable AI widget component',
     href: '/ai-widget',
