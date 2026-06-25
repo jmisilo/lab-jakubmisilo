@@ -16,6 +16,7 @@
     "@labjm/api": "workspace:^",
     "@labjm/types": "workspace:*",
     "@labjm/utilities": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
     "ai": "7.0.0",
     "hono": "4.12.25",
     "motion": "12.40.0",

@@ -1,8 +1,7 @@
-import '../styles/globals.css';
-
 import type { Metadata } from 'next';
 import type { FC, PropsWithChildren } from 'react';
 
+import { Analytics } from '@vercel/analytics/next';
 import localFont from 'next/font/local';
 import { Suspense } from 'react';
 
@@ -10,6 +9,8 @@ import { cn } from '@labjm/utilities/cn';
 import { url } from '@labjm/utilities/url-composer';
 
 import { Footer } from '@/ui/footer';
+
+import '../styles/globals.css';
 
 export const metadata: Metadata = {
   title: 'lab.jakubmisilo.com',
@@ -70,6 +71,8 @@ const RootLayout: FC<PropsWithChildren> = async ({ children }) => {
           </Suspense>
         </div>
       </body>
+
+      <Analytics />
     </html>
   );
 };
