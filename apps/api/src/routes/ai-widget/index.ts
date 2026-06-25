@@ -1,7 +1,3 @@
-import type { AnthropicLanguageModelOptions } from '@ai-sdk/anthropic';
-import type { GoogleLanguageModelOptions } from '@ai-sdk/google';
-import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai';
-
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
@@ -16,7 +12,7 @@ import {
 } from 'ai';
 import { Hono } from 'hono';
 
-import type { AIWidgetModel, AIWidgetThinkingIntensity } from '@labjm/types/ai-widget';
+import type { AIWidgetModel } from '@labjm/types/ai-widget';
 import { tools } from '@labjm/ai/ai-widget';
 import { AIChatRequestSchema } from '@labjm/schemas';
 
@@ -44,7 +40,8 @@ export const AIWidgetRouter = new Hono().post(
       system: "Answer user's requests about the football WC 2022 Argentina vs France final game.",
       tools,
       stopWhen: isStepCount(2),
-      ...getModelOptions({ model, thinkingIntensity }),
+      reasoning: thinkingIntensity,
+      model: getModel({ model }),
     });
 
     return createUIMessageStreamResponse({
@@ -56,48 +53,21 @@ export const AIWidgetRouter = new Hono().post(
   },
 );
 
-const getModelOptions = ({
+const getModel = ({
   model,
-  thinkingIntensity,
 }: {
   model: AIWidgetModel;
-  thinkingIntensity: AIWidgetThinkingIntensity;
-}): Pick<Parameters<typeof streamText>[0], 'model' | 'providerOptions'> => {
+}): Pick<Parameters<typeof streamText>[0], 'model'>['model'] => {
   if (model === 'openai-gpt-5.5') {
-    return {
-      model: openai('gpt-5.5'),
-      providerOptions: {
-        openai: {
-          reasoningEffort: thinkingIntensity,
-          reasoningSummary: 'auto',
-        } satisfies OpenAILanguageModelResponsesOptions,
-      },
-    };
+    return openai('gpt-5.5');
   }
+
   if (model === 'claude-opus-4.8') {
-    return {
-      model: anthropic('claude-opus-4-8'),
-      providerOptions: {
-        anthropic: {
-          effort: thinkingIntensity,
-          thinking: { type: 'adaptive', display: 'summarized' },
-        } satisfies AnthropicLanguageModelOptions,
-      },
-    };
+    return anthropic('claude-opus-4-8');
   }
 
   if (model === 'google-gemini-3.1-pro') {
-    return {
-      model: google('gemini-pro-latest'),
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingLevel: thinkingIntensity,
-            includeThoughts: true,
-          },
-        } satisfies GoogleLanguageModelOptions,
-      },
-    };
+    return google('gemini-pro-latest');
   }
 
   throw new Error('Unsupported model');
