@@ -4,6 +4,7 @@ import config from '@labjm/jest-config/node';
 
 const agentConfig: Config = {
   ...config,
+  modulePathIgnorePatterns: ['<rootDir>/.vercel'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     ...(config.moduleNameMapper ?? {}),
