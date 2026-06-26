@@ -5,6 +5,7 @@ import type { Thread } from 'chat';
 import dedent from 'dedent';
 
 import { AIService } from '@/app/ai';
+import { WorldCupNotificationAttachmentService } from '@/app/features/world-cup/tracking/notification/attachment';
 import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
 import { logger } from '@/infrastructure/logger';
@@ -42,7 +43,19 @@ export class WorldCupNotificationService {
       { eventKey: event.eventKey, threadId, messageLength: message.length },
       '[WORLD_CUP]: posting notification',
     );
-    await bot.thread(threadId).post({ markdown: message });
+    const thread = bot.thread(threadId);
+    const attachment = await WorldCupNotificationAttachmentService.createAttachment(event);
+
+    if (attachment) {
+      logger.info(
+        { eventKey: event.eventKey, threadId, attachmentName: attachment.name },
+        '[WORLD_CUP]: posting notification attachment',
+      );
+
+      await thread.post({ markdown: '', attachments: [attachment] });
+    }
+
+    await thread.post({ markdown: message });
   }
 
   static async #composeNotification({
