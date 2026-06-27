@@ -82,6 +82,94 @@ CRON_TZ=Europe/Warsaw * 18-23 * * *
 CRON_TZ=Europe/Warsaw * 0-9 * * *
 ```
 
+## Deployment to Vercel
+
+The agent is deployed as a Vercel Node function from the `apps/agent` workspace package. The Vercel project must use:
+
+- **Root Directory**: `apps/agent`
+- **Build Command**: `pnpm build`
+- **Output Directory**: `dist`
+- **Database**: Neon Postgres via `DATABASE_URL`
+
+`vercel.json` already defines the build/output settings and rewrites all traffic to the Hono app entrypoint.
+
+### 1. Create the Neon database
+
+Create a Neon Postgres project for the agent and use its connection string as `DATABASE_URL`.
+
+Recommended setup:
+
+- Use the Neon pooled connection string for Vercel runtime.
+- Keep all app tables in the `public` schema.
+- Do not rely on `search_path` connection options; Neon pooled connections can reject unsupported startup parameters.
+- If a local `db:push` ever has issues with the pooled URL, temporarily use Neon’s direct/unpooled URL locally for the push, then keep Vercel runtime on the pooled URL.
+
+Before deploying the app, push the Drizzle schema to Neon:
+
+```sh
+pnpm --filter @labjm/agent db:push
+```
+
+Review the generated statements before accepting them. The expected output should not drop `chat_state_*` tables or their sequences.
+
+### 2. Configure Vercel environment variables
+
+Set these in the Vercel project for the environments you deploy to:
+
+Required:
+
+- `DATABASE_URL` — Neon Postgres connection string
+- `OPENAI_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET_TOKEN`
+- `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated allowlist while the agent is private
+- `TELEGRAM_BOT_USERNAME` — optional, defaults to `labjm_assistant_bot`
+- `OPENWEATHER_API_KEY` — required for weather and local-time tools
+- `QSTASH_CURRENT_SIGNING_KEY` — required for World Cup polling
+- `QSTASH_NEXT_SIGNING_KEY` — required for World Cup polling
+
+Add the optional env vars the same way when those integrations are enabled.
+
+### 3. Deploy
+
+Preferred flow is git-connected Vercel deployment: merge/push to the production branch after the project is linked to Vercel.
+
+Manual CLI deployment:
+
+```sh
+vercel --cwd apps/agent deploy --prod
+```
+
+### 4. Configure Telegram webhook
+
+Point Telegram at the deployed agent URL:
+
+```sh
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://<agent-domain>/webhooks/telegram" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET_TOKEN"
+```
+
+The `secret_token` must match `TELEGRAM_WEBHOOK_SECRET_TOKEN` in Vercel.
+
+### 5. Configure QStash schedules, if World Cup polling is enabled
+
+Use QStash schedules that call:
+
+```txt
+GET https://<agent-domain>/jobs/world-cup/events
+```
+
+The route verifies QStash signatures with `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY`; it does not use a separate cron secret.
+
+Current polling window:
+
+```txt
+CRON_TZ=Europe/Warsaw 45-59 17 * * *
+CRON_TZ=Europe/Warsaw * 18-23 * * *
+CRON_TZ=Europe/Warsaw * 0-9 * * *
+```
+
 ## Database
 
 Drizzle-managed app tables live in the `public` PostgreSQL schema, including the temporary `world_cup_2026_*` tables.
