@@ -21,12 +21,18 @@ type AttachmentPayload = WorldCupEventPayload & {
   eventType: SupportedAttachmentEvent;
 };
 
+type ScorerEntry = {
+  minute?: string;
+  name: string;
+};
+
 type WorldCupNotificationAttachmentProps = {
   payload: AttachmentPayload;
 };
 
 type TeamColumnProps = {
   align: 'left' | 'right';
+  scorers: ScorerEntry[];
   team: AttachmentPayload['homeTeam'];
 };
 
@@ -34,9 +40,9 @@ type ScoreboardProps = {
   payload: AttachmentPayload;
 };
 
-type ScorerListsProps = {
-  awayScorers: ScorerDisplay[];
-  homeScorers: ScorerDisplay[];
+type ScorerListProps = {
+  align: 'left' | 'right';
+  scorers: ScorerEntry[];
 };
 
 const palette = {
@@ -44,13 +50,10 @@ const palette = {
   shell: '#f8f8f8',
   card: '#ffffff',
   border: '#f2f2f2',
-  borderStrong: '#e4e4e7',
   primary: '#18181b',
   secondary: '#333333',
   muted: '#959595',
-  subtle: '#a1a1aa',
   black: '#000000',
-  success: '#52B371',
 };
 
 export class WorldCupNotificationAttachmentService {
@@ -59,24 +62,24 @@ export class WorldCupNotificationAttachmentService {
       return null;
     }
 
-    const attachmentHeight = getAttachmentHeight(event.payload);
-    const graphemeImages = await getAttachmentGraphemeImages(event.payload);
-
+    const height = getAttachmentHeight(event.payload);
+    const graphemeImages = await getGraphemeImages(event.payload);
     const data = await renderWorldCupAttachmentToPng(
       <WorldCupNotificationAttachment payload={event.payload} />,
       {
         graphemeImages,
         width: ATTACHMENT_WIDTH,
-        height: attachmentHeight,
+        height,
         scale: ATTACHMENT_SCALE,
       },
     );
 
     return {
       data,
-      height: attachmentHeight * ATTACHMENT_SCALE,
+      height: height * ATTACHMENT_SCALE,
       mimeType: 'image/png',
       name: `world-cup-2026-${event.payload.eventType}-${event.gameId}.png`,
+      size: data.byteLength,
       type: 'image',
       width: ATTACHMENT_WIDTH * ATTACHMENT_SCALE,
     };
@@ -91,49 +94,41 @@ export class WorldCupNotificationAttachmentService {
 
 const WorldCupNotificationAttachment: FC<WorldCupNotificationAttachmentProps> = ({ payload }) => {
   const isFinal = payload.eventType === 'game-end';
-  const homeScorers = parseScorers(payload.homeTeam.scorers);
-  const awayScorers = parseScorers(payload.awayTeam.scorers);
-  const hasScorers = isFinal && (homeScorers.length > 0 || awayScorers.length > 0);
+  const homeScorers = isFinal ? parseScorerEntries(payload.homeTeam.scorers) : [];
+  const awayScorers = isFinal ? parseScorerEntries(payload.awayTeam.scorers) : [];
 
   return (
     <Attachment style={styles.root}>
       <Section style={styles.shell}>
         <Section style={styles.card}>
-          <Spacer height={26} />
-
           <Heading level={1} style={styles.title}>
             {isFinal ? 'Final score' : 'Kickoff'}
           </Heading>
 
-          <Spacer height={32} />
+          <Spacer height={28} />
 
           <Row style={styles.scoreRow}>
-            <TeamColumn team={payload.homeTeam} align="left" />
-
+            <TeamColumn team={payload.homeTeam} scorers={homeScorers} align="left" />
             <Scoreboard payload={payload} />
-
-            <TeamColumn team={payload.awayTeam} align="right" />
+            <TeamColumn team={payload.awayTeam} scorers={awayScorers} align="right" />
           </Row>
-
-          {hasScorers ? <ScorerLists homeScorers={homeScorers} awayScorers={awayScorers} /> : null}
         </Section>
       </Section>
     </Attachment>
   );
 };
 
-const TeamColumn: FC<TeamColumnProps> = ({ align, team }) => {
+const TeamColumn: FC<TeamColumnProps> = ({ align, scorers, team }) => {
   const alignedRight = align === 'right';
 
   return (
     <Column style={{ ...styles.teamColumn, alignItems: alignedRight ? 'flex-end' : 'flex-start' }}>
-      <Text style={team.flagEmoji ? styles.teamFlag : styles.teamFlagCode}>
-        {team.flagEmoji ?? team.fifaCode ?? 'TBD'}
-      </Text>
-      <Spacer height={12} />
+      <Text style={styles.flag}>{team.flagEmoji ?? team.fifaCode ?? 'TBD'}</Text>
+      <Spacer height={10} />
       <Text style={{ ...styles.teamName, textAlign: alignedRight ? 'right' : 'left' }}>
         {formatTeamName(team.name)}
       </Text>
+      {scorers.length > 0 && <ScorerList scorers={scorers} align={align} />}
     </Column>
   );
 };
@@ -148,68 +143,82 @@ const Scoreboard: FC<ScoreboardProps> = ({ payload }) => {
   );
 };
 
-const ScorerLists: FC<ScorerListsProps> = ({ awayScorers, homeScorers }) => {
-  return (
-    <div style={styles.scorersGrid}>
-      <div style={styles.homeScorersColumn}>
-        {homeScorers.map((scorer) => (
-          <div key={`${scorer.minute}-${scorer.name}`} style={styles.homeScorerLine}>
-            <Text style={styles.goalIcon}>⚽️</Text>
-            <Text style={styles.scorerMinute}>{formatScorerMinute(scorer)}</Text>
-            <Text style={styles.scorerName}>{scorer.name}</Text>
-          </div>
-        ))}
-      </div>
+const ScorerList: FC<ScorerListProps> = ({ align, scorers }) => {
+  const alignedRight = align === 'right';
 
-      <div style={styles.awayScorersColumn}>
-        {awayScorers.map((scorer) => (
-          <div key={`${scorer.minute}-${scorer.name}`} style={styles.awayScorerLine}>
-            <Text style={styles.scorerName}>{scorer.name}</Text>
-            <Text style={styles.scorerMinute}>{formatScorerMinute(scorer)}</Text>
-            <Text style={styles.goalIcon}>⚽️</Text>
-          </div>
-        ))}
-      </div>
+  return (
+    <div
+      style={{
+        ...styles.scorerLane,
+        ...(alignedRight ? styles.awayScorerLane : styles.homeScorerLane),
+        alignItems: alignedRight ? 'flex-end' : 'flex-start',
+      }}
+    >
+      {scorers.map((scorer, index) => (
+        <div
+          key={`${scorer.name}-${scorer.minute ?? index}`}
+          style={{
+            ...styles.scorerRow,
+            ...(alignedRight ? styles.awayScorerRow : styles.homeScorerRow),
+          }}
+        >
+          {align === 'left' ? (
+            <>
+              <div style={styles.homeScorerBall}>⚽️</div>
+              <div style={styles.homeScorerText}>{formatHomeScorerText(scorer)}</div>
+            </>
+          ) : (
+            <>
+              <div style={styles.awayScorerText}>{formatAwayScorerText(scorer)}</div>
+              <div style={styles.awayScorerBall}>⚽️</div>
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 };
 
 const getAttachmentHeight = (payload: AttachmentPayload) => {
-  if (payload.eventType !== 'game-end') {
+  if (payload.eventType === 'kickoff') {
     return KICKOFF_ATTACHMENT_HEIGHT;
   }
 
-  const scorerRowCount = Math.max(
-    parseScorers(payload.homeTeam.scorers).length,
-    parseScorers(payload.awayTeam.scorers).length,
+  const scorerCount = Math.max(
+    parseScorerEntries(payload.homeTeam.scorers).length,
+    parseScorerEntries(payload.awayTeam.scorers).length,
   );
 
-  if (scorerRowCount === 0) {
-    return KICKOFF_ATTACHMENT_HEIGHT;
+  if (scorerCount === 0) {
+    return GAME_END_ATTACHMENT_BASE_HEIGHT;
   }
 
-  return GAME_END_ATTACHMENT_BASE_HEIGHT + scorerRowCount * SCORER_ROW_HEIGHT;
+  return GAME_END_ATTACHMENT_BASE_HEIGHT + 24 + scorerCount * SCORER_ROW_HEIGHT;
+};
+
+const getGraphemeImages = async (payload: AttachmentPayload) => {
+  const emojis = new Set(
+    [payload.homeTeam.flagEmoji, payload.awayTeam.flagEmoji, '⚽️'].filter(
+      (emoji): emoji is string => Boolean(emoji),
+    ),
+  );
+  const entries = await Promise.all(
+    [...emojis].map(async (emoji) => [emoji, await loadEmojiImageDataUrl(emoji)] as const),
+  );
+
+  return Object.fromEntries(entries);
 };
 
 const formatTeamName = (name: string) => {
   const replacements: Record<string, string> = {
     'Bosnia and Herzegovina': 'Bosnia & Herzegovina',
     'Democratic Republic of the Congo': 'DR Congo',
-    'United States': 'United States',
   };
 
   return replacements[name] ?? name;
 };
 
-const formatScorerMinute = (scorer: ScorerDisplay) => {
-  return scorer.minute ? `${scorer.minute}'` : '';
-};
-
-const parseScorers = (value: string): ScorerDisplay[] => {
-  return parseScorerEntries(value).map(parseScorerEntry);
-};
-
-const parseScorerEntries = (value: string) => {
+const parseScorerEntries = (value: string): ScorerEntry[] => {
   const trimmed = value.trim();
 
   if (!trimmed || trimmed.toLowerCase() === 'null') {
@@ -219,18 +228,20 @@ const parseScorerEntries = (value: string) => {
   const quotedEntries = [...trimmed.matchAll(/"([^"]+)"/g)]
     .map((match) => match[1]?.trim())
     .filter((entry): entry is string => Boolean(entry));
+  const entries =
+    quotedEntries.length > 0
+      ? quotedEntries
+      : trimmed
+          .replace(/^[{[]/, '')
+          .replace(/[}\]]$/, '')
+          .split(/[;,]/)
+          .map((entry) => entry.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean);
 
-  if (quotedEntries.length > 0) {
-    return quotedEntries;
-  }
-
-  return trimmed
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  return entries.map(parseScorerEntry);
 };
 
-const parseScorerEntry = (entry: string): ScorerDisplay => {
+const parseScorerEntry = (entry: string): ScorerEntry => {
   const trailingMinuteMatch = /^(?<name>.+?)\s+(?<minute>\d{1,3}(?:\+\d{1,2})?)['’]?$/.exec(entry);
 
   if (trailingMinuteMatch?.groups?.name && trailingMinuteMatch.groups.minute) {
@@ -252,18 +263,16 @@ const parseScorerEntry = (entry: string): ScorerDisplay => {
   return { name: entry };
 };
 
-const getAttachmentGraphemeImages = async (payload: AttachmentPayload) => {
-  const emojis = new Set(
-    [payload.homeTeam.flagEmoji, payload.awayTeam.flagEmoji, '⚽', '⚽️'].filter(
-      (emoji): emoji is string => Boolean(emoji),
-    ),
-  );
+const formatHomeScorerText = (scorer: ScorerEntry) => {
+  const minute = scorer.minute ? `${scorer.minute}'` : null;
 
-  const entries = await Promise.all(
-    [...emojis].map(async (emoji) => [emoji, await loadEmojiImageDataUrl(emoji)] as const),
-  );
+  return [minute, scorer.name].filter(Boolean).join(' ');
+};
 
-  return Object.fromEntries(entries);
+const formatAwayScorerText = (scorer: ScorerEntry) => {
+  const minute = scorer.minute ? `${scorer.minute}'` : null;
+
+  return [scorer.name, minute].filter(Boolean).join(' ');
 };
 
 const styles = {
@@ -295,39 +304,6 @@ const styles = {
     padding: '30px 32px 42px',
     width: '100%',
   },
-  header: {
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  eventPill: {
-    alignItems: 'center',
-    backgroundColor: palette.card,
-    borderColor: '#f1f1f1',
-    borderRadius: 999,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow:
-      '0px 5px 3px rgba(0,0,0,0.02),0px 2px 2px rgba(0,0,0,0.03),0px 1px 1px rgba(0,0,0,0.03)',
-    gap: 8,
-    padding: '8px 12px',
-  },
-  statusDot: {
-    borderRadius: 999,
-    height: 8,
-    width: 8,
-  },
-  eventText: {
-    color: palette.black,
-    fontSize: 14,
-    fontWeight: 500,
-    lineHeight: 1,
-  },
-  kicker: {
-    color: palette.muted,
-    fontSize: 14,
-    fontWeight: 500,
-  },
   title: {
     color: palette.primary,
     fontFamily: 'Inter',
@@ -336,29 +312,18 @@ const styles = {
     letterSpacing: -1,
     lineHeight: 1.06,
   },
-  subtitle: {
-    color: palette.muted,
-    fontSize: 16,
-    fontWeight: 400,
-  },
   scoreRow: {
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
   },
   teamColumn: {
-    flex: '0 0 190px',
+    position: 'relative',
     width: 190,
   },
-  teamFlag: {
-    color: palette.primary,
-    fontSize: 48,
-    fontWeight: 500,
-    lineHeight: 1,
-  },
-  teamFlagCode: {
-    color: palette.primary,
-    fontSize: 20,
+  flag: {
+    color: palette.black,
+    fontSize: 40,
     fontWeight: 500,
     lineHeight: 1,
   },
@@ -393,94 +358,78 @@ const styles = {
     marginLeft: 14,
     marginRight: 14,
   },
-  scorersGrid: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    width: '100%',
-  },
-  homeScorersColumn: {
+  scorerLane: {
+    alignItems: 'flex-start',
     display: 'flex',
     flexDirection: 'column',
-    width: 260,
+    flexShrink: 0,
+    position: 'absolute',
+    top: 94,
+    width: 190,
   },
-  awayScorersColumn: {
-    alignItems: 'flex-end',
-    display: 'flex',
-    flexDirection: 'column',
-    width: 260,
+  homeScorerLane: {
+    left: 0,
   },
-  homeScorerLine: {
+  awayScorerLane: {
+    right: 0,
+  },
+  scorerRow: {
     alignItems: 'center',
-    display: 'flex',
-    flexDirection: 'row',
-    gap: 6,
-    height: SCORER_ROW_HEIGHT,
-    justifyContent: 'flex-start',
-    width: '100%',
-  },
-  awayScorerLine: {
-    alignItems: 'center',
-    display: 'flex',
-    flexDirection: 'row',
-    gap: 6,
-    height: SCORER_ROW_HEIGHT,
-    justifyContent: 'flex-end',
-    width: '100%',
-  },
-  goalIcon: {
     color: palette.secondary,
+    display: 'flex',
+    flexDirection: 'row',
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: 500,
+    height: SCORER_ROW_HEIGHT,
+    lineHeight: 1,
+    width: '100%',
+  },
+  homeScorerRow: {
+    textAlign: 'left',
+  },
+  awayScorerRow: {
+    justifyContent: 'flex-end',
+    textAlign: 'right',
+  },
+  homeScorerBall: {
+    color: palette.black,
+    display: 'flex',
+    fontFamily: 'Inter',
+    fontSize: 14,
+    lineHeight: 1,
+    marginRight: 6,
+    width: 18,
+  },
+  awayScorerBall: {
+    color: palette.black,
+    display: 'flex',
+    fontFamily: 'Inter',
+    fontSize: 14,
+    justifyContent: 'flex-end',
+    lineHeight: 1,
+    marginLeft: 6,
+    width: 18,
+  },
+  homeScorerText: {
+    color: palette.secondary,
+    display: 'flex',
     fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: 500,
     lineHeight: 1,
+    textAlign: 'left',
+    width: 166,
   },
-  scorerMinute: {
+  awayScorerText: {
     color: palette.secondary,
+    display: 'flex',
+    fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: 500,
+    justifyContent: 'flex-end',
     lineHeight: 1,
-  },
-  scorerName: {
-    color: palette.secondary,
-    fontSize: 14,
-    fontWeight: 500,
-    lineHeight: 1,
-  },
-  metaPanel: {
-    backgroundColor: palette.shell,
-    borderColor: palette.border,
-    borderRadius: 20,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    padding: '14px 16px',
-    width: '100%',
-  },
-  metaRow: {
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  metaDivider: {
-    backgroundColor: palette.border,
-    height: 1,
-    marginBottom: 10,
-    marginTop: 10,
-    width: '100%',
-  },
-  metaLabel: {
-    color: palette.muted,
-    fontSize: 14,
-    fontWeight: 400,
-  },
-  metaValue: {
-    color: palette.secondary,
-    fontSize: 14,
-    fontWeight: 500,
+    textAlign: 'right',
+    width: 166,
   },
 } satisfies Record<string, CSSProperties>;
-
-type ScorerDisplay = {
-  name: string;
-  minute?: string;
-};

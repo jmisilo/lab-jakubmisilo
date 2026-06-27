@@ -1,5 +1,5 @@
+import type { WorldCupNotificationBot } from '@/app/features/world-cup/tracking/notification';
 import type { WorldCupDetectedEvent } from '@/app/features/world-cup/types';
-import type { Attachment } from 'chat';
 
 import { AIService } from '@/app/ai';
 import { WorldCupNotificationAttachmentService } from '@/app/features/world-cup/tracking/notification/attachment';
@@ -13,134 +13,116 @@ jest.mock('@/app/ai', () => ({
   },
 }));
 
-jest.mock('@/app/memory', () => ({
-  AgentMemoryService: {
-    buildContext: jest.fn(),
-  },
-}));
-
-jest.mock('@/app/memory/context', () => ({
-  AgentContextService: {
-    contextSourceMessageLimit: 12,
-  },
-}));
-
 jest.mock('@/app/features/world-cup/tracking/notification/attachment', () => ({
   WorldCupNotificationAttachmentService: {
     createAttachment: jest.fn(),
   },
 }));
 
-jest.mock('@/infrastructure/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
+jest.mock('@/app/memory', () => ({
+  AgentMemoryService: {
+    buildContext: jest.fn(),
   },
 }));
 
-const aiServiceMock = jest.mocked(AIService);
-const memoryServiceMock = jest.mocked(AgentMemoryService);
-const attachmentServiceMock = jest.mocked(WorldCupNotificationAttachmentService);
+const aiMock = jest.mocked(AIService);
+const attachmentMock = jest.mocked(WorldCupNotificationAttachmentService);
+const memoryMock = jest.mocked(AgentMemoryService);
 
 describe('WorldCupNotificationService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    aiServiceMock.generate.mockResolvedValue('Kickoff is live.');
-    memoryServiceMock.buildContext.mockResolvedValue([]);
-    attachmentServiceMock.createAttachment.mockResolvedValue(attachment);
+    aiMock.generate.mockResolvedValue('Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.');
+    attachmentMock.createAttachment.mockResolvedValue(attachment);
+    memoryMock.buildContext.mockResolvedValue([]);
+    threadMock.mockReturnValue({
+      post: postMock,
+    });
+    postMock.mockResolvedValue(undefined);
+    transcriptsListMock.mockResolvedValue([]);
   });
 
-  it('posts a supported event attachment before the generated notification message', async () => {
-    const post = jest.fn().mockResolvedValue(undefined);
-    const bot = createBot({ post });
-
+  it('posts the custom attachment before the text notification', async () => {
     await WorldCupNotificationService.postNotification({
       bot,
-      event: createWorldCupEvent({ eventType: 'kickoff' }),
+      event,
       identityId: 'identity-1',
-      threadId: 'thread-1',
+      threadId: 'telegram:1',
     });
 
-    expect(attachmentServiceMock.createAttachment).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: 'kickoff' }),
-    );
-    expect(post).toHaveBeenNthCalledWith(1, {
-      markdown: '',
+    expect(attachmentMock.createAttachment).toHaveBeenCalledWith(event);
+    expect(postMock).toHaveBeenNthCalledWith(1, {
       attachments: [attachment],
+      markdown: '',
     });
-    expect(post).toHaveBeenNthCalledWith(2, {
-      markdown: 'Kickoff is live.',
+    expect(postMock).toHaveBeenNthCalledWith(2, {
+      markdown: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
     });
   });
 
-  it('posts only the generated notification message when no attachment is available', async () => {
-    const post = jest.fn().mockResolvedValue(undefined);
-    const bot = createBot({ post });
-    attachmentServiceMock.createAttachment.mockResolvedValue(null);
+  it('still posts the text notification when attachment rendering fails', async () => {
+    attachmentMock.createAttachment.mockRejectedValue(new Error('render failed'));
 
     await WorldCupNotificationService.postNotification({
       bot,
-      event: createWorldCupEvent({ eventType: 'goal' }),
+      event,
       identityId: 'identity-1',
-      threadId: 'thread-1',
+      threadId: 'telegram:1',
     });
 
-    expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith({
-      markdown: 'Kickoff is live.',
+    expect(postMock).toHaveBeenCalledTimes(1);
+    expect(postMock).toHaveBeenCalledWith({
+      markdown: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
     });
   });
 });
 
-const attachment: Attachment = {
+const postMock = jest.fn();
+const threadMock = jest.fn();
+const transcriptsListMock = jest.fn();
+
+const bot = {
+  thread: threadMock,
+  transcripts: {
+    list: transcriptsListMock,
+  },
+} as unknown as WorldCupNotificationBot;
+
+const attachment = {
   data: Buffer.from('png'),
-  height: 840,
+  height: 624,
   mimeType: 'image/png',
-  name: 'world-cup-2026-kickoff-21.png',
-  type: 'image',
+  name: 'world-cup-2026-kickoff-1.png',
+  type: 'image' as const,
   width: 1440,
 };
 
-const createBot = ({ post }: { post: jest.Mock }) =>
-  ({
-    thread: jest.fn(() => ({ post })),
-    transcripts: {
-      list: jest.fn().mockResolvedValue([]),
-    },
-  }) as never;
-
-const createWorldCupEvent = ({
-  eventType,
-}: {
-  eventType: WorldCupDetectedEvent['eventType'];
-}): WorldCupDetectedEvent => ({
-  eventKey: `world-cup-2026:${eventType}:21`,
-  eventType,
-  gameId: '21',
-  teamIds: ['41', '42'],
+const event = {
+  eventKey: 'world-cup-2026:kickoff:1',
+  eventType: 'kickoff',
+  gameId: '1',
+  teamIds: ['33', '34'],
   payload: {
-    eventType,
-    gameId: '21',
-    matchLabel: 'Portugal 2-1 Democratic Republic of the Congo',
+    eventType: 'kickoff',
+    gameId: '1',
+    matchLabel: 'France 0-0 Argentina',
     homeTeam: {
-      id: '41',
-      name: 'Portugal',
-      fifaCode: 'POR',
-      flagEmoji: '🇵🇹',
-      score: 2,
-      scorers: 'Player 10',
+      id: '33',
+      name: 'France',
+      fifaCode: 'FRA',
+      flagEmoji: '🇫🇷',
+      score: 0,
+      scorers: 'null',
     },
     awayTeam: {
-      id: '42',
-      name: 'Democratic Republic of the Congo',
-      fifaCode: 'COD',
-      flagEmoji: '🇨🇩',
-      score: 1,
-      scorers: 'Player 20',
+      id: '34',
+      name: 'Argentina',
+      fifaCode: 'ARG',
+      flagEmoji: '🇦🇷',
+      score: 0,
+      scorers: 'null',
     },
-    localDate: '06/17/2026 12:00',
-    timeElapsed: eventType === 'game-end' ? 'finished' : '1',
+    localDate: '2026-06-17T18:00:00.000Z',
+    timeElapsed: '1',
   },
-});
+} satisfies WorldCupDetectedEvent;

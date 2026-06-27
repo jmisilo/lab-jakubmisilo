@@ -9,74 +9,39 @@ import inter800 from '@fontsource/inter/files/inter-latin-800-normal.woff';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 
-type RenderToPngOptions = {
+import { logger } from '@/infrastructure/logger';
+
+type RenderWorldCupAttachmentOptions = {
   graphemeImages?: Record<string, string>;
-  width: number;
   height: number;
   scale?: number;
+  width: number;
 };
-
-const interFonts = [
-  {
-    weight: 400,
-    data: inter400,
-  },
-  {
-    weight: 500,
-    data: inter500,
-  },
-  {
-    weight: 600,
-    data: inter600,
-  },
-  {
-    weight: 700,
-    data: inter700,
-  },
-  {
-    weight: 800,
-    data: inter800,
-  },
-] satisfies FontDefinition[];
-
-const fonts = interFonts.map(({ data, weight }) => ({
-  name: 'Inter',
-  data: Buffer.from(data),
-  weight,
-  style: 'normal' as const,
-})) satisfies SatoriOptions['fonts'];
-
-const TWEMOJI_ASSET_BASE_URL = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
-
-const transparentEmojiDataUrl = svgToDataUrl(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" />',
-);
 
 const emojiAssetCache = new Map<string, Promise<string>>();
 
-const loadAdditionalAsset: NonNullable<SatoriOptions['loadAdditionalAsset']> = async (
-  languageCode,
-  segment,
-) => {
-  if (languageCode !== 'emoji') {
-    return [];
-  }
+const transparentSvgDataUrl =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=';
 
-  return getEmojiAsset(segment);
-};
+const fonts = [
+  { data: Buffer.from(inter400), name: 'Inter', weight: 400 },
+  { data: Buffer.from(inter500), name: 'Inter', weight: 500 },
+  { data: Buffer.from(inter600), name: 'Inter', weight: 600 },
+  { data: Buffer.from(inter700), name: 'Inter', weight: 700 },
+  { data: Buffer.from(inter800), name: 'Inter', weight: 800 },
+] satisfies SatoriOptions['fonts'];
 
 export const renderWorldCupAttachmentToPng = async (
   element: ReactNode,
-  { graphemeImages, width, height, scale = 2 }: RenderToPngOptions,
+  { graphemeImages, height, scale = 2, width }: RenderWorldCupAttachmentOptions,
 ) => {
   const svg = await satori(element, {
-    width,
-    height,
     fonts,
     graphemeImages,
+    height,
     loadAdditionalAsset,
+    width,
   });
-
   const resvg = new Resvg(svg, {
     fitTo: {
       mode: 'width',
@@ -90,52 +55,64 @@ export const renderWorldCupAttachmentToPng = async (
   return Buffer.from(resvg.render().asPng());
 };
 
-export function loadEmojiImageDataUrl(emoji: string) {
-  return getEmojiAsset(emoji);
-}
+export const loadEmojiImageDataUrl = (emoji: string) => getEmojiAsset(emoji);
 
-function getEmojiAsset(emoji: string) {
-  const cachedAsset = emojiAssetCache.get(emoji);
+const loadAdditionalAsset: NonNullable<SatoriOptions['loadAdditionalAsset']> = async (
+  _languageCode,
+  segment,
+) => {
+  return getEmojiAsset(segment);
+};
 
-  if (cachedAsset) {
-    return cachedAsset;
-  }
-
-  const asset = loadTwemojiSvg(emoji).catch(() => transparentEmojiDataUrl);
-  emojiAssetCache.set(emoji, asset);
-
-  return asset;
-}
-
-async function loadTwemojiSvg(emoji: string) {
-  const codepoints = formatTwemojiCodepoints(emoji);
+const getEmojiAsset = async (emoji: string) => {
+  const codepoints = getEmojiCodepoints(emoji);
 
   if (!codepoints) {
-    return transparentEmojiDataUrl;
+    return transparentSvgDataUrl;
   }
 
-  const response = await fetch(`${TWEMOJI_ASSET_BASE_URL}/${codepoints}.svg`);
+  const cached = emojiAssetCache.get(codepoints);
 
-  if (!response.ok) {
-    return transparentEmojiDataUrl;
+  if (cached) {
+    return cached;
   }
 
-  return svgToDataUrl(await response.text());
-}
+  const asset = fetchTwemojiAsset(codepoints);
 
-function formatTwemojiCodepoints(emoji: string) {
-  return Array.from(emoji)
-    .map((character) => character.codePointAt(0))
-    .filter((codepoint): codepoint is number => codepoint !== undefined && codepoint !== 0xfe0f)
-    .map((codepoint) => codepoint.toString(16))
-    .join('-');
-}
+  emojiAssetCache.set(codepoints, asset);
 
-function svgToDataUrl(svg: string) {
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-}
+  return asset;
+};
 
-type FontDefinition = {
-  data: Uint8Array;
-  weight: NonNullable<SatoriOptions['fonts']>[number]['weight'];
+const fetchTwemojiAsset = async (codepoints: string) => {
+  try {
+    const response = await fetch(
+      `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${codepoints}.svg`,
+    );
+
+    if (!response.ok) {
+      logger.warn(
+        { codepoints, status: response.status },
+        '[WORLD_CUP]: emoji asset request failed',
+      );
+
+      return transparentSvgDataUrl;
+    }
+
+    const svg = await response.text();
+
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  } catch (error) {
+    logger.warn({ codepoints, error }, '[WORLD_CUP]: emoji asset unavailable');
+
+    return transparentSvgDataUrl;
+  }
+};
+
+const getEmojiCodepoints = (emoji: string) => {
+  const codepoints = [...emoji]
+    .map((segment) => segment.codePointAt(0)?.toString(16))
+    .filter((codepoint): codepoint is string => Boolean(codepoint) && codepoint !== 'fe0f');
+
+  return codepoints.length > 0 ? codepoints.join('-') : null;
 };

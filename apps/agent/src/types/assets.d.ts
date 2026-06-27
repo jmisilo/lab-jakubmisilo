@@ -1,4 +1,5 @@
 declare module '*.woff' {
-  const content: Uint8Array;
-  export default content;
+  const data: Uint8Array;
+
+  export default data;
 }

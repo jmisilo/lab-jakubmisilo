@@ -32,10 +32,12 @@ export class AIService {
   }
 
   static async generate({
+    instructions,
     model = AIService.model,
     messages,
     timeoutMs = AIService.timeout,
   }: {
+    instructions?: Parameters<typeof generateText>[0]['instructions'];
     messages: ModelMessage[];
     model?: Parameters<typeof openai>[0];
     timeoutMs?: number;
@@ -48,6 +50,7 @@ export class AIService {
     try {
       const result = await generateText({
         model: openai(model),
+        instructions,
         maxRetries: 1,
         abortSignal: abortController.signal,
         messages,

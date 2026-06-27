@@ -33,6 +33,7 @@ export class WorldCupNotificationService {
       { eventKey: event.eventKey, identityId, threadId },
       '[WORLD_CUP]: composing notification',
     );
+    const thread = bot.thread(threadId);
     const message = await this.#composeNotification({
       bot,
       event,
@@ -43,19 +44,38 @@ export class WorldCupNotificationService {
       { eventKey: event.eventKey, threadId, messageLength: message.length },
       '[WORLD_CUP]: posting notification',
     );
-    const thread = bot.thread(threadId);
-    const attachment = await WorldCupNotificationAttachmentService.createAttachment(event);
+    await this.#postAttachment({ event, thread, threadId });
+    await thread.post({ markdown: message });
+  }
 
-    if (attachment) {
+  static async #postAttachment({
+    event,
+    thread,
+    threadId,
+  }: {
+    event: WorldCupDetectedEvent;
+    thread: Thread;
+    threadId: string;
+  }) {
+    try {
+      const attachment = await WorldCupNotificationAttachmentService.createAttachment(event);
+
+      if (!attachment) {
+        return;
+      }
+
       logger.info(
-        { eventKey: event.eventKey, threadId, attachmentName: attachment.name },
+        { attachmentName: attachment.name, eventKey: event.eventKey, threadId },
         '[WORLD_CUP]: posting notification attachment',
       );
 
-      await thread.post({ markdown: '', attachments: [attachment] });
+      await thread.post({ attachments: [attachment], markdown: '' });
+    } catch (error) {
+      logger.error(
+        { error, eventKey: event.eventKey, threadId },
+        '[WORLD_CUP]: notification attachment failed',
+      );
     }
-
-    await thread.post({ markdown: message });
   }
 
   static async #composeNotification({
@@ -101,18 +121,15 @@ export class WorldCupNotificationService {
       );
 
       return await AIService.generate({
+        instructions: dedent`
+          Write a short Telegram notification for a FIFA World Cup 2026 event.
+          Use the prior conversation only to match the user's tone and preferences.
+          Do not invent football facts, times, scorers, teams, or scores.
+          Use country flag emojis from the payload when they are available.
+          Vary wording, sentence rhythm, and openings between notifications so the message does not read like a fixed template.
+          Keep it natural, direct, and concise. Use markdown only when helpful.
+        `,
         messages: [
-          {
-            role: 'system',
-            content: dedent`
-              Write a short Telegram notification for a FIFA World Cup 2026 event.
-              Use the prior conversation only to match the user's tone and preferences.
-              Do not invent football facts, times, scorers, teams, or scores.
-              Use country flag emojis from the payload when they are available.
-              Vary wording, sentence rhythm, and openings between notifications so the message does not read like a fixed template.
-              Keep it natural, direct, and concise. Use markdown only when helpful.
-            `,
-          },
           ...context,
           {
             role: 'user',

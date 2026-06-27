@@ -6,7 +6,9 @@ export default defineConfig({
   dts: false,
   entry: ['src/index.ts', 'src/app/tui/index.ts'],
   format: ['esm'],
-  loader: { '.woff': 'binary' },
+  loader: {
+    '.woff': 'binary',
+  },
   noExternal: [/^@fontsource\/inter/, /^@labjm\//],
   outDir: 'dist',
   platform: 'node',

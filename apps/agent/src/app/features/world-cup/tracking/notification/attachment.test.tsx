@@ -63,6 +63,7 @@ describe('WorldCupNotificationAttachmentService', () => {
       height: 624,
       mimeType: 'image/png',
       name: 'world-cup-2026-kickoff-21.png',
+      size: 3,
       type: 'image',
       width: 1440,
     });
@@ -76,8 +77,9 @@ describe('WorldCupNotificationAttachmentService', () => {
     expect(mockRenderWorldCupAttachmentToPng).toHaveBeenCalledTimes(1);
     expect(attachment).toEqual(
       expect.objectContaining({
-        height: 672,
+        height: 720,
         name: 'world-cup-2026-game-end-21.png',
+        size: 3,
         type: 'image',
       }),
     );
