@@ -1,6 +1,6 @@
 # Agent Chat Refactor Handoff
 
-Date: 2026-07-03
+Date: 2026-07-04
 
 ## Context
 
@@ -19,7 +19,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Put app-owned callback behavior behind `BotHandler`, a static class whose public methods match Chat SDK handler signatures.
 - Keep current bot behavior in one cohesive handler for now. Separate `TelegramConversationService` and `TelegramTypingIndicatorService` were removed as over-abstraction.
 - Do not wrap the bot factory in a class. Additional platforms should be added by composing Chat SDK adapters/handlers, not by building a framework around Chat SDK.
-- Static services may use `this` for private static access. `BotHandler` methods are bound at registration with `.bind(BotHandler)` because passing a static method as a bare callback loses the class receiver in JavaScript.
+- Static services may use `this` for private static access. Do not pass those static methods as bare SDK callbacks; use a small callback wrapper that calls the static method through the class.
 - Use stable error codes through `AppErrorCode`; do not encode dynamic values into error names/messages such as `assistant_generate_timeout_30000ms`.
 - Put timeout values and operation identifiers in structured `context`, not in the error code.
 - Use `ErrorService.toUserFacingFailure` and `ErrorService.toSafeLog` for failure projection. The service keeps user-safe messaging and developer log shape in one place without spreading ad-hoc error handling.
@@ -49,7 +49,12 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `AI_EMBEDDING_TIMEOUT`
   - `BOT_TYPING_INDICATOR_TIMEOUT`
 - Added tests for the error module contract.
-- Added a `BotHandler` regression test that calls a public static handler with the same `.bind(BotHandler)` pattern used by Chat SDK registration.
+- Added a `BotHandler` regression test that calls the public `{ event, thread, message }` handler payload used by Chat SDK registration.
+- Moved typing indicator coverage to the full bot handling lifecycle. `BotHandler` now starts typing before transcript/memory writes and keeps refreshing through generation, response posting, and failure handling.
+- Migrated weather and World Cup provider failures to stable `AppError` codes:
+  - Weather uses `WEATHER_API_TIMEOUT`, `WEATHER_API_ERROR`, `WEATHER_RESPONSE_INVALID`, and `WEATHER_FORECAST_TARGET_UNAVAILABLE`.
+  - World Cup API uses `WORLD_CUP_API_TIMEOUT` and `WORLD_CUP_API_ERROR`.
+  - World Cup catch boundaries now log `ErrorService.toSafeLog(error)` for coded app errors.
 - Moved tool input/output/context schemas out of tool modules:
   - Weather tool schemas now live in `features/weather/schemas.ts`.
   - World Cup tool schemas now live in `features/world-cup/schemas.ts`.
@@ -67,7 +72,6 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Add internal user identity resolution and stop using Telegram `author.userId` as the core identity.
 - Build the new durable knowledge module as an arbitrarily deep user-owned node tree. Do not revive flat noted memories.
 - Add `manage-knowledge` as a constrained tool once the knowledge module exists.
-- Migrate remaining provider-specific dynamic errors in weather and World Cup modules to `AppError` gradually.
 - If another chat platform appears, register it through `app/bot/index.ts` first; split platform-specific modules only when behavior differs enough to justify it.
 - Add behavior tests around `BotHandler` once identity and knowledge dependencies stabilize.
 

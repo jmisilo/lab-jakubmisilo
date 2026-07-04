@@ -22,6 +22,7 @@ describe('withWhitelist', () => {
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'thread-1' }),
       expect.objectContaining({ id: 'message-1' }),
+      'direct_message',
     );
     expect(loggerMock.warn).not.toHaveBeenCalled();
   });
@@ -33,6 +34,11 @@ describe('withWhitelist', () => {
     await withWhitelist('subscribed_message', handler)(createThread(), createMessage('user-2'));
 
     expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'thread-1' }),
+      expect.objectContaining({ id: 'message-1' }),
+      'subscribed_message',
+    );
     expect(loggerMock.warn).not.toHaveBeenCalled();
   });
 

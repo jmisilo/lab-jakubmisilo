@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 
 import { bot } from '@/app/bot';
 import { WorldCupPollingService } from '@/app/features/world-cup/tracking/polling';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export const WorldCupRouter = new Hono().get('/jobs/world-cup/events', async (c) => {
@@ -40,19 +41,34 @@ export const WorldCupRouter = new Hono().get('/jobs/world-cup/events', async (c)
     }
   } catch (error) {
     if (error instanceof SignatureError) {
-      logger.warn({ error }, '[WORLD_CUP]: QStash signature verification failed');
+      logger.warn(
+        { error, safeError: ErrorService.toSafeLog(error) },
+        '[WORLD_CUP]: QStash signature verification failed',
+      );
 
       return c.json({ ok: false, error: 'Unauthorized' }, 401);
     }
 
-    logger.error({ error }, '[WORLD_CUP]: QStash signature verification errored');
+    logger.error(
+      { error, safeError: ErrorService.toSafeLog(error) },
+      '[WORLD_CUP]: QStash signature verification errored',
+    );
 
     return c.json({ ok: false, error: 'Unauthorized' }, 401);
   }
 
   logger.info({ url: c.req.url }, '[WORLD_CUP]: polling request verified');
 
-  const result = await WorldCupPollingService.pollAndDeliver({ bot });
+  try {
+    const result = await WorldCupPollingService.pollAndDeliver({ bot });
 
-  return c.json({ ok: true, result });
+    return c.json({ ok: true, result });
+  } catch (error) {
+    logger.error(
+      { error, safeError: ErrorService.toSafeLog(error), url: c.req.url },
+      '[WORLD_CUP]: polling request failed',
+    );
+
+    return c.json({ ok: false, error: 'World Cup polling failed' }, 500);
+  }
 });

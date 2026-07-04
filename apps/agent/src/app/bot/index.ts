@@ -35,6 +35,30 @@ export const bot = new Chat({
 
 BotHandler.configure({ bot });
 
-bot.onDirectMessage(withWhitelist('direct_message', BotHandler.respondToDirectMessage));
-bot.onNewMention(withWhitelist('new_mention', BotHandler.respondToNewMention));
-bot.onSubscribedMessage(withWhitelist('subscribed_message', BotHandler.respondToSubscribedMessage));
+bot.onDirectMessage(
+  withWhitelist('direct_message', (thread, message, event) =>
+    BotHandler.respondToMessage({
+      event,
+      thread,
+      message,
+    }),
+  ),
+);
+bot.onNewMention(
+  withWhitelist('new_mention', (thread, message, event) =>
+    BotHandler.respondToMessage({
+      event,
+      thread,
+      message,
+    }),
+  ),
+);
+bot.onSubscribedMessage(
+  withWhitelist('subscribed_message', (thread, message, event) =>
+    BotHandler.respondToMessage({
+      event,
+      thread,
+      message,
+    }),
+  ),
+);

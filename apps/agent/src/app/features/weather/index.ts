@@ -19,26 +19,7 @@ import {
   OpenWeatherGeocodingResponseSchema,
   WeatherUnitsSchema,
 } from '@/app/features/weather/schemas';
-
-class OpenWeatherApiError extends Error {
-  constructor(
-    message: string,
-    readonly details: { status: number; providerMessage?: string },
-  ) {
-    super(message);
-    this.name = 'OpenWeatherApiError';
-  }
-}
-
-class WeatherForecastTargetUnavailableError extends Error {
-  constructor(
-    message: string,
-    readonly details: { targetLocalDate: string; fromLocal: string; toLocal: string },
-  ) {
-    super(message);
-    this.name = 'WeatherForecastTargetUnavailableError';
-  }
-}
+import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
 export class WeatherService {
   static #timeout = 10_000;
@@ -146,8 +127,9 @@ export class WeatherService {
 
   static async #findLocation({ location }: { location: string }) {
     try {
-      const response = await this.#fetch(
-        this.#geocodingUrl.compose({
+      const response = await this.#fetch({
+        operation: 'openweather.geocoding',
+        url: this.#geocodingUrl.compose({
           pathSegments: ['/geo', '/1.0', '/direct'],
           queryParams: {
             q: location.trim(),
@@ -155,7 +137,7 @@ export class WeatherService {
             appid: process.env.OPENWEATHER_API_KEY,
           },
         }),
-      );
+      });
       const [matchedLocation] = OpenWeatherGeocodingResponseSchema.parse(response);
 
       if (!matchedLocation) {
@@ -197,8 +179,9 @@ export class WeatherService {
     units: WeatherUnits;
   }) {
     try {
-      const response = await this.#fetch(
-        this.#weatherUrl.compose({
+      const response = await this.#fetch({
+        operation: 'openweather.current_weather',
+        url: this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/weather'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -208,7 +191,7 @@ export class WeatherService {
             lang: 'en',
           },
         }),
-      );
+      });
       const weather = OpenWeatherCurrentResponseSchema.parse(response);
 
       return {
@@ -256,8 +239,9 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.#fetch(
-        this.#weatherUrl.compose({
+      const response = await this.#fetch({
+        operation: 'openweather.forecast',
+        url: this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/forecast'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -267,7 +251,7 @@ export class WeatherService {
             lang: 'en',
           },
         }),
-      );
+      });
       const forecast = OpenWeatherForecastResponseSchema.parse(response);
 
       return {
@@ -282,13 +266,15 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      if (error instanceof WeatherForecastTargetUnavailableError) {
+      if (this.#isAppErrorCode(error, AppErrorCode.WEATHER_FORECAST_TARGET_UNAVAILABLE)) {
+        const details = this.#getForecastTargetUnavailableDetails(error);
+
         return {
           ok: false as const,
           reason: 'forecast_target_unavailable' as const,
           message: [
-            `Forecast for "${location}" is not available on ${error.details.targetLocalDate}.`,
-            `Available forecast range is ${error.details.fromLocal} to ${error.details.toLocal}.`,
+            `Forecast for "${location}" is not available on ${details.targetLocalDate}.`,
+            `Available forecast range is ${details.fromLocal} to ${details.toLocal}.`,
           ].join(' '),
         };
       }
@@ -319,8 +305,9 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.#fetch(
-        this.#weatherUrl.compose({
+      const response = await this.#fetch({
+        operation: 'openweather.local_time',
+        url: this.#weatherUrl.compose({
           pathSegments: ['/data', '/2.5', '/weather'],
           queryParams: {
             lat: resolvedLocation.lat,
@@ -328,7 +315,7 @@ export class WeatherService {
             appid: process.env.OPENWEATHER_API_KEY,
           },
         }),
-      );
+      });
       const weather = OpenWeatherCurrentResponseSchema.parse(response);
 
       return {
@@ -357,12 +344,20 @@ export class WeatherService {
     }
   }
   /** @todo provide better, typesafe solution for interactions with 3rd party apis */
-  static async #fetch(url: string): Promise<unknown> {
+  static async #fetch({ operation, url }: { operation: string; url: string }): Promise<unknown> {
     const abortController = new AbortController();
-    const timeout = setTimeout(
-      () => abortController.abort(new Error('openweather_api_timeout')),
-      this.#timeout,
-    );
+    const timeout = setTimeout(() => {
+      abortController.abort(
+        AppError.timeout({
+          code: AppErrorCode.WEATHER_API_TIMEOUT,
+          message: 'OpenWeather request timed out.',
+          context: {
+            operation,
+          },
+          timeoutMs: this.#timeout,
+        }),
+      );
+    }, this.#timeout);
 
     try {
       const response = await fetch(url, {
@@ -371,9 +366,17 @@ export class WeatherService {
       });
 
       if (!response.ok) {
-        throw new OpenWeatherApiError('openweather_api_error', {
-          status: response.status,
-          providerMessage: await this.#readProviderErrorMessage(response),
+        const providerMessage = await this.#readProviderErrorMessage(response);
+
+        throw new AppError({
+          code: AppErrorCode.WEATHER_API_ERROR,
+          message: 'OpenWeather request failed.',
+          context: {
+            operation,
+            providerStatus: response.status,
+            providerMessage,
+          },
+          retryable: response.status === 429 || response.status >= 500,
         });
       }
 
@@ -397,7 +400,14 @@ export class WeatherService {
     const [condition] = weather.weather;
 
     if (!condition) {
-      throw new Error('openweather_current_weather_condition_missing');
+      throw new AppError({
+        code: AppErrorCode.WEATHER_RESPONSE_INVALID,
+        message: 'OpenWeather current weather response is missing weather condition.',
+        context: {
+          operation: 'openweather.current_weather.parse',
+          field: 'weather[0]',
+        },
+      });
     }
 
     return {
@@ -451,7 +461,14 @@ export class WeatherService {
     const lastPoint = points.at(-1);
 
     if (!firstPoint || !lastPoint) {
-      throw new Error('openweather_forecast_points_missing');
+      throw new AppError({
+        code: AppErrorCode.WEATHER_RESPONSE_INVALID,
+        message: 'OpenWeather forecast response is missing forecast points.',
+        context: {
+          operation: 'openweather.forecast.parse',
+          field: 'list',
+        },
+      });
     }
 
     const targetLocalDate =
@@ -469,10 +486,14 @@ export class WeatherService {
       : [];
 
     if (targetLocalDate && matchingDayPoints.length === 0) {
-      throw new WeatherForecastTargetUnavailableError('openweather_forecast_target_unavailable', {
-        targetLocalDate,
-        fromLocal: firstPoint.forecastedAtLocal,
-        toLocal: lastPoint.forecastedAtLocal,
+      throw new AppError({
+        code: AppErrorCode.WEATHER_FORECAST_TARGET_UNAVAILABLE,
+        message: 'Requested forecast target is outside the available OpenWeather range.',
+        context: {
+          targetLocalDate,
+          fromLocal: firstPoint.forecastedAtLocal,
+          toLocal: lastPoint.forecastedAtLocal,
+        },
       });
     }
 
@@ -513,7 +534,14 @@ export class WeatherService {
     const [condition] = point.weather;
 
     if (!condition) {
-      throw new Error('openweather_forecast_weather_condition_missing');
+      throw new AppError({
+        code: AppErrorCode.WEATHER_RESPONSE_INVALID,
+        message: 'OpenWeather forecast point is missing weather condition.',
+        context: {
+          operation: 'openweather.forecast_point.parse',
+          field: 'weather[0]',
+        },
+      });
     }
 
     const localDateTime = this.#toOffsetDateTime({
@@ -584,7 +612,14 @@ export class WeatherService {
     const [firstPoint] = points;
 
     if (!firstPoint) {
-      throw new Error('openweather_forecast_candidates_missing');
+      throw new AppError({
+        code: AppErrorCode.WEATHER_RESPONSE_INVALID,
+        message: 'OpenWeather forecast selection has no candidate points.',
+        context: {
+          operation: 'openweather.forecast.select',
+          field: 'points',
+        },
+      });
     }
 
     return points.reduce((bestPoint, point) =>
@@ -694,11 +729,44 @@ export class WeatherService {
   }
 
   static #getProviderErrorDetails(error: unknown) {
-    if (error instanceof OpenWeatherApiError) {
-      return error.details;
+    if (this.#isAppErrorCode(error, AppErrorCode.WEATHER_API_ERROR)) {
+      const status = this.#getNumberContext(error, 'providerStatus');
+
+      if (status === undefined) {
+        return undefined;
+      }
+
+      return {
+        status,
+        providerMessage: this.#getStringContext(error, 'providerMessage'),
+      };
     }
 
     return undefined;
+  }
+
+  static #getForecastTargetUnavailableDetails(error: AppError) {
+    return {
+      targetLocalDate: this.#getStringContext(error, 'targetLocalDate') ?? 'the requested date',
+      fromLocal: this.#getStringContext(error, 'fromLocal') ?? 'unknown',
+      toLocal: this.#getStringContext(error, 'toLocal') ?? 'unknown',
+    };
+  }
+
+  static #isAppErrorCode(error: unknown, code: AppErrorCode): error is AppError {
+    return AppError.is(error) && error.code === code;
+  }
+
+  static #getStringContext(error: AppError, field: string) {
+    const value = error.context[field];
+
+    return typeof value === 'string' && value.trim() ? value : undefined;
+  }
+
+  static #getNumberContext(error: AppError, field: string) {
+    const value = error.context[field];
+
+    return typeof value === 'number' ? value : undefined;
   }
 
   static #createFailureMessage({

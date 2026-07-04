@@ -8,6 +8,7 @@ import { WorldCupNotificationAttachmentService } from '@/app/features/world-cup/
 import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
 import { AIService } from '@/infrastructure/ai';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export type WorldCupNotificationBot = {
@@ -72,7 +73,7 @@ export class WorldCupNotificationService {
       await thread.post({ attachments: [attachment], markdown: '' });
     } catch (error) {
       logger.error(
-        { error, eventKey: event.eventKey, threadId },
+        { error, safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey, threadId },
         '[WORLD_CUP]: notification attachment failed',
       );
     }
@@ -98,7 +99,7 @@ export class WorldCupNotificationService {
         })
         .catch((error: unknown) => {
           logger.warn(
-            { error, identityId, threadId },
+            { error, safeError: ErrorService.toSafeLog(error), identityId, threadId },
             '[WORLD_CUP]: transcript context unavailable',
           );
           return [];
@@ -142,7 +143,10 @@ export class WorldCupNotificationService {
         timeoutMs: 20_000,
       });
     } catch (error) {
-      logger.error({ error, eventKey: event.eventKey }, '[WORLD_CUP]: AI notification failed');
+      logger.error(
+        { error, safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey },
+        '[WORLD_CUP]: AI notification failed',
+      );
       return this.#createFallbackNotification(event);
     }
   }
