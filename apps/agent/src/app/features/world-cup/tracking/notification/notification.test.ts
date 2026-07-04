@@ -1,13 +1,13 @@
 import type { WorldCupNotificationBot } from '@/app/features/world-cup/tracking/notification';
 import type { WorldCupDetectedEvent } from '@/app/features/world-cup/types';
 
-import { AIService } from '@/app/ai';
 import { WorldCupNotificationAttachmentService } from '@/app/features/world-cup/tracking/notification/attachment';
 import { AgentMemoryService } from '@/app/memory';
+import { AIService } from '@/infrastructure/ai';
 
 import { WorldCupNotificationService } from '.';
 
-jest.mock('@/app/ai', () => ({
+jest.mock('@/infrastructure/ai', () => ({
   AIService: {
     generate: jest.fn(),
   },

@@ -1,7 +1,7 @@
 import { Receiver, SignatureError } from '@upstash/qstash';
 import { Hono } from 'hono';
 
-import { bot } from '@/app/channels';
+import { bot } from '@/app/bot';
 import { WorldCupPollingService } from '@/app/features/world-cup/tracking/polling';
 import { logger } from '@/infrastructure/logger';
 

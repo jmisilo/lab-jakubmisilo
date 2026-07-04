@@ -2,8 +2,8 @@ import type { MemoryMessageRole } from '@/app/memory/types';
 
 import dedent from 'dedent';
 
-import { AIService } from '@/app/ai';
 import { AgentContextService } from '@/app/memory/context';
+import { AIService } from '@/infrastructure/ai';
 import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory';
 import { logger } from '@/infrastructure/logger';
 
@@ -30,31 +30,6 @@ export class AgentMemoryService {
       role,
       content,
       sourceMessageId,
-    });
-  }
-
-  static async recordNotedInfo({
-    identityId,
-    content,
-    kind = 'note',
-    importance = 1,
-    metadata = {},
-  }: {
-    identityId: string;
-    content: string;
-    kind?: string;
-    importance?: number;
-    metadata?: Record<string, unknown>;
-  }) {
-    const embedding = await AIService.embed(content);
-
-    return AgentMemoryDbService.createNotedMemory({
-      identityId,
-      content,
-      kind,
-      importance,
-      metadata,
-      embedding,
     });
   }
 

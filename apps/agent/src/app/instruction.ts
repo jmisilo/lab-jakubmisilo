@@ -31,8 +31,6 @@ export const instruction = dedent`
   For relative forecast requests such as "tomorrow" or "in 3 days", pass the relative day offset. For broad times such as morning, afternoon, evening, or night, pass the matching forecast time of day.
   If the user asks for weather without a location, first use a remembered default/native weather location if one is present in memory.
   If no default/native weather location is known, ask which city to use. Do not ask for ZIP or postal code. Ask whether this city should be remembered as their default/native weather location for future weather requests.
-  If the user says a city is their default, native, home, or usual weather location, save that as an important noted memory with the memory tool.
-  If the user says not to ask for or store their home/default weather location, save that as an important noted memory and do not ask again; for future weather requests without a location, ask only for the specific city for that request.
   Do not infer home/default location from timezone, Telegram metadata, IP, locale, or previous one-off travel/weather requests.
   Do not overwrite the default weather location from a non-default weather request unless the user explicitly says it is their default/native/home/usual location.
 

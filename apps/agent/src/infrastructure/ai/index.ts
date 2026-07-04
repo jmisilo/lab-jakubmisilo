@@ -3,6 +3,8 @@ import type { ModelMessage } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { embed, generateText } from 'ai';
 
+import { AppError, AppErrorCode } from '@/infrastructure/errors';
+
 export class AIService {
   static readonly model = 'gpt-5.4-nano';
   static readonly timeout = 30_000;
@@ -14,7 +16,17 @@ export class AIService {
   static async embed(value: string): Promise<number[]> {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
-      abortController.abort(new Error(`embedding_timeout`));
+      abortController.abort(
+        AppError.timeout({
+          code: AppErrorCode.AI_EMBEDDING_TIMEOUT,
+          message: 'Embedding generation timed out.',
+          context: {
+            model: this.embeddingModel,
+            operation: 'ai.embed',
+          },
+          timeoutMs: this.embeddingTimeout,
+        }),
+      );
     }, this.embeddingTimeout);
 
     try {
@@ -44,7 +56,17 @@ export class AIService {
   }) {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
-      abortController.abort(new Error(`ai_generate_timeout_${timeoutMs}ms`));
+      abortController.abort(
+        AppError.timeout({
+          code: AppErrorCode.AI_GENERATE_TIMEOUT,
+          message: 'AI text generation timed out.',
+          context: {
+            model,
+            operation: 'ai.generate',
+          },
+          timeoutMs,
+        }),
+      );
     }, timeoutMs);
 
     try {

@@ -1,7 +1,7 @@
 import { waitUntil } from '@vercel/functions';
 import { Hono } from 'hono';
 
-import { bot } from '@/app/channels';
+import { bot } from '@/app/bot';
 import { WorldCupRouter } from '@/app/features/world-cup';
 
 const app = new Hono()

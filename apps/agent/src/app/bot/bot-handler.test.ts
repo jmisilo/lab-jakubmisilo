@@ -1,0 +1,119 @@
+import type { Chat, Message, Thread } from 'chat';
+
+const mockWaitUntil = jest.fn();
+const mockAgentService = {
+  generate: jest.fn(),
+};
+const mockAgentMemoryService = {
+  recordMessage: jest.fn(),
+  buildContext: jest.fn(),
+  compressShortTermMemory: jest.fn(),
+};
+const mockLogger = {
+  info: jest.fn(),
+  debug: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+};
+
+jest.mock('@vercel/functions', () => ({
+  waitUntil: mockWaitUntil,
+}));
+
+jest.mock('@/app/agent', () => ({
+  AgentService: mockAgentService,
+}));
+
+jest.mock('@/app/memory', () => ({
+  AgentMemoryService: mockAgentMemoryService,
+}));
+
+jest.mock('@/app/memory/context', () => ({
+  AgentContextService: {
+    contextSourceMessageLimit: 20,
+  },
+}));
+
+jest.mock('@/infrastructure/logger', () => ({
+  logger: mockLogger,
+}));
+
+let BotHandler: typeof import('./bot-handler').BotHandler;
+
+beforeAll(async () => {
+  ({ BotHandler } = await import('./bot-handler'));
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+
+  mockAgentMemoryService.recordMessage.mockResolvedValue(undefined);
+  mockAgentMemoryService.buildContext.mockResolvedValue([{ role: 'user', content: 'Hello' }]);
+  mockAgentMemoryService.compressShortTermMemory.mockResolvedValue(undefined);
+  mockAgentService.generate.mockResolvedValue({ text: 'Hi there.' });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+describe('BotHandler', () => {
+  it('handles direct-message callbacks when bound at the SDK registration boundary', async () => {
+    const bot = createBot();
+    const thread = createThread();
+    const message = createMessage();
+
+    BotHandler.configure({ bot });
+
+    const boundHandler = BotHandler.respondToDirectMessage.bind(BotHandler);
+
+    await boundHandler(thread, message);
+
+    expect(bot.transcripts.append).toHaveBeenCalledWith(thread, message);
+    expect(bot.transcripts.list).toHaveBeenCalledWith({
+      userKey: 'identity-1',
+      threadId: 'thread-1',
+      limit: 20,
+    });
+    expect(mockAgentService.generate).toHaveBeenCalledWith({
+      messages: [{ role: 'user', content: 'Hello' }],
+      identityId: 'identity-1',
+      threadId: 'thread-1',
+      sourceMessageId: 'message-1',
+    });
+    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Hi there.' });
+    expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
+  });
+});
+
+function createBot() {
+  return {
+    transcripts: {
+      append: jest.fn().mockResolvedValue(undefined),
+      list: jest.fn().mockResolvedValue([{ role: 'user', text: 'Hello' }]),
+    },
+  } as unknown as Chat;
+}
+
+function createThread() {
+  return {
+    id: 'thread-1',
+    post: jest.fn().mockResolvedValue(undefined),
+    startTyping: jest.fn().mockResolvedValue(undefined),
+  } as unknown as Thread & {
+    post: jest.Mock;
+    startTyping: jest.Mock;
+  };
+}
+
+function createMessage() {
+  return {
+    id: 'message-1',
+    userKey: 'identity-1',
+    text: 'Hello',
+    author: {
+      userId: 'telegram-user-1',
+    },
+  } as Message;
+}

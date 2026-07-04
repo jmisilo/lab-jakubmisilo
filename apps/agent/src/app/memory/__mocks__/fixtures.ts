@@ -30,25 +30,3 @@ export const createMemoryChunk = ({ id, summary }: { id: string; summary: string
   sourceMessageIds: [],
   createdAt: now,
 });
-
-export const createNotedMemory = ({
-  id,
-  content,
-  kind = 'note',
-  importance = 1,
-}: {
-  id: string;
-  content: string;
-  kind?: string;
-  importance?: number;
-}) => ({
-  id,
-  identityId: 'identity-1',
-  kind,
-  content,
-  metadata: {},
-  embedding: [0.1, 0.2, 0.3],
-  importance,
-  createdAt: now,
-  updatedAt: now,
-});

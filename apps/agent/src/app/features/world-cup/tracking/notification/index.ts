@@ -4,10 +4,10 @@ import type { Thread } from 'chat';
 
 import dedent from 'dedent';
 
-import { AIService } from '@/app/ai';
 import { WorldCupNotificationAttachmentService } from '@/app/features/world-cup/tracking/notification/attachment';
 import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
+import { AIService } from '@/infrastructure/ai';
 import { logger } from '@/infrastructure/logger';
 
 export type WorldCupNotificationBot = {
