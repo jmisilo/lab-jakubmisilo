@@ -7,6 +7,7 @@ import { WorldCupApiClient } from '@/app/features/world-cup/tracking/api';
 import { WorldCupEventDetector } from '@/app/features/world-cup/tracking/events';
 import { WorldCupNotificationService } from '@/app/features/world-cup/tracking/notification';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export class WorldCupPollingService {
@@ -150,6 +151,7 @@ export class WorldCupPollingService {
             logger.error(
               {
                 error,
+                safeError: ErrorService.toSafeLog(error),
                 pollRunId,
                 deliveryId: delivery.id,
                 eventKey: event.eventKey,

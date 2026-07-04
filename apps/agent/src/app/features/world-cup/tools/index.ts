@@ -18,6 +18,7 @@ import {
 import { WorldCupContextService } from '@/app/features/world-cup/tracking/context';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
 import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export type ManageWorldCupSubscriptionTool = Tool<
@@ -136,7 +137,12 @@ export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
       };
     } catch (error) {
       logger.error(
-        { error, identityId: context.identityId, threadId: context.threadId },
+        {
+          error,
+          safeError: ErrorService.toSafeLog(error),
+          identityId: context.identityId,
+          threadId: context.threadId,
+        },
         '[WORLD_CUP]: tracking tool failed',
       );
 
@@ -221,7 +227,10 @@ export const getWorldCupContextTool: GetWorldCupContextTool = tool({
           : undefined,
       };
     } catch (error) {
-      logger.error({ error, focus, teamCodes, date }, '[WORLD_CUP]: context tool failed');
+      logger.error(
+        { error, safeError: ErrorService.toSafeLog(error), focus, teamCodes, date },
+        '[WORLD_CUP]: context tool failed',
+      );
 
       return {
         ok: false,

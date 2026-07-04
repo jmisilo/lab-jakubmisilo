@@ -63,7 +63,9 @@ Good:
 
 ```ts
 bot.onDirectMessage(
-  withWhitelist('direct_message', BotHandler.respondToDirectMessage.bind(BotHandler)),
+  withWhitelist('direct_message', (thread, message, event) =>
+    BotHandler.respondToMessage({ event, thread, message }),
+  ),
 );
 ```
 
@@ -98,17 +100,23 @@ export const bot = new Chat({ ... });
 BotHandler.configure({ bot });
 
 bot.onDirectMessage(
-  withWhitelist('direct_message', BotHandler.respondToDirectMessage.bind(BotHandler)),
+  withWhitelist('direct_message', (thread, message, event) =>
+    BotHandler.respondToMessage({ event, thread, message }),
+  ),
 );
-bot.onNewMention(withWhitelist('new_mention', BotHandler.respondToNewMention.bind(BotHandler)));
+bot.onNewMention(
+  withWhitelist('new_mention', (thread, message, event) =>
+    BotHandler.respondToMessage({ event, thread, message }),
+  ),
+);
 ```
 
 Rules:
 
 - `BotHandler` owns the chat message lifecycle: transcript writes, memory writes, context assembly, agent generation, response posting, failure posting, and post-response maintenance.
-- Public handler methods should match the Chat SDK callback signature where practical.
+- `withWhitelist(event, callback)` passes the same `event` value to the callback as the third argument; forward it into `BotHandler.respondToMessage({ event, thread, message })`.
 - Static service methods may use `this` for private static access and static state.
-- When passing static methods to SDK callbacks, bind them at the registration boundary. Without binding, JavaScript calls the method without the class receiver and `this.#private` access fails at runtime.
+- Do not pass static methods as bare SDK callbacks when they use `this`; use a small callback wrapper that calls the static method through the class.
 - Keep callback registration short and declarative.
 - Do not introduce `TelegramAgentBot` or `ChatAgentBot` classes for composition.
 - Split into `bot/telegram.ts`, `bot/slack.ts`, etc. only when platform-specific behavior becomes large enough to deserve its own module.

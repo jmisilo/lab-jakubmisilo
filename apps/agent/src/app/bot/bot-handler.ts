@@ -29,33 +29,7 @@ export class BotHandler {
     this.#bot = bot;
   }
 
-  static async respondToDirectMessage(thread: Thread, message: Message) {
-    await this.#respondToMessage({
-      event: 'direct_message',
-      thread,
-      message,
-    });
-  }
-
-  static async respondToNewMention(thread: Thread, message: Message) {
-    await thread.subscribe();
-
-    await this.#respondToMessage({
-      event: 'new_mention',
-      thread,
-      message,
-    });
-  }
-
-  static async respondToSubscribedMessage(thread: Thread, message: Message) {
-    await this.#respondToMessage({
-      event: 'subscribed_message',
-      thread,
-      message,
-    });
-  }
-
-  static async #respondToMessage({ event, thread, message }: RespondToMessageInput) {
+  static async respondToMessage({ event, thread, message }: RespondToMessageInput) {
     logger.info(
       {
         messageEvent: event,
@@ -66,126 +40,127 @@ export class BotHandler {
       '[BOT]: message received',
     );
 
-    try {
-      logger.debug(
-        {
-          threadId: thread.id,
-          messageId: message.id,
-        },
-        '[BOT]: agent thinking started',
-      );
+    await this.#withTypingIndicator({
+      thread,
+      operation: async () => {
+        try {
+          logger.debug(
+            {
+              threadId: thread.id,
+              messageId: message.id,
+            },
+            '[BOT]: agent thinking started',
+          );
 
-      const bot = this.#getBot();
-      const identityId = this.#resolveIdentityId(message);
+          const bot = this.#getBot();
+          const identityId = this.#resolveIdentityId(message);
 
-      await Promise.all([
-        bot.transcripts.append(thread, message),
-        AgentMemoryService.recordMessage({
-          identityId,
-          threadId: thread.id,
-          role: 'user',
-          content: message.text,
-          sourceMessageId: message.id,
-        }),
-      ]);
+          await Promise.all([
+            bot.transcripts.append(thread, message),
+            AgentMemoryService.recordMessage({
+              identityId,
+              threadId: thread.id,
+              role: 'user',
+              content: message.text,
+              sourceMessageId: message.id,
+            }),
+          ]);
 
-      const shortTermMemory = await bot.transcripts.list({
-        userKey: identityId,
-        threadId: thread.id,
-        limit: AgentContextService.contextSourceMessageLimit,
-      });
-      const contextMessages = await AgentMemoryService.buildContext({
-        identityId,
-        threadId: thread.id,
-        shortTermMemory,
-      });
+          const shortTermMemory = await bot.transcripts.list({
+            userKey: identityId,
+            threadId: thread.id,
+            limit: AgentContextService.contextSourceMessageLimit,
+          });
+          const contextMessages = await AgentMemoryService.buildContext({
+            identityId,
+            threadId: thread.id,
+            shortTermMemory,
+          });
 
-      logger.debug(
-        {
-          threadId: thread.id,
-          messageId: message.id,
-          contextMessageCount: contextMessages.length,
-        },
-        '[BOT]: context prepared',
-      );
+          logger.debug(
+            {
+              threadId: thread.id,
+              messageId: message.id,
+              contextMessageCount: contextMessages.length,
+            },
+            '[BOT]: context prepared',
+          );
 
-      const result = await this.#runWithTypingIndicator({
-        thread,
-        operation: () =>
-          AgentService.generate({
+          const result = await AgentService.generate({
             messages: contextMessages,
             identityId,
             threadId: thread.id,
             sourceMessageId: message.id,
-          }),
-      });
+          });
 
-      logger.debug(
-        {
-          threadId: thread.id,
-          messageId: message.id,
-          text: result.text,
-        },
-        '[BOT]: model output generated',
-      );
+          logger.debug(
+            {
+              threadId: thread.id,
+              messageId: message.id,
+              text: result.text,
+            },
+            '[BOT]: model output generated',
+          );
 
-      const responseText = this.#resolveResponseText({
-        text: result.text,
-        threadId: thread.id,
-        sourceMessageId: message.id,
-      });
+          const responseText = this.#resolveResponseText({
+            text: result.text,
+            threadId: thread.id,
+            sourceMessageId: message.id,
+          });
 
-      await thread.post({ markdown: responseText });
+          await thread.post({ markdown: responseText });
 
-      await Promise.all([
-        bot.transcripts.append(
-          thread,
-          { role: 'assistant', text: responseText },
-          { userKey: identityId },
-        ),
-        AgentMemoryService.recordMessage({
-          identityId,
-          threadId: thread.id,
-          role: 'assistant',
-          content: responseText,
-        }),
-      ]);
+          await Promise.all([
+            bot.transcripts.append(
+              thread,
+              { role: 'assistant', text: responseText },
+              { userKey: identityId },
+            ),
+            AgentMemoryService.recordMessage({
+              identityId,
+              threadId: thread.id,
+              role: 'assistant',
+              content: responseText,
+            }),
+          ]);
 
-      logger.info(
-        {
-          threadId: thread.id,
-          sourceMessageId: message.id,
-        },
-        '[BOT]: message sent',
-      );
+          logger.info(
+            {
+              threadId: thread.id,
+              sourceMessageId: message.id,
+            },
+            '[BOT]: message sent',
+          );
 
-      waitUntil(
-        AgentMemoryService.compressShortTermMemory({
-          identityId,
-          threadId: thread.id,
-        }),
-      );
-    } catch (error) {
-      const failure = ErrorService.toUserFacingFailure(error, {
-        fallbackCode: AppErrorCode.BOT_MESSAGE_FAILED,
-        fallbackMessage: 'I hit a failure while handling that request.',
-      });
+          waitUntil(
+            AgentMemoryService.compressShortTermMemory({
+              identityId,
+              threadId: thread.id,
+            }),
+          );
+        } catch (error) {
+          const failure = ErrorService.toUserFacingFailure(error, {
+            fallbackCode: AppErrorCode.BOT_MESSAGE_FAILED,
+            fallbackMessage: 'I hit a failure while handling that request.',
+          });
 
-      logger.error(
-        {
-          threadId: thread.id,
-          sourceMessageId: message.id,
-          error,
-          safeError: ErrorService.toSafeLog(error),
-          userFacingCode: failure.code,
-          userFacingMessage: failure.message,
-          retryable: failure.retryable,
-        },
-        '[BOT]: message failed',
-      );
+          logger.error(
+            {
+              threadId: thread.id,
+              sourceMessageId: message.id,
+              error,
+              safeError: ErrorService.toSafeLog(error),
+              userFacingCode: failure.code,
+              userFacingMessage: failure.message,
+              retryable: failure.retryable,
+            },
+            '[BOT]: message failed',
+          );
 
-      await this.#postFailureMessage({ thread, sourceMessageId: message.id, failure });
-    }
+          await this.#postFailureMessage({ thread, sourceMessageId: message.id, failure });
+        }
+      },
+    });
   }
 
   static #getBot() {
@@ -272,7 +247,7 @@ export class BotHandler {
     }
   }
 
-  static async #runWithTypingIndicator<T>({
+  static async #withTypingIndicator<T>({
     thread,
     operation,
   }: {

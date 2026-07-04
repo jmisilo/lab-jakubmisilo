@@ -3,6 +3,11 @@ import type { Message, Thread } from 'chat';
 import { logger } from '@/infrastructure/logger';
 
 type TelegramMessageHandler = (thread: Thread, message: Message) => Promise<void>;
+type TelegramMessageHandlerWithEvent<TEvent extends string> = (
+  thread: Thread,
+  message: Message,
+  event: TEvent,
+) => Promise<void>;
 
 const TELEGRAM_ALLOWED_USER_IDS = new Set(
   (process.env.TELEGRAM_ALLOWED_USER_IDS ?? '')
@@ -12,13 +17,16 @@ const TELEGRAM_ALLOWED_USER_IDS = new Set(
 );
 
 export const withWhitelist =
-  (event: string, handler: TelegramMessageHandler): TelegramMessageHandler =>
+  <TEvent extends string>(
+    event: TEvent,
+    handler: TelegramMessageHandlerWithEvent<TEvent>,
+  ): TelegramMessageHandler =>
   async (thread, message) => {
     if (
       TELEGRAM_ALLOWED_USER_IDS.has(message.author.userId) ||
       TELEGRAM_ALLOWED_USER_IDS.size === 0
     ) {
-      await handler(thread, message);
+      await handler(thread, message, event);
 
       return;
     }

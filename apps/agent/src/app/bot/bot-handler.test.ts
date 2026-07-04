@@ -59,16 +59,18 @@ afterEach(() => {
 });
 
 describe('BotHandler', () => {
-  it('handles direct-message callbacks when bound at the SDK registration boundary', async () => {
+  it('handles direct-message callback payloads', async () => {
     const bot = createBot();
     const thread = createThread();
     const message = createMessage();
 
     BotHandler.configure({ bot });
 
-    const boundHandler = BotHandler.respondToDirectMessage.bind(BotHandler);
-
-    await boundHandler(thread, message);
+    await BotHandler.respondToMessage({
+      event: 'direct_message',
+      thread,
+      message,
+    });
 
     expect(bot.transcripts.append).toHaveBeenCalledWith(thread, message);
     expect(bot.transcripts.list).toHaveBeenCalledWith({
@@ -82,10 +84,32 @@ describe('BotHandler', () => {
       threadId: 'thread-1',
       sourceMessageId: 'message-1',
     });
+    expect(thread.startTyping).toHaveBeenCalled();
+    expect(getFirstInvocationOrder(thread.startTyping as jest.Mock)).toBeLessThan(
+      getFirstInvocationOrder(mockAgentMemoryService.recordMessage),
+    );
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Hi there.' });
     expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageEvent: 'direct_message',
+        threadId: 'thread-1',
+        messageId: 'message-1',
+      }),
+      '[BOT]: message received',
+    );
   });
 });
+
+function getFirstInvocationOrder(mock: jest.Mock) {
+  const [order] = mock.mock.invocationCallOrder;
+
+  if (order === undefined) {
+    throw new Error('Expected mock to have been called.');
+  }
+
+  return order;
+}
 
 function createBot() {
   return {
