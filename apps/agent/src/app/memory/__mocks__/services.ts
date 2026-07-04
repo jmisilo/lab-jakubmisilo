@@ -4,9 +4,6 @@ export const agentMemoryDbServiceMock = {
   markMessagesCompressed: jest.fn(),
   createMemoryChunk: jest.fn(),
   getRecentMemoryChunks: jest.fn(),
-  createNotedMemory: jest.fn(),
-  getNotedMemories: jest.fn(),
-  searchNotedMemories: jest.fn(),
 };
 
 export const aiServiceMock = {

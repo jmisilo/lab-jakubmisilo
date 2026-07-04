@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { agentTools } from '@/app/agent/tools';
 import { instruction } from '@/app/instruction';
+import { AppError, AppErrorCode } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const AgentRuntimeContextSchema = z.object({
@@ -21,7 +22,7 @@ type AgentRuntimeContext = z.infer<typeof AgentRuntimeContextSchema>;
 const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
 const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
 
-export class AIAgentService {
+export class AgentService {
   static #timeout = {
     total: 30_000,
     step: 20_000,
@@ -37,9 +38,6 @@ export class AIAgentService {
      * AI SDK requires initial context objects for tools with context schemas. These sentinels are not used for persistence because `prepareCall` disables context-dependent tools until real call options provide the required identity/thread context.
      */
     toolsContext: {
-      'create-noted-memory': {
-        identityId: UNAVAILABLE_TOOL_CONTEXT,
-      },
       'manage-world-cup-subscription': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
         threadId: UNAVAILABLE_TOOL_CONTEXT,
@@ -57,9 +55,6 @@ export class AIAgentService {
       ...input,
       activeTools: this.#getActiveTools(options),
       toolsContext: {
-        'create-noted-memory': {
-          identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
-        },
         'manage-world-cup-subscription': {
           identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
           threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
@@ -107,10 +102,6 @@ export class AIAgentService {
       'get-local-time',
     ];
 
-    if (options?.identityId) {
-      activeTools.push('create-noted-memory');
-    }
-
     if (options?.identityId && options.threadId) {
       activeTools.push('manage-world-cup-subscription');
       activeTools.push('get-world-cup-tracking');
@@ -134,7 +125,17 @@ export class AIAgentService {
   }) {
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
-      abortController.abort(new Error(`assistant_generate_timeout_${this.#timeout.total}ms`));
+      abortController.abort(
+        AppError.timeout({
+          code: AppErrorCode.ASSISTANT_GENERATE_TIMEOUT,
+          message: 'Assistant response generation timed out.',
+          context: {
+            model: this.#model,
+            operation: 'assistant.generate',
+          },
+          timeoutMs: this.#timeout.total,
+        }),
+      );
     }, this.#timeout.total);
 
     try {

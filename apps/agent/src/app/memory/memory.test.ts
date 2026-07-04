@@ -1,12 +1,7 @@
-import type { agentTools as agentToolsType } from '@/app/agent/tools';
 import type { AgentMemoryService as AgentMemoryServiceType } from '@/app/memory';
 import type { AgentContextService as AgentContextServiceType } from '@/app/memory/context';
 
-import {
-  createMemoryChunk,
-  createMessage,
-  createNotedMemory,
-} from '@/app/memory/__mocks__/fixtures';
+import { createMemoryChunk, createMessage } from '@/app/memory/__mocks__/fixtures';
 import {
   agentMemoryDbServiceMock as mockAgentMemoryDbService,
   aiServiceMock as mockAIService,
@@ -17,27 +12,12 @@ jest.mock('@/infrastructure/db/services/agent-memory', () => ({
   AgentMemoryDbService: mockAgentMemoryDbService,
 }));
 
-jest.mock('@/app/ai', () => ({
+jest.mock('@/infrastructure/ai', () => ({
   AIService: mockAIService,
-}));
-
-jest.mock('ai', () => ({
-  tool: (definition: unknown) => definition,
-}));
-
-jest.mock('@ai-sdk/openai', () => ({
-  openai: {
-    tools: {
-      webSearch: jest.fn(() => ({
-        id: 'openai.web_search',
-      })),
-    },
-  },
 }));
 
 let AgentMemoryService: typeof AgentMemoryServiceType;
 let AgentContextService: typeof AgentContextServiceType;
-let agentTools: typeof agentToolsType;
 
 const overrideStaticProperty = <T extends object, K extends keyof T>({
   target,
@@ -65,7 +45,6 @@ const overrideStaticProperty = <T extends object, K extends keyof T>({
 beforeAll(async () => {
   ({ AgentMemoryService } = await import('.'));
   ({ AgentContextService } = await import('@/app/memory/context'));
-  ({ agentTools } = await import('@/app/agent/tools'));
 });
 
 beforeEach(() => {
@@ -92,35 +71,6 @@ describe('AgentMemoryService', () => {
         content: 'Remember that I prefer concise updates.',
         sourceMessageId: 'telegram-message-1',
       });
-    });
-  });
-
-  describe('recordNotedInfo', () => {
-    it('embeds noted information before writing it to memory', async () => {
-      mockAIService.embed.mockResolvedValue([0.4, 0.5, 0.6]);
-      const createdMemory = createNotedMemory({
-        id: 'noted-1',
-        content: 'The user prefers direct Pino logger usage.',
-      });
-      mockAgentMemoryDbService.createNotedMemory.mockResolvedValue(createdMemory);
-
-      const result = await AgentMemoryService.recordNotedInfo({
-        identityId: 'identity-1',
-        content: 'The user prefers direct Pino logger usage.',
-        kind: 'preference',
-        importance: 3,
-        metadata: { source: 'test' },
-      });
-
-      expect(mockAgentMemoryDbService.createNotedMemory).toHaveBeenCalledWith({
-        identityId: 'identity-1',
-        content: 'The user prefers direct Pino logger usage.',
-        kind: 'preference',
-        importance: 3,
-        metadata: { source: 'test' },
-        embedding: [0.4, 0.5, 0.6],
-      });
-      expect(result).toBe(createdMemory);
     });
   });
 
@@ -244,38 +194,7 @@ describe('AgentMemoryService', () => {
 });
 
 describe('AgentContextService', () => {
-  it('assembles user-role memory context with semantic notes before recent fallback notes', async () => {
-    mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
-    mockAgentMemoryDbService.getNotedMemories.mockResolvedValue([
-      createNotedMemory({
-        id: 'recent-1',
-        content: 'The user prefers concise implementation updates.',
-        kind: 'preference',
-      }),
-      createNotedMemory({
-        id: 'duplicate-1',
-        content: 'The user avoids helper logger wrappers.',
-        kind: 'preference',
-      }),
-    ]);
-    mockAgentMemoryDbService.searchNotedMemories.mockResolvedValue([
-      {
-        ...createNotedMemory({
-          id: 'semantic-1',
-          content: 'The user wants direct Pino logger usage.',
-          kind: 'preference',
-        }),
-        distance: 0.12,
-      },
-      {
-        ...createNotedMemory({
-          id: 'duplicate-1',
-          content: 'The user avoids helper logger wrappers.',
-          kind: 'preference',
-        }),
-        distance: 0.2,
-      },
-    ]);
+  it('assembles rolling compressed memory before short-term transcript messages', async () => {
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([
       createMemoryChunk({
         id: 'chunk-1',
@@ -297,18 +216,17 @@ describe('AgentContextService', () => {
     expect(context.some((message) => message.role === 'system')).toBe(false);
 
     const memoryContent = String(context[0]?.content);
-    expect(memoryContent).toContain('Noted information:');
     expect(memoryContent).toContain('Compressed conversation memory:');
     expect(memoryContent).toContain('[AI-compressed]');
-    expect(memoryContent.indexOf('direct Pino logger usage')).toBeLessThan(
-      memoryContent.indexOf('concise implementation updates'),
-    );
-    expect(memoryContent.match(/avoids helper logger wrappers/g)).toHaveLength(1);
+    expect(memoryContent).toContain('Earlier discussion decided not to reintroduce Eve routes.');
+    expect(context.at(-1)).toEqual({
+      role: 'user',
+      content: 'What should you remember about logging?',
+    });
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         identityId: 'identity-1',
         threadId: 'thread-1',
-        semanticNotedMemoryCount: 2,
         selectedCompressedChunkCount: 1,
       }),
       '[AGENT_MEMORY]: context assembled',
@@ -316,9 +234,6 @@ describe('AgentContextService', () => {
   });
 
   it('keeps selected short-term transcript messages chronological', async () => {
-    mockAIService.embed.mockResolvedValue([0.1]);
-    mockAgentMemoryDbService.getNotedMemories.mockResolvedValue([]);
-    mockAgentMemoryDbService.searchNotedMemories.mockResolvedValue([]);
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
 
     const context = await AgentContextService.buildContext({
@@ -356,9 +271,6 @@ describe('AgentContextService', () => {
     });
 
     try {
-      mockAIService.embed.mockResolvedValue([0.1]);
-      mockAgentMemoryDbService.getNotedMemories.mockResolvedValue([]);
-      mockAgentMemoryDbService.searchNotedMemories.mockResolvedValue([]);
       mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
 
       const context = await AgentContextService.buildContext({
@@ -394,8 +306,7 @@ describe('AgentContextService', () => {
     }
   });
 
-  it('skips semantic noted-memory search when there is no current user query', async () => {
-    mockAgentMemoryDbService.getNotedMemories.mockResolvedValue([]);
+  it('does not embed the current query while knowledge retrieval is not wired in', async () => {
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
 
     await AgentContextService.buildContext({
@@ -405,49 +316,5 @@ describe('AgentContextService', () => {
     });
 
     expect(mockAIService.embed).not.toHaveBeenCalled();
-    expect(mockAgentMemoryDbService.searchNotedMemories).not.toHaveBeenCalled();
-  });
-});
-
-describe('agent memory tools', () => {
-  it('creates noted memory with identity from tool context', async () => {
-    mockAIService.embed.mockResolvedValue([0.4, 0.5, 0.6]);
-    mockAgentMemoryDbService.createNotedMemory.mockResolvedValue(
-      createNotedMemory({
-        id: 'noted-1',
-        content: 'The user prefers static service classes.',
-      }),
-    );
-
-    const result = await agentTools['create-noted-memory'].execute?.(
-      {
-        content: 'The user prefers static service classes.',
-        kind: 'preference',
-        importance: 3,
-      },
-      {
-        abortSignal: new AbortController().signal,
-        context: {
-          identityId: 'identity-1',
-        },
-        messages: [],
-        toolCallId: 'tool-call-1',
-      },
-    );
-
-    expect(mockAgentMemoryDbService.createNotedMemory).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      content: 'The user prefers static service classes.',
-      kind: 'preference',
-      importance: 3,
-      metadata: {
-        source: 'agent_tool',
-      },
-      embedding: [0.4, 0.5, 0.6],
-    });
-    expect(result).toEqual({
-      id: 'noted-1',
-      saved: true,
-    });
   });
 });

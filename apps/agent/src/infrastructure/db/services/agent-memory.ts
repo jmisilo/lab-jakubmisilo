@@ -1,9 +1,8 @@
-import type { NewAgentMemoryChunk, NewAgentMessage, NewAgentNotedMemory } from '@/types';
+import type { NewAgentMemoryChunk, NewAgentMessage } from '@/types';
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
-import { cosineDistance } from 'drizzle-orm/sql/functions/vector';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-import { agentMemoryChunks, agentMessages, agentNotedMemories } from '@/infrastructure/db/schema';
+import { agentMemoryChunks, agentMessages } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
 
 export class AgentMemoryDbService extends DbService {
@@ -120,58 +119,5 @@ export class AgentMemoryDbService extends DbService {
 
     // Select the latest N rows first, then restore chronological order.
     return chunks.reverse();
-  }
-
-  static async createNotedMemory(input: NewAgentNotedMemory) {
-    const [memory] = await this.client.insert(agentNotedMemories).values(input).returning();
-
-    return memory ?? null;
-  }
-
-  static async getNotedMemories({ identityId, limit }: { identityId: string; limit: number }) {
-    return this.client
-      .select()
-      .from(agentNotedMemories)
-      .where(eq(agentNotedMemories.identityId, identityId))
-      .orderBy(desc(agentNotedMemories.updatedAt), desc(agentNotedMemories.importance))
-      .limit(limit);
-  }
-
-  static async searchNotedMemories({
-    identityId,
-    embedding,
-    limit,
-    maxDistance,
-  }: {
-    identityId: string;
-    embedding: number[];
-    limit: number;
-    maxDistance: number;
-  }) {
-    const distance = cosineDistance(agentNotedMemories.embedding, embedding);
-
-    return this.client
-      .select({
-        id: agentNotedMemories.id,
-        identityId: agentNotedMemories.identityId,
-        kind: agentNotedMemories.kind,
-        content: agentNotedMemories.content,
-        metadata: agentNotedMemories.metadata,
-        embedding: agentNotedMemories.embedding,
-        importance: agentNotedMemories.importance,
-        createdAt: agentNotedMemories.createdAt,
-        updatedAt: agentNotedMemories.updatedAt,
-        distance,
-      })
-      .from(agentNotedMemories)
-      .where(
-        and(
-          eq(agentNotedMemories.identityId, identityId),
-          isNotNull(agentNotedMemories.embedding),
-          sql`${distance} <= ${maxDistance}`,
-        ),
-      )
-      .orderBy(distance)
-      .limit(limit);
   }
 }

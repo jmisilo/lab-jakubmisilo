@@ -1,61 +1,24 @@
 import type { WorldCupEventType, WorldCupTrackingMode } from '@/app/features/world-cup/types';
 import type { Tool } from 'ai';
+import type { z } from 'zod';
 
 import { tool } from 'ai';
-import { z } from 'zod';
 
-import { WORLD_CUP_TEAM_FIFA_CODES } from '@/app/features/world-cup/teams';
+import {
+  GetWorldCupContextToolContextSchema,
+  GetWorldCupContextToolInputSchema,
+  GetWorldCupContextToolOutputSchema,
+  GetWorldCupTrackingToolContextSchema,
+  GetWorldCupTrackingToolInputSchema,
+  GetWorldCupTrackingToolOutputSchema,
+  ManageWorldCupSubscriptionToolContextSchema,
+  ManageWorldCupSubscriptionToolInputSchema,
+  ManageWorldCupSubscriptionToolOutputSchema,
+} from '@/app/features/world-cup/schemas';
 import { WorldCupContextService } from '@/app/features/world-cup/tracking/context';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
 import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
 import { logger } from '@/infrastructure/logger';
-
-const WORLD_CUP_CONTEXT_FOCUSES = [
-  'all',
-  'schedule',
-  'team',
-  'tables',
-  'knockout',
-  'stage',
-] as const;
-
-export const ManageWorldCupSubscriptionToolInputSchema = z.object({
-  action: z
-    .enum(['subscribe', 'unsubscribe'])
-    .describe('Whether to create/update a subscription or remove existing subscriptions.'),
-  trackingMode: z
-    .enum(['all_teams', 'teams', 'team'])
-    .optional()
-    .describe(
-      "Use 'all_teams' for entire World Cup requests. Use 'teams' for a set of requested teams. Use 'team' for exactly one requested team.",
-    ),
-  teamCodes: z
-    .array(z.enum(WORLD_CUP_TEAM_FIFA_CODES))
-    .optional()
-    .describe(
-      "Three-letter FIFA team codes for 'team' and 'teams' tracking modes, for example ['POR'] or ['ENG', 'ESP'].",
-    ),
-  eventTypes: z
-    .array(z.enum(WORLD_CUP_EVENT_TYPES))
-    .optional()
-    .describe(
-      "Events to notify about. Use ['goal'] for goal-only requests. Use all event types when the user asks for all events.",
-    ),
-});
-
-export const ManageWorldCupSubscriptionToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  subscriptionId: z.string().nullable().optional(),
-  subscriptionIds: z.array(z.string()).optional(),
-  deactivatedCount: z.number().optional(),
-});
-
-export const ManageWorldCupSubscriptionToolContextSchema = z.object({
-  identityId: z.string(),
-  threadId: z.string(),
-  sourceMessageId: z.string().optional(),
-});
 
 export type ManageWorldCupSubscriptionTool = Tool<
   z.infer<typeof ManageWorldCupSubscriptionToolInputSchema>,
@@ -63,95 +26,11 @@ export type ManageWorldCupSubscriptionTool = Tool<
   z.infer<typeof ManageWorldCupSubscriptionToolContextSchema>
 >;
 
-export const GetWorldCupTrackingToolInputSchema = z.object({});
-
-const WorldCupTrackedSubscriptionToolOutputSchema = z.object({
-  subscriptionId: z.string(),
-  teamId: z.string().nullable(),
-  teamName: z.string(),
-  fifaCode: z.string().optional(),
-  flagEmoji: z.string().optional(),
-  eventTypes: z.array(z.enum(WORLD_CUP_EVENT_TYPES)),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-export const GetWorldCupTrackingToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  summaryMarkdown: z.string(),
-  subscriptions: z.array(WorldCupTrackedSubscriptionToolOutputSchema),
-});
-
-export const GetWorldCupTrackingToolContextSchema = z.object({
-  identityId: z.string(),
-  threadId: z.string(),
-});
-
 export type GetWorldCupTrackingTool = Tool<
   z.infer<typeof GetWorldCupTrackingToolInputSchema>,
   z.infer<typeof GetWorldCupTrackingToolOutputSchema>,
   z.infer<typeof GetWorldCupTrackingToolContextSchema>
 >;
-
-export const GetWorldCupContextToolInputSchema = z.object({
-  focus: z
-    .enum(WORLD_CUP_CONTEXT_FOCUSES)
-    .optional()
-    .describe(
-      "Use 'schedule' for today's games or a specific date, 'team' for one or more teams, 'tables' for finished-game group tables, 'knockout' for the knockout ladder, 'stage' for current tournament phase, and 'all' when several views are useful.",
-    ),
-  teamCodes: z
-    .array(z.enum(WORLD_CUP_TEAM_FIFA_CODES))
-    .optional()
-    .describe(
-      "Three-letter FIFA team codes to narrow the context, for example ['POR'] or ['ESP'].",
-    ),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .describe('Optional user-local date in YYYY-MM-DD format. Omit it for today.'),
-});
-
-const WorldCupContextTeamToolOutputSchema = z.object({
-  name: z.string(),
-  fifaCode: z.string().optional(),
-  flagEmoji: z.string().optional(),
-  score: z.number(),
-});
-
-const WorldCupContextGameToolOutputSchema = z.object({
-  gameId: z.string(),
-  stage: z.string(),
-  group: z.string(),
-  matchday: z.string(),
-  status: z.enum(['scheduled', 'active', 'finished']),
-  kickoffDate: z.string().nullable(),
-  kickoffTime: z.string(),
-  homeTeam: WorldCupContextTeamToolOutputSchema,
-  awayTeam: WorldCupContextTeamToolOutputSchema,
-  score: z.string(),
-  winnerTeamId: z.string().optional(),
-});
-
-export const GetWorldCupContextToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  timeZone: z.string().optional(),
-  generatedAt: z.string().optional(),
-  today: z.string().optional(),
-  currentStage: z.string().optional(),
-  summaryMarkdown: z.string().optional(),
-  scheduleMarkdown: z.string().optional(),
-  groupTablesMarkdown: z.string().optional(),
-  knockoutLadderMarkdown: z.string().optional(),
-  games: z.array(WorldCupContextGameToolOutputSchema).optional(),
-});
-
-export const GetWorldCupContextToolContextSchema = z.object({
-  timeZone: z.string(),
-});
 
 export type GetWorldCupContextTool = Tool<
   z.infer<typeof GetWorldCupContextToolInputSchema>,

@@ -1,92 +1,16 @@
 import type { Tool } from 'ai';
+import type { z } from 'zod';
 
 import { tool } from 'ai';
-import { z } from 'zod';
 
 import { WeatherService } from '@/app/features/weather';
 import {
-  CurrentWeatherSchema,
-  LocalTimeSchema,
-  WeatherFailureReasonSchema,
-  WeatherForecastSchema,
-  WeatherForecastTimeOfDaySchema,
-  WeatherUnitsSchema,
+  GetLocalTimeToolInputSchema,
+  GetLocalTimeToolOutputSchema,
+  GetWeatherToolInputSchema,
+  GetWeatherToolOutputSchema,
 } from '@/app/features/weather/schemas';
 import { logger } from '@/infrastructure/logger';
-
-const WeatherRequestTypeSchema = z.enum(['current', 'forecast']);
-
-export const GetWeatherToolInputSchema = z.object({
-  location: z
-    .string()
-    .min(1)
-    .describe(
-      'City name to retrieve weather for. Must be explicit or come from a remembered default weather city. Include country only if needed for disambiguation.',
-    ),
-  units: WeatherUnitsSchema.optional().describe(
-    "Use 'metric' by default unless the user explicitly asks for Fahrenheit/imperial units.",
-  ),
-  requestType: WeatherRequestTypeSchema.optional().describe(
-    "Use 'current' for weather now. Use 'forecast' for future weather questions such as tomorrow, in 3 days, tonight, or this weekend.",
-  ),
-  forecast: z
-    .object({
-      daysFromNow: z
-        .number()
-        .int()
-        .min(0)
-        .max(5)
-        .optional()
-        .describe(
-          "Relative forecast day. Use 1 for tomorrow, 3 for 'in 3 days'. OpenWeather free forecast only covers about 5 days.",
-        ),
-      targetLocalDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional()
-        .describe('Target date in the forecast city local date, formatted YYYY-MM-DD.'),
-      timeOfDay: WeatherForecastTimeOfDaySchema.optional().describe(
-        'Optional broad target time for forecast questions. Defaults to midday if absent.',
-      ),
-      hour: z
-        .number()
-        .int()
-        .min(0)
-        .max(23)
-        .optional()
-        .describe('Optional forecast-city local hour to select the closest 3-hour forecast point.'),
-    })
-    .optional(),
-});
-
-export const GetWeatherToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  requestType: WeatherRequestTypeSchema.optional(),
-  weather: CurrentWeatherSchema.optional(),
-  forecast: WeatherForecastSchema.optional(),
-  reason: WeatherFailureReasonSchema.optional(),
-  providerStatus: z.number().optional(),
-  providerMessage: z.string().optional(),
-});
-
-export const GetLocalTimeToolInputSchema = z.object({
-  location: z
-    .string()
-    .min(1)
-    .describe(
-      'City or place to retrieve current local date and time for. Must be explicit or come from a remembered default/native location.',
-    ),
-});
-
-export const GetLocalTimeToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  localTime: LocalTimeSchema.optional(),
-  reason: WeatherFailureReasonSchema.optional(),
-  providerStatus: z.number().optional(),
-  providerMessage: z.string().optional(),
-});
 
 export type GetWeatherTool = Tool<
   z.infer<typeof GetWeatherToolInputSchema>,
@@ -98,11 +22,11 @@ export type GetLocalTimeTool = Tool<
   z.infer<typeof GetLocalTimeToolOutputSchema>
 >;
 
-const getProviderStatus = (result: object) =>
+const _getProviderStatus = (result: object) =>
   'providerStatus' in result && typeof result.providerStatus === 'number'
     ? result.providerStatus
     : undefined;
-const getProviderMessage = (result: object) =>
+const _getProviderMessage = (result: object) =>
   'providerMessage' in result && typeof result.providerMessage === 'string'
     ? result.providerMessage
     : undefined;
@@ -132,8 +56,8 @@ export const getWeatherTool: GetWeatherTool = tool({
           ok: result.ok,
           reason: result.ok ? undefined : result.reason,
           message: result.ok ? undefined : result.message,
-          providerStatus: result.ok ? undefined : getProviderStatus(result),
-          providerMessage: result.ok ? undefined : getProviderMessage(result),
+          providerStatus: result.ok ? undefined : _getProviderStatus(result),
+          providerMessage: result.ok ? undefined : _getProviderMessage(result),
         },
         '[WEATHER]: tool executed',
       );
@@ -144,8 +68,8 @@ export const getWeatherTool: GetWeatherTool = tool({
           requestType,
           message: result.message,
           reason: result.reason,
-          providerStatus: getProviderStatus(result),
-          providerMessage: getProviderMessage(result),
+          providerStatus: _getProviderStatus(result),
+          providerMessage: _getProviderMessage(result),
         };
       }
 
@@ -167,8 +91,8 @@ export const getWeatherTool: GetWeatherTool = tool({
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
         message: result.ok ? undefined : result.message,
-        providerStatus: result.ok ? undefined : getProviderStatus(result),
-        providerMessage: result.ok ? undefined : getProviderMessage(result),
+        providerStatus: result.ok ? undefined : _getProviderStatus(result),
+        providerMessage: result.ok ? undefined : _getProviderMessage(result),
       },
       '[WEATHER]: tool executed',
     );
@@ -179,8 +103,8 @@ export const getWeatherTool: GetWeatherTool = tool({
         requestType,
         message: result.message,
         reason: result.reason,
-        providerStatus: getProviderStatus(result),
-        providerMessage: getProviderMessage(result),
+        providerStatus: _getProviderStatus(result),
+        providerMessage: _getProviderMessage(result),
       };
     }
 
@@ -207,8 +131,8 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
         message: result.ok ? undefined : result.message,
-        providerStatus: result.ok ? undefined : getProviderStatus(result),
-        providerMessage: result.ok ? undefined : getProviderMessage(result),
+        providerStatus: result.ok ? undefined : _getProviderStatus(result),
+        providerMessage: result.ok ? undefined : _getProviderMessage(result),
       },
       '[LOCAL_TIME]: tool executed',
     );
@@ -218,8 +142,8 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
         ok: false,
         message: result.message,
         reason: result.reason,
-        providerStatus: getProviderStatus(result),
-        providerMessage: getProviderMessage(result),
+        providerStatus: _getProviderStatus(result),
+        providerMessage: _getProviderMessage(result),
       };
     }
 
