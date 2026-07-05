@@ -6,8 +6,12 @@ export const agentMemoryDbServiceMock = {
   getRecentMemoryChunks: jest.fn(),
 };
 
+export const agentKnowledgeServiceMock = {
+  getContextItems: jest.fn(),
+};
+
 export const aiServiceMock = {
-  model: 'gpt-5.4-nano',
+  model: 'gpt-5.5',
   timeout: 30_000,
   embeddingModel: 'text-embedding-3-small',
   embeddingDimensions: 1536,

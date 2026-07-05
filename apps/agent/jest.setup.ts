@@ -1,3 +1,7 @@
+import { config } from 'dotenv';
+
+config({ path: '.env.local', quiet: true });
+
 process.env.DATABASE_URL ??= 'postgres://test:test@localhost:5432/test';
 process.env.LOG_LEVEL ??= 'silent';
 

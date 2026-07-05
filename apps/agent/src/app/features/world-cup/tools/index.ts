@@ -3,6 +3,7 @@ import type { Tool } from 'ai';
 import type { z } from 'zod';
 
 import { tool } from 'ai';
+import dedent from 'dedent';
 
 import {
   GetWorldCupContextToolContextSchema,
@@ -40,8 +41,38 @@ export type GetWorldCupContextTool = Tool<
 >;
 
 export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = tool({
-  description:
-    "Create, update, or remove FIFA World Cup 2026 event notification subscriptions for this chat. Only use this when the user explicitly asks to notify, alert, subscribe, unsubscribe, stop, or track future events. Do not use this for factual questions, schedules, tables, standings, brackets, or results; use get-world-cup-context instead. Use explicit tracking modes: all_teams creates one subscription per World Cup team; teams creates one subscription for each requested team; team creates one subscription for exactly one requested team. Use only three-letter FIFA team codes in teamCodes. Team tracking always means events in that team's match, so 'England goals' includes goals scored by either team in England matches. A kickoff subscription sends both a 15-minute pre-kickoff reminder and a match-start notification. Examples: 'notify me about Portugal goals' => subscribe trackingMode team, teamCodes ['POR'], eventTypes goal; 'Portugal and Argentina goals' => subscribe trackingMode teams, teamCodes ['POR', 'ARG'], eventTypes goal; 'entire world cup notifications' => subscribe trackingMode all_teams, eventTypes kickoff, goal, game-end; 'all Argentina alerts' => subscribe trackingMode team, teamCodes ['ARG'], eventTypes kickoff, goal, game-end; 'stop Portugal notifications' => unsubscribe trackingMode team, teamCodes ['POR'].",
+  description: dedent`
+    Create, update, or remove FIFA World Cup 2026 event notification subscriptions for this chat.
+
+    # When To Use
+    - The user explicitly asks to notify, alert, subscribe, unsubscribe, stop, or track future World Cup events.
+    - The user asks for goal, kickoff, game-end, team, multi-team, or whole-tournament notifications.
+    - The user changes notification scope for a team or the tournament.
+
+    # When Not To Use
+    - The user asks factual questions about schedules, tables, standings, results, brackets, or current stage; use get-world-cup-context.
+    - The user asks what is already tracked; use get-world-cup-tracking.
+    - The user casually mentions a team without asking for notifications.
+
+    # Do Not Use For
+    - Historical match facts or standings.
+    - Guessing teams not named by the user.
+    - Creating notification side effects for ambiguous requests.
+
+    # Usage
+    - trackingMode all_teams creates one subscription per World Cup team.
+    - trackingMode teams creates one subscription for each requested team.
+    - trackingMode team creates one subscription for exactly one requested team.
+    - Use only three-letter FIFA team codes in teamCodes.
+    - Team tracking means events in that team's match, so "England goals" includes goals by either team in England matches.
+    - A kickoff subscription sends both a 15-minute pre-kickoff reminder and a match-start notification.
+
+    # Examples
+    - "Notify me about Portugal goals" -> subscribe, trackingMode team, teamCodes ["POR"], eventTypes ["goal"].
+    - "Portugal and Argentina goals" -> subscribe, trackingMode teams, teamCodes ["POR", "ARG"], eventTypes ["goal"].
+    - "Entire World Cup notifications" -> subscribe, trackingMode all_teams, eventTypes ["kickoff", "goal", "game-end"].
+    - "Stop Portugal notifications" -> unsubscribe, trackingMode team, teamCodes ["POR"].
+  `,
   inputSchema: ManageWorldCupSubscriptionToolInputSchema,
   outputSchema: ManageWorldCupSubscriptionToolOutputSchema,
   contextSchema: ManageWorldCupSubscriptionToolContextSchema,
@@ -99,8 +130,25 @@ export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = to
 });
 
 export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
-  description:
-    'Read the active FIFA World Cup 2026 notification tracking configured for this chat. Use this when the user asks what teams, events, subscriptions, alerts, or notifications are already being tracked for them. This is read-only; do not use the mutating subscription tool for inspection/status questions.',
+  description: dedent`
+    Read active FIFA World Cup 2026 notification tracking configured for this chat.
+
+    # When To Use
+    - The user asks what World Cup teams, events, subscriptions, alerts, or notifications are already being tracked.
+    - The user asks for notification status or wants to verify current tracking before changing it.
+
+    # When Not To Use
+    - The user asks to create, update, stop, or remove notifications; use manage-world-cup-subscription.
+    - The user asks factual tournament questions; use get-world-cup-context.
+
+    # Do Not Use For
+    - Mutating subscriptions.
+    - Reading schedules, tables, standings, results, or brackets.
+
+    # Usage
+    - This tool is read-only.
+    - Summarize the returned tracking status concisely for the user.
+  `,
   inputSchema: GetWorldCupTrackingToolInputSchema,
   outputSchema: GetWorldCupTrackingToolOutputSchema,
   contextSchema: GetWorldCupTrackingToolContextSchema,
@@ -157,8 +205,33 @@ export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
 });
 
 export const getWorldCupContextTool: GetWorldCupContextTool = tool({
-  description:
-    "Read FIFA World Cup 2026 context for factual tournament questions. Use this for questions about today's games, kick-off times, a team's next game, current stage, group tables, standings, completed results, or the knockout ladder. Use this, not the subscription tool, when the user asks for a Portugal table, team table, group table, standings, schedule, result, or bracket. Times are formatted in the user's timezone from tool context. Do not use this tool to subscribe or unsubscribe notifications.",
+  description: dedent`
+    Read FIFA World Cup 2026 context for factual tournament questions.
+
+    # When To Use
+    - The user asks about today's games, kickoff times, a team's next game, current stage, group tables, standings, completed results, or knockout ladder.
+    - The user asks for a Portugal table, team table, group table, standings, schedule, result, or bracket.
+    - The user needs tournament facts before deciding whether to subscribe to notifications.
+
+    # When Not To Use
+    - The user asks to notify, alert, subscribe, unsubscribe, stop, or track future events; use manage-world-cup-subscription.
+    - The user asks what notifications are already configured; use get-world-cup-tracking.
+
+    # Do Not Use For
+    - Creating or removing notification subscriptions.
+    - Guessing team codes not implied by the user's request.
+
+    # Usage
+    - Times are formatted in the user's timezone from tool context.
+    - Use focus schedule for today's games or a specific date.
+    - Use focus team when one or more teams are named.
+    - Use focus tables for group tables, knockout for the bracket, stage for the current phase, and all when several views are useful.
+
+    # Examples
+    - "Who does Portugal play next?" -> focus team, teamCodes ["POR"].
+    - "Today's World Cup games" -> focus schedule.
+    - "Group tables" -> focus tables.
+  `,
   inputSchema: GetWorldCupContextToolInputSchema,
   outputSchema: GetWorldCupContextToolOutputSchema,
   contextSchema: GetWorldCupContextToolContextSchema,

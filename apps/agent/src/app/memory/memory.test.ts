@@ -3,6 +3,7 @@ import type { AgentContextService as AgentContextServiceType } from '@/app/memor
 
 import { createMemoryChunk, createMessage } from '@/app/memory/__mocks__/fixtures';
 import {
+  agentKnowledgeServiceMock as mockAgentKnowledgeService,
   agentMemoryDbServiceMock as mockAgentMemoryDbService,
   aiServiceMock as mockAIService,
 } from '@/app/memory/__mocks__/services';
@@ -10,6 +11,10 @@ import { logger as mockLogger } from '@/infrastructure/logger';
 
 jest.mock('@/infrastructure/db/services/agent-memory', () => ({
   AgentMemoryDbService: mockAgentMemoryDbService,
+}));
+
+jest.mock('@/app/knowledge', () => ({
+  AgentKnowledgeService: mockAgentKnowledgeService,
 }));
 
 jest.mock('@/infrastructure/ai', () => ({
@@ -49,6 +54,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAgentKnowledgeService.getContextItems.mockResolvedValue([]);
 });
 
 describe('AgentMemoryService', () => {
@@ -228,6 +234,48 @@ describe('AgentContextService', () => {
         identityId: 'identity-1',
         threadId: 'thread-1',
         selectedCompressedChunkCount: 1,
+        selectedKnowledgeItemCount: 0,
+      }),
+      '[AGENT_MEMORY]: context assembled',
+    );
+  });
+
+  it('assembles durable knowledge before compressed memory and short-term transcript messages', async () => {
+    mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([
+      createMemoryChunk({
+        id: 'chunk-1',
+        summary: 'Earlier discussion decided to keep bot handlers static.',
+      }),
+    ]);
+    mockAgentKnowledgeService.getContextItems.mockResolvedValue([
+      '- [knowledge:match similarity=0.912] profile/location\n  Title: Default location\n  Content:\n  Warsaw is the user default location.',
+    ]);
+
+    const context = await AgentContextService.buildContext({
+      identityId: 'identity-1',
+      threadId: 'thread-1',
+      shortTermMemory: [{ role: 'user', text: 'What is my default location?' }],
+    });
+
+    const memoryContent = String(context[0]?.content);
+    expect(memoryContent).toContain('Durable knowledge:');
+    expect(memoryContent).toContain('profile/location');
+    expect(memoryContent).toContain('Compressed conversation memory:');
+    expect(memoryContent.indexOf('Durable knowledge:')).toBeLessThan(
+      memoryContent.indexOf('Compressed conversation memory:'),
+    );
+    expect(context.at(-1)).toEqual({
+      role: 'user',
+      content: 'What is my default location?',
+    });
+    expect(mockAgentKnowledgeService.getContextItems).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      shortTermMemory: [{ role: 'user', text: 'What is my default location?' }],
+    });
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedKnowledgeItemCount: 1,
+        selectedCompressedChunkCount: 1,
       }),
       '[AGENT_MEMORY]: context assembled',
     );
@@ -306,7 +354,7 @@ describe('AgentContextService', () => {
     }
   });
 
-  it('does not embed the current query while knowledge retrieval is not wired in', async () => {
+  it('requests durable knowledge items through the knowledge module', async () => {
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
 
     await AgentContextService.buildContext({
@@ -315,6 +363,9 @@ describe('AgentContextService', () => {
       shortTermMemory: [{ role: 'assistant', text: 'Assistant-only state.' }],
     });
 
-    expect(mockAIService.embed).not.toHaveBeenCalled();
+    expect(mockAgentKnowledgeService.getContextItems).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      shortTermMemory: [{ role: 'assistant', text: 'Assistant-only state.' }],
+    });
   });
 });

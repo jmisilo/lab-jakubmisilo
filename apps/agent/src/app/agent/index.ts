@@ -5,8 +5,8 @@ import { openai } from '@ai-sdk/openai';
 import { isStepCount, ToolLoopAgent } from 'ai';
 import { z } from 'zod';
 
+import { AgentPromptService } from '@/app/agent/prompt';
 import { agentTools } from '@/app/agent/tools';
-import { instruction } from '@/app/instruction';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
@@ -28,16 +28,24 @@ export class AgentService {
     step: 20_000,
   };
 
-  static #model = 'gpt-5.4-nano';
+  static #model = 'gpt-5.5';
 
   static readonly agent = new ToolLoopAgent({
-    model: openai(this.#model),
-    instructions: instruction,
+    model: openai('gpt-5.5'),
+    instructions: AgentPromptService.buildSystemPrompt({
+      identityId: UNAVAILABLE_TOOL_CONTEXT,
+      currentDate: 'provided-at-call-time',
+      timeZone: DEFAULT_USER_TIME_ZONE,
+      tools: Object.keys(agentTools),
+    }),
     tools: agentTools,
     /**
      * AI SDK requires initial context objects for tools with context schemas. These sentinels are not used for persistence because `prepareCall` disables context-dependent tools until real call options provide the required identity/thread context.
      */
     toolsContext: {
+      'manage-knowledge': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
       'manage-world-cup-subscription': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
         threadId: UNAVAILABLE_TOOL_CONTEXT,
@@ -51,24 +59,39 @@ export class AgentService {
       },
     },
     callOptionsSchema: AgentRuntimeContextSchema,
-    prepareCall: ({ options, ...input }) => ({
-      ...input,
-      activeTools: this.#getActiveTools(options),
-      toolsContext: {
-        'manage-world-cup-subscription': {
+    prepareCall: ({ options, ...input }) => {
+      const timeZone = options?.timeZone ?? DEFAULT_USER_TIME_ZONE;
+      const activeTools = this.#getActiveTools(options);
+
+      return {
+        ...input,
+        instructions: AgentPromptService.buildSystemPrompt({
           identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
-          threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
-          sourceMessageId: options?.sourceMessageId,
+          currentDate: this.#getCurrentDate({ timeZone }),
+          timeZone,
+          tools: activeTools,
+        }),
+        activeTools,
+        toolsContext: {
+          'manage-knowledge': {
+            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            sourceMessageId: options?.sourceMessageId,
+          },
+          'manage-world-cup-subscription': {
+            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
+            sourceMessageId: options?.sourceMessageId,
+          },
+          'get-world-cup-tracking': {
+            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
+          },
+          'get-world-cup-context': {
+            timeZone,
+          },
         },
-        'get-world-cup-tracking': {
-          identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
-          threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
-        },
-        'get-world-cup-context': {
-          timeZone: options?.timeZone ?? DEFAULT_USER_TIME_ZONE,
-        },
-      },
-    }),
+      };
+    },
     maxRetries: 1,
     stopWhen: isStepCount(5),
     onStart: (event) => {
@@ -103,11 +126,36 @@ export class AgentService {
     ];
 
     if (options?.identityId && options.threadId) {
+      activeTools.push('manage-knowledge');
       activeTools.push('manage-world-cup-subscription');
       activeTools.push('get-world-cup-tracking');
+    } else if (options?.identityId) {
+      activeTools.push('manage-knowledge');
     }
 
     return activeTools;
+  }
+
+  static #getCurrentDate({ timeZone }: { timeZone: string }) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date());
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+
+      if (year && month && day) {
+        return `${year}-${month}-${day}`;
+      }
+    } catch {
+      // Fall through to UTC when a stored timezone is invalid.
+    }
+
+    return new Date().toISOString().slice(0, 10);
   }
 
   static async generate({

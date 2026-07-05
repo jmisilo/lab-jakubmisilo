@@ -2,6 +2,7 @@ import type { Tool } from 'ai';
 import type { z } from 'zod';
 
 import { tool } from 'ai';
+import dedent from 'dedent';
 
 import { WeatherService } from '@/app/features/weather';
 import {
@@ -32,8 +33,35 @@ const _getProviderMessage = (result: object) =>
     : undefined;
 
 export const getWeatherTool: GetWeatherTool = tool({
-  description:
-    'Get current weather or a 5-day / 3-hour forecast for a specific city using OpenWeather. Use forecast mode for future weather questions such as tomorrow, in 3 days, tonight, or this weekend. Forecast data is available for about 5 days ahead in 3-hour steps. Use this only after resolving a city from the user message or remembered default weather city. Do not ask for ZIP/post code. Do not guess home/native location. If no location is known, ask the user which city to use before calling this tool.',
+  description: dedent`
+    Get current weather or a 5-day / 3-hour forecast for a resolved city using OpenWeather.
+
+    # When To Use
+    - The user asks for current weather, temperature, wind, rain, snow, or conditions in a city.
+    - The user asks for near-future weather such as tomorrow, tonight, this weekend, or in up to 5 days.
+    - A remembered default/native weather city is visible in durable knowledge and the user asks weather without naming a city.
+
+    # When Not To Use
+    - The user asks only for local date/time; use get-local-time.
+    - The user asks for climate averages, historical weather, or forecasts beyond about 5 days; explain the limitation instead.
+    - The city is unknown and no remembered default/native weather city is visible; ask which city to use.
+
+    # Do Not Use For
+    - Guessing home/default location from timezone, Telegram metadata, IP, locale, or previous one-off requests.
+    - ZIP/postal-code lookup.
+    - Mutating the user's remembered default city.
+
+    # Usage
+    - Use requestType "current" for weather now.
+    - Use requestType "forecast" for future weather questions.
+    - Use metric units by default unless the user asks for Fahrenheit/imperial.
+    - For relative dates, pass daysFromNow. For broad times, pass timeOfDay. For exact local hours, pass hour.
+
+    # Examples
+    - "Weather in Warsaw?" -> current, location Warsaw.
+    - "Will it rain in Tokyo tomorrow evening?" -> forecast, location Tokyo, daysFromNow 1, timeOfDay evening.
+    - "Weather tomorrow?" with no known default city -> ask for the city before calling.
+  `,
   inputSchema: GetWeatherToolInputSchema,
   outputSchema: GetWeatherToolOutputSchema,
   execute: async ({ location, units = 'metric', requestType = 'current', forecast }) => {
@@ -118,8 +146,32 @@ export const getWeatherTool: GetWeatherTool = tool({
 });
 
 export const getLocalTimeTool: GetLocalTimeTool = tool({
-  description:
-    'Get the current local date and time for a specific city/place. Use this for questions such as "what time is it in Tokyo?" or "what is the date there?". If the user asks for the time without a city/place, use a remembered default/native location when present. If no default/native location is known, ask which city to use. Do not guess location from timezone, Telegram metadata, IP, or locale.',
+  description: dedent`
+    Get the current local date, time, and UTC offset for a resolved city or place.
+
+    # When To Use
+    - The user asks what time or date it is in a city/place.
+    - The user asks for current time/date without a city and a remembered default/native location is visible.
+    - The user asks follow-up time/date questions where the referenced place is clear from recent context.
+
+    # When Not To Use
+    - The user asks for weather; use get-weather.
+    - The user asks for scheduled reminders or future jobs; use the scheduling flow when it exists.
+    - No city/place is known; ask which city to use.
+
+    # Do Not Use For
+    - Guessing location from timezone, Telegram metadata, IP, locale, or previous one-off requests.
+    - Mutating remembered default/native location.
+
+    # Usage
+    - Pass an explicit city/place or a remembered default/native location.
+    - If the user provides a one-off city, use it only for this request.
+
+    # Examples
+    - "What time is it in Tokyo?" -> location Tokyo.
+    - "What date is it there?" after discussing Lisbon -> location Lisbon.
+    - "What time is it?" with no known default location -> ask for the city.
+  `,
   inputSchema: GetLocalTimeToolInputSchema,
   outputSchema: GetLocalTimeToolOutputSchema,
   execute: async ({ location }) => {

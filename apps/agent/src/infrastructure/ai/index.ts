@@ -6,7 +6,7 @@ import { embed, generateText } from 'ai';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
 export class AIService {
-  static readonly model = 'gpt-5.4-nano';
+  static readonly model = 'gpt-5.5';
   static readonly timeout = 30_000;
 
   static readonly embeddingModel = 'text-embedding-3-small';

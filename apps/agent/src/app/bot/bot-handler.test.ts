@@ -9,6 +9,9 @@ const mockAgentMemoryService = {
   buildContext: jest.fn(),
   compressShortTermMemory: jest.fn(),
 };
+const mockAgentKnowledgeService = {
+  extractImplicitKnowledge: jest.fn(),
+};
 const mockLogger = {
   info: jest.fn(),
   debug: jest.fn(),
@@ -26,6 +29,10 @@ jest.mock('@/app/agent', () => ({
 
 jest.mock('@/app/memory', () => ({
   AgentMemoryService: mockAgentMemoryService,
+}));
+
+jest.mock('@/app/knowledge', () => ({
+  AgentKnowledgeService: mockAgentKnowledgeService,
 }));
 
 jest.mock('@/app/memory/context', () => ({
@@ -51,6 +58,7 @@ beforeEach(() => {
   mockAgentMemoryService.recordMessage.mockResolvedValue(undefined);
   mockAgentMemoryService.buildContext.mockResolvedValue([{ role: 'user', content: 'Hello' }]);
   mockAgentMemoryService.compressShortTermMemory.mockResolvedValue(undefined);
+  mockAgentKnowledgeService.extractImplicitKnowledge.mockResolvedValue(undefined);
   mockAgentService.generate.mockResolvedValue({ text: 'Hi there.' });
 });
 
@@ -90,6 +98,13 @@ describe('BotHandler', () => {
     );
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Hi there.' });
     expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
+    expect(mockAgentKnowledgeService.extractImplicitKnowledge).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'thread-1',
+      sourceMessageId: 'message-1',
+      userMessage: 'Hello',
+      assistantMessage: 'Hi there.',
+    });
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         messageEvent: 'direct_message',

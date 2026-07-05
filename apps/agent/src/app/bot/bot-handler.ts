@@ -4,6 +4,7 @@ import type { Chat, Message, Thread } from 'chat';
 import { waitUntil } from '@vercel/functions';
 
 import { AgentService } from '@/app/agent';
+import { AgentKnowledgeService } from '@/app/knowledge';
 import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
@@ -136,6 +137,15 @@ export class BotHandler {
             AgentMemoryService.compressShortTermMemory({
               identityId,
               threadId: thread.id,
+            }),
+          );
+          waitUntil(
+            AgentKnowledgeService.extractImplicitKnowledge({
+              identityId,
+              threadId: thread.id,
+              sourceMessageId: message.id,
+              userMessage: message.text,
+              assistantMessage: responseText,
             }),
           );
         } catch (error) {

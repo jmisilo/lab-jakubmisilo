@@ -4,6 +4,7 @@ import type {
   GetWorldCupTrackingTool,
   ManageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
+import type { ManageKnowledgeTool } from '@/app/knowledge/tools';
 
 import { openai } from '@ai-sdk/openai';
 
@@ -13,9 +14,11 @@ import {
   getWorldCupTrackingTool,
   manageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
+import { manageKnowledgeTool } from '@/app/knowledge/tools';
 
 export type AgentTools = {
   webSearch: ReturnType<typeof openai.tools.webSearch>;
+  'manage-knowledge': ManageKnowledgeTool;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
   'get-world-cup-tracking': GetWorldCupTrackingTool;
   'get-world-cup-context': GetWorldCupContextTool;
@@ -29,6 +32,7 @@ export const agentTools: AgentTools = {
     searchContextSize: 'medium',
   }),
 
+  'manage-knowledge': manageKnowledgeTool,
   'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
   'get-world-cup-tracking': getWorldCupTrackingTool,
   'get-world-cup-context': getWorldCupContextTool,
