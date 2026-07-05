@@ -1,3 +1,6 @@
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -5,13 +8,16 @@ import {
   jsonb,
   pgSequence,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core';
 
 type WorldCup2026EventType = 'kickoff' | 'goal' | 'game-end';
+type AgentKnowledgeSource = 'explicit' | 'implicit' | 'system';
 
 /**
  * Chat SDK owns chat_state_* tables. Drizzle excludes those tables from db:push,
@@ -61,6 +67,80 @@ export const agentMemoryChunks = pgTable(
   (table) => [
     index('agent_memory_chunks_identity_created_at_idx').on(table.identityId, table.createdAt),
     index('agent_memory_chunks_thread_created_at_idx').on(table.threadId, table.createdAt),
+  ],
+);
+
+export const agentKnowledgeNodes = pgTable(
+  'agent_knowledge_nodes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    identityId: text('identity_id').notNull(),
+    parentId: uuid('parent_id').references((): AnyPgColumn => agentKnowledgeNodes.id, {
+      onDelete: 'set null',
+    }),
+    slug: text('slug').notNull(),
+    path: text('path').notNull(),
+    depth: integer('depth').notNull().default(0),
+    title: text('title').notNull(),
+    content: text('content').notNull().default(''),
+    active: boolean('active').notNull().default(true),
+    supersededById: uuid('superseded_by_id').references((): AnyPgColumn => agentKnowledgeNodes.id, {
+      onDelete: 'set null',
+    }),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    source: text('source', { enum: ['explicit', 'implicit', 'system'] })
+      .notNull()
+      .default('explicit')
+      .$type<AgentKnowledgeSource>(),
+    sourceMessageId: text('source_message_id'),
+    metadata: jsonb('metadata').notNull().default({}),
+    embedding: vector('embedding', { dimensions: 1536 }),
+    embeddingModel: text('embedding_model'),
+    embeddingContentHash: text('embedding_content_hash'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_knowledge_nodes_active_path_idx')
+      .on(table.identityId, table.path)
+      .where(sql`${table.active} = true`),
+    index('agent_knowledge_nodes_identity_parent_idx').on(table.identityId, table.parentId),
+    index('agent_knowledge_nodes_identity_active_idx').on(table.identityId, table.active),
+    index('agent_knowledge_nodes_superseded_by_idx').on(table.supersededById),
+    index('agent_knowledge_nodes_embedding_idx')
+      .using('hnsw', table.embedding.op('vector_cosine_ops'))
+      .where(sql`${table.embedding} is not null`),
+  ],
+);
+
+export const agentKnowledgeNodeClosure = pgTable(
+  'agent_knowledge_node_closure',
+  {
+    identityId: text('identity_id').notNull(),
+    ancestorId: uuid('ancestor_id')
+      .notNull()
+      .references(() => agentKnowledgeNodes.id, { onDelete: 'cascade' }),
+    descendantId: uuid('descendant_id')
+      .notNull()
+      .references(() => agentKnowledgeNodes.id, { onDelete: 'cascade' }),
+    depth: integer('depth').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.ancestorId, table.descendantId],
+      name: 'agent_knowledge_node_closure_pk',
+    }),
+    index('agent_knowledge_node_closure_ancestor_idx').on(
+      table.identityId,
+      table.ancestorId,
+      table.depth,
+    ),
+    index('agent_knowledge_node_closure_descendant_idx').on(
+      table.identityId,
+      table.descendantId,
+      table.depth,
+    ),
   ],
 );
 

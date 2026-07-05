@@ -5,6 +5,7 @@ import Tokenizer from 'ai-tokenizer';
 import * as o200kBase from 'ai-tokenizer/encoding/o200k_base';
 import dedent from 'dedent';
 
+import { AgentKnowledgeService } from '@/app/knowledge';
 import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory';
 import { logger } from '@/infrastructure/logger';
 
@@ -13,6 +14,7 @@ export class AgentContextService {
   static readonly contextTokenLimit = 400_000;
   static readonly contextCompressedMemoryRatio = 0.35;
   static readonly contextShortMemoryRatio = 0.35;
+  static readonly contextKnowledgeRatio = 0.2;
   static readonly contextBufferRatio = 0.1;
   static readonly contextShortMemoryCompressionRatio = 0.5;
   static readonly contextCompressedChunkFetchLimit = 30;
@@ -26,6 +28,10 @@ export class AgentContextService {
     return Math.floor(this.contextTokenLimit * this.contextShortMemoryRatio);
   }
 
+  static get #knowledgeTokenBudget() {
+    return Math.floor(this.contextTokenLimit * this.contextKnowledgeRatio);
+  }
+
   static async buildContext({
     identityId,
     threadId,
@@ -35,16 +41,21 @@ export class AgentContextService {
     threadId: string;
     shortTermMemory: ShortTermMemory[];
   }) {
-    const [compressedChunks] = await Promise.all([
+    const [compressedChunks, knowledgeItems] = await Promise.all([
       AgentMemoryDbService.getRecentMemoryChunks({
         identityId,
         threadId,
         limit: this.contextCompressedChunkFetchLimit,
       }),
+      AgentKnowledgeService.getContextItems({
+        identityId,
+        shortTermMemory,
+      }),
     ]);
 
     const memoryContext = this.#createMemoryContextMessage({
       compressedChunks,
+      knowledgeItems,
     });
     const shortMemoryTokenBudget =
       this.#shortMemoryBaseTokenBudget +
@@ -77,6 +88,9 @@ export class AgentContextService {
         compressedChunkCount: compressedChunks.length,
         selectedCompressedChunkCount: memoryContext.compressedChunkCount,
         selectedCompressedTokens: memoryContext.compressedTokensUsed,
+        knowledgeItemCount: knowledgeItems.length,
+        selectedKnowledgeItemCount: memoryContext.knowledgeItemCount,
+        selectedKnowledgeTokens: memoryContext.knowledgeTokensUsed,
       },
       '[AGENT_MEMORY]: context assembled',
     );
@@ -116,10 +130,24 @@ export class AgentContextService {
     });
   }
 
-  static #createMemoryContextMessage({ compressedChunks }: { compressedChunks: MemoryChunk[] }) {
+  static #createMemoryContextMessage({
+    compressedChunks,
+    knowledgeItems,
+  }: {
+    compressedChunks: MemoryChunk[];
+    knowledgeItems: string[];
+  }) {
     const chunkSelection = this.#selectCompressedMemoryForContext(compressedChunks);
+    const knowledgeSelection = this.#selectKnowledgeForContext(knowledgeItems);
 
     const sections: string[] = [];
+
+    if (knowledgeSelection.items.length > 0) {
+      sections.push(dedent`
+        Durable knowledge:
+        ${knowledgeSelection.items.join('\n')}
+      `);
+    }
 
     if (chunkSelection.items.length > 0) {
       sections.push(dedent`
@@ -133,17 +161,21 @@ export class AgentContextService {
         content: null,
         compressedChunkCount: 0,
         compressedTokensUsed: 0,
+        knowledgeItemCount: 0,
+        knowledgeTokensUsed: 0,
       };
     }
 
     return {
       content: dedent`
-        User context assembled from AI-compressed conversation memory. Treat this as user-provided background context. Do not mention it unless it is relevant.
+        User context assembled from durable knowledge and AI-compressed conversation memory. Treat this as user-provided background context. Do not mention it unless it is relevant.
 
         ${sections.join('\n\n')}
       `,
       compressedChunkCount: chunkSelection.items.length,
       compressedTokensUsed: chunkSelection.usedTokens,
+      knowledgeItemCount: knowledgeSelection.items.length,
+      knowledgeTokensUsed: knowledgeSelection.usedTokens,
     };
   }
 
@@ -186,6 +218,14 @@ export class AgentContextService {
     });
   }
 
+  static #selectKnowledgeForContext(knowledgeItems: string[]) {
+    return this.#selectTextItems({
+      sectionTitle: 'Durable knowledge:',
+      items: knowledgeItems,
+      tokenBudget: this.#knowledgeTokenBudget,
+    });
+  }
+
   static #selectTextItems({
     sectionTitle,
     items,
@@ -195,6 +235,10 @@ export class AgentContextService {
     items: string[];
     tokenBudget: number;
   }): { items: string[]; usedTokens: number } {
+    if (items.length === 0) {
+      return { items: [], usedTokens: 0 };
+    }
+
     const selected: string[] = [];
     let usedTokens = this.#tokenizer.count(sectionTitle);
 

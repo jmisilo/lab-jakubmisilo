@@ -4,7 +4,9 @@
   "globalEnv": [
     "NODE_ENV",
     "PORT",
+    "AGENT_DB_INTEGRATION_TESTS",
     "AGENT_LOG_FILE",
+    "AGENT_LOG_KNOWLEDGE_TOOL_CONTENT",
     "CHAT_SDK_LOG_LEVEL",
     "DATABASE_URL",
     "LOG_LEVEL",
