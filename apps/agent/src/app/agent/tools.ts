@@ -5,6 +5,7 @@ import type {
   ManageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
 import type { ManageKnowledgeTool } from '@/app/knowledge/tools';
+import type { LoadSkillTool } from '@/app/skills/tools';
 
 import { openai } from '@ai-sdk/openai';
 
@@ -15,8 +16,10 @@ import {
   manageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
 import { manageKnowledgeTool } from '@/app/knowledge/tools';
+import { loadSkillTool } from '@/app/skills/tools';
 
 export type AgentTools = {
+  'load-skill': LoadSkillTool;
   webSearch: ReturnType<typeof openai.tools.webSearch>;
   'manage-knowledge': ManageKnowledgeTool;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
@@ -28,6 +31,7 @@ export type AgentTools = {
 
 /** @todo defer loading tools, upon having multiple choices */
 export const agentTools: AgentTools = {
+  'load-skill': loadSkillTool,
   webSearch: openai.tools.webSearch({
     searchContextSize: 'medium',
   }),

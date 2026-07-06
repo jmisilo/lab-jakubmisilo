@@ -1,6 +1,10 @@
 const mockAgentKnowledgeService = {
+  listNodes: jest.fn(),
+  readNodeByPath: jest.fn(),
   createNode: jest.fn(),
   updateNodeByPath: jest.fn(),
+  deactivateNodeByPath: jest.fn(),
+  moveNodeByPath: jest.fn(),
   supersedeNodeByPath: jest.fn(),
 };
 const mockLogger = {
@@ -67,6 +71,7 @@ describe('manageKnowledgeTool', () => {
       node: {
         id: 'node-1',
         path: 'profile/location',
+        parentPath: 'profile',
         title: 'Default location',
         active: true,
       },
@@ -91,6 +96,154 @@ describe('manageKnowledgeTool', () => {
       }),
       '[AGENT_KNOWLEDGE]: manage tool started',
     );
+  });
+
+  it('lists knowledge notes for inspection requests', async () => {
+    mockAgentKnowledgeService.listNodes.mockResolvedValue([
+      createNode({
+        id: 'node-1',
+        path: 'work/current-role',
+        title: 'Current role',
+        active: true,
+      }),
+    ]);
+
+    const result = await executeManageKnowledgeTool({
+      action: 'list',
+      parentPath: 'work',
+      limit: 10,
+    });
+
+    expect(mockAgentKnowledgeService.listNodes).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      parentPath: 'work',
+      includeInactive: undefined,
+      limit: 10,
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: 'Loaded 1 knowledge note.',
+      operationId: expect.any(String),
+      nodes: [
+        {
+          id: 'node-1',
+          path: 'work/current-role',
+          parentPath: 'work',
+          title: 'Current role',
+          active: true,
+        },
+      ],
+    });
+  });
+
+  it('reads a knowledge note with content for correction requests', async () => {
+    mockAgentKnowledgeService.readNodeByPath.mockResolvedValue(
+      createNode({
+        id: 'node-1',
+        path: 'preferences/communication',
+        title: 'Communication preference',
+        content: 'Jakub prefers casual, concise answers.',
+        active: true,
+      }),
+    );
+
+    const result = await executeManageKnowledgeTool({
+      action: 'read',
+      path: 'preferences/communication',
+    });
+
+    expect(mockAgentKnowledgeService.readNodeByPath).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      path: 'preferences/communication',
+      includeInactive: undefined,
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: 'Loaded knowledge note preferences/communication.',
+      operationId: expect.any(String),
+      node: {
+        id: 'node-1',
+        path: 'preferences/communication',
+        parentPath: 'preferences',
+        title: 'Communication preference',
+        content: 'Jakub prefers casual, concise answers.',
+        active: true,
+      },
+    });
+  });
+
+  it('deactivates knowledge notes for forget requests', async () => {
+    mockAgentKnowledgeService.deactivateNodeByPath.mockResolvedValue(
+      createNode({
+        id: 'node-1',
+        path: 'profile/old-location',
+        title: 'Old location',
+        active: false,
+      }),
+    );
+
+    const result = await executeManageKnowledgeTool({
+      action: 'deactivate',
+      path: 'profile/old-location',
+    });
+
+    expect(mockAgentKnowledgeService.deactivateNodeByPath).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      path: 'profile/old-location',
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: 'Deactivated knowledge note profile/old-location.',
+      operationId: expect.any(String),
+      node: {
+        id: 'node-1',
+        path: 'profile/old-location',
+        parentPath: 'profile',
+        title: 'Old location',
+        active: false,
+      },
+    });
+  });
+
+  it('moves or renames knowledge notes while preserving runtime identity context', async () => {
+    mockAgentKnowledgeService.moveNodeByPath.mockResolvedValue(
+      createNode({
+        id: 'node-1',
+        path: 'projects/lab-agent/scheduling',
+        title: 'Scheduling',
+        active: true,
+      }),
+    );
+
+    const result = await executeManageKnowledgeTool({
+      action: 'move',
+      path: 'ideas/agent-scheduling',
+      move: {
+        parentPath: 'projects/lab-agent',
+        slug: 'scheduling',
+        title: 'Scheduling',
+      },
+    });
+
+    expect(mockAgentKnowledgeService.moveNodeByPath).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      path: 'ideas/agent-scheduling',
+      newParentPath: 'projects/lab-agent',
+      newSlug: 'scheduling',
+      title: 'Scheduling',
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: 'Moved knowledge note ideas/agent-scheduling to projects/lab-agent/scheduling.',
+      operationId: expect.any(String),
+      node: {
+        id: 'node-1',
+        path: 'projects/lab-agent/scheduling',
+        parentPath: 'projects/lab-agent',
+        title: 'Scheduling',
+        active: true,
+      },
+    });
   });
 
   it('creates replacement knowledge and supersedes the old active path', async () => {
@@ -141,19 +294,21 @@ describe('manageKnowledgeTool', () => {
       node: {
         id: 'node-2',
         path: 'work/company-y',
+        parentPath: 'work',
         title: 'Company Y',
         active: true,
       },
       supersededNode: {
         id: 'node-1',
         path: 'work/company-x',
+        parentPath: 'work',
         title: 'Company X',
         active: false,
       },
     });
   });
 
-  it('returns a debug operation id and logs attempted input when knowledge updates fail', async () => {
+  it('returns a safe failure and logs attempted input when knowledge updates fail', async () => {
     const error = new Error('database unavailable');
 
     mockAgentKnowledgeService.createNode.mockRejectedValue(error);
@@ -169,7 +324,7 @@ describe('manageKnowledgeTool', () => {
 
     expect(result).toEqual({
       ok: false,
-      message: expect.stringMatching(/^Knowledge could not be updated\. Debug ID: /),
+      message: 'Knowledge request could not be completed.',
       operationId: expect.any(String),
     });
     expect(mockLogger.error).toHaveBeenCalledWith(
@@ -217,11 +372,13 @@ function createNode({
   id,
   path,
   title,
+  content = '',
   active,
 }: {
   id: string;
   path: string;
   title: string;
+  content?: string;
   active: boolean;
 }) {
   return {
@@ -232,7 +389,7 @@ function createNode({
     path,
     depth: path.split('/').length - 1,
     title,
-    content: '',
+    content,
     active,
     supersededById: null,
     supersededAt: null,

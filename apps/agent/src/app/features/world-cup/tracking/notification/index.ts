@@ -121,7 +121,7 @@ export class WorldCupNotificationService {
         '[WORLD_CUP]: notification context built',
       );
 
-      return await AIService.generate({
+      const result = await AIService.generate({
         instructions: dedent`
           Write a short Telegram notification for a FIFA World Cup 2026 event.
           Use the prior conversation only to match the user's tone and preferences.
@@ -140,8 +140,10 @@ export class WorldCupNotificationService {
             `,
           },
         ],
-        timeoutMs: 20_000,
+        timeout: 20_000,
       });
+
+      return result.text;
     } catch (error) {
       logger.error(
         { error, safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey },

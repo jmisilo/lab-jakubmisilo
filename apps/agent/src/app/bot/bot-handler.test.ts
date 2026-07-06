@@ -114,6 +114,31 @@ describe('BotHandler', () => {
       '[BOT]: message received',
     );
   });
+
+  it('posts user-safe failures without internal error metadata', async () => {
+    const bot = createBot();
+    const thread = createThread();
+    const message = createMessage();
+
+    mockAgentService.generate.mockRejectedValue(new Error('provider exploded'));
+
+    BotHandler.configure({ bot });
+
+    await BotHandler.respondToMessage({
+      event: 'direct_message',
+      thread,
+      message,
+    });
+
+    expect(thread.post).toHaveBeenCalledWith({
+      markdown: 'I hit a failure while handling that request. Please retry.',
+    });
+    expect(thread.post).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        markdown: expect.stringContaining('Error code:'),
+      }),
+    );
+  });
 });
 
 function getFirstInvocationOrder(mock: jest.Mock) {

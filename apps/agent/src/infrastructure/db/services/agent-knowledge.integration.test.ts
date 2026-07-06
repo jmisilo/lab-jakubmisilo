@@ -106,6 +106,88 @@ describeIntegration('AgentKnowledgeDbService integration', () => {
       ]),
     );
   });
+
+  it('moves a subtree and rewrites descendant paths and closure rows', async () => {
+    const projects = await AgentKnowledgeDbService.createNode({
+      identityId,
+      title: 'Projects',
+      content: 'All project knowledge.',
+    });
+    const ideas = await AgentKnowledgeDbService.createNode({
+      identityId,
+      title: 'Ideas',
+      content: 'All idea notes.',
+    });
+
+    expect(projects).not.toBeNull();
+    expect(ideas).not.toBeNull();
+
+    if (!projects || !ideas) {
+      throw new Error('Expected root knowledge nodes to be created.');
+    }
+
+    const labAgent = await AgentKnowledgeDbService.createNode({
+      identityId,
+      parentId: projects.id,
+      title: 'Lab Agent',
+      content: 'Personal agent project.',
+    });
+    const scheduling = await AgentKnowledgeDbService.createNode({
+      identityId,
+      parentId: ideas.id,
+      title: 'Agent Scheduling',
+      content: 'Scheduling idea.',
+    });
+
+    expect(labAgent).not.toBeNull();
+    expect(scheduling).not.toBeNull();
+
+    if (!labAgent || !scheduling) {
+      throw new Error('Expected project and scheduling nodes to be created.');
+    }
+
+    const details = await AgentKnowledgeDbService.createNode({
+      identityId,
+      parentId: scheduling.id,
+      title: 'Details',
+      content: 'Recurring jobs should support cron syntax.',
+    });
+
+    expect(details).not.toBeNull();
+
+    if (!details) {
+      throw new Error('Expected detail node to be created.');
+    }
+
+    const movedScheduling = await AgentKnowledgeDbService.moveNode({
+      identityId,
+      nodeId: scheduling.id,
+      parentId: labAgent.id,
+      slug: 'scheduling',
+      title: 'Scheduling',
+    });
+    const movedDetails = await AgentKnowledgeDbService.getNode({
+      identityId,
+      nodeId: details.id,
+    });
+    const detailClosureRows = await db
+      .select()
+      .from(agentKnowledgeNodeClosure)
+      .where(eq(agentKnowledgeNodeClosure.descendantId, details.id));
+
+    expect(movedScheduling.path).toBe('projects/lab-agent/scheduling');
+    expect(movedDetails.path).toBe('projects/lab-agent/scheduling/details');
+    expect(
+      detailClosureRows
+        .map((row) => ({ ancestorId: row.ancestorId, depth: row.depth }))
+        .sort((a, b) => a.depth - b.depth),
+    ).toEqual([
+      { ancestorId: details.id, depth: 0 },
+      { ancestorId: scheduling.id, depth: 1 },
+      { ancestorId: labAgent.id, depth: 2 },
+      { ancestorId: projects.id, depth: 3 },
+    ]);
+  });
 });
 
 async function deleteTestKnowledge(identityId: string) {

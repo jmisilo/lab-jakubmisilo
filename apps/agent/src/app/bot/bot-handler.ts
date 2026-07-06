@@ -230,7 +230,7 @@ export class BotHandler {
 
     try {
       await thread.post({
-        markdown: `${failure.message}${retryText}\n\nError code: \`${failure.code}\``,
+        markdown: `${failure.message}${retryText}`,
       });
 
       logger.info(

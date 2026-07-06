@@ -3,6 +3,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -110,6 +111,11 @@ export const agentKnowledgeNodes = pgTable(
     index('agent_knowledge_nodes_embedding_idx')
       .using('hnsw', table.embedding.op('vector_cosine_ops'))
       .where(sql`${table.embedding} is not null`),
+    check('agent_knowledge_nodes_title_length_check', sql`char_length(${table.title}) <= 180`),
+    check(
+      'agent_knowledge_nodes_content_length_check',
+      sql`char_length(${table.content}) <= 20000`,
+    ),
   ],
 );
 

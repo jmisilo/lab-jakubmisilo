@@ -1,7 +1,7 @@
-import type { ModelMessage } from 'ai';
+import type { ToolSet } from 'ai';
 
 import { openai } from '@ai-sdk/openai';
-import { embed, generateText } from 'ai';
+import { embed, generateText, Output } from 'ai';
 
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
@@ -43,44 +43,63 @@ export class AIService {
     }
   }
 
-  static async generate({
-    instructions,
-    model = AIService.model,
-    messages,
-    timeoutMs = AIService.timeout,
-  }: {
-    instructions?: Parameters<typeof generateText>[0]['instructions'];
-    messages: ModelMessage[];
-    model?: Parameters<typeof openai>[0];
-    timeoutMs?: number;
-  }) {
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort(
-        AppError.timeout({
+  static async generate<OUTPUT extends Output.Output = ReturnType<typeof Output.text>>(
+    input: AIGenerateInput<OUTPUT>,
+  ) {
+    const resolvedModel = input.model ?? openai(this.model);
+    const timeout = input.timeout ?? this.timeout;
+
+    try {
+      return await generateText({
+        ...input,
+        model: resolvedModel,
+        maxRetries: input.maxRetries ?? 1,
+        timeout,
+      });
+    } catch (error) {
+      if (this.#isTimeoutError(error)) {
+        throw AppError.timeout({
           code: AppErrorCode.AI_GENERATE_TIMEOUT,
           message: 'AI text generation timed out.',
           context: {
-            model,
+            model: this.#getModelLogValue(resolvedModel),
             operation: 'ai.generate',
           },
-          timeoutMs,
-        }),
-      );
-    }, timeoutMs);
+          timeoutMs: this.#getTimeoutContextMs(timeout),
+          cause: error,
+        });
+      }
 
-    try {
-      const result = await generateText({
-        model: openai(model),
-        instructions,
-        maxRetries: 1,
-        abortSignal: abortController.signal,
-        messages,
-      });
-
-      return result.text;
-    } finally {
-      clearTimeout(timeout);
+      throw error;
     }
   }
+
+  static #getModelLogValue(model: AIGenerateTextInput<Output.Output>['model']) {
+    return typeof model === 'string' ? model : model.modelId;
+  }
+
+  static #getTimeoutContextMs(timeout: AIGenerateTextInput<Output.Output>['timeout']) {
+    if (typeof timeout === 'number') {
+      return timeout;
+    }
+
+    return (
+      timeout?.totalMs ?? timeout?.stepMs ?? timeout?.chunkMs ?? timeout?.toolMs ?? this.timeout
+    );
+  }
+
+  static #isTimeoutError(error: unknown) {
+    return error instanceof Error && error.name === 'TimeoutError';
+  }
 }
+
+type AIGenerateTextInput<OUTPUT extends Output.Output> = Parameters<
+  typeof generateText<ToolSet, Record<string, unknown>, OUTPUT>
+>[0];
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type AIGenerateInput<OUTPUT extends Output.Output> = DistributiveOmit<
+  AIGenerateTextInput<OUTPUT>,
+  'model'
+> & {
+  model?: AIGenerateTextInput<OUTPUT>['model'];
+};
