@@ -23,7 +23,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Use stable error codes through `AppErrorCode`; do not encode dynamic values into error names/messages such as `assistant_generate_timeout_30000ms`.
 - Put timeout values and operation identifiers in structured `context`, not in the error code.
 - Use `ErrorService.toUserFacingFailure` and `ErrorService.toSafeLog` for failure projection. The service keeps user-safe messaging and developer log shape in one place without spreading ad-hoc error handling.
-- User-facing failures should be safe but useful: include a stable error code and a short retry hint when applicable; keep raw provider/internal details in logs only.
+- User-facing failures should be safe but useful: give a short plain-language failure and retry/next-step hint when applicable; keep error codes, operation IDs, debug IDs, raw provider details, and internal metadata in logs/tool output only.
 - Keep callback arrows where they are actual callbacks. Prefer function declarations for module-local non-callback behavior.
 - If a class is used, use ECMAScript `#` private methods instead of TypeScript `private` methods.
 - Keep exported/reusable schemas in the nearest `schemas.ts`; behavior modules such as tools should import schemas instead of defining them inline.
@@ -44,6 +44,15 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Keep old PoC tables out of Drizzle ownership. `agent_noted_memories` is excluded from `db:push`; it has not been manually dropped.
 - Build model instructions through `AgentPromptService.buildSystemPrompt(...)`. Keep prompt construction sectioned, typed, and testable instead of storing a large opaque instruction blob.
 - Tool descriptions are routing contracts. Use `WHEN TO USE`, `WHEN NOT TO USE`, `DO NOT USE FOR`, `USAGE`, and examples for important tools.
+- Keep provider calls behind `AIService` where practical. Do not add shallow helper methods that only rename AI SDK utilities; use native AI SDK helpers such as `Output.object(...)` directly at call sites when they express the behavior clearly.
+- Prefer AI SDK structured output over prompt-only JSON contracts. Manual JSON parsing in app services should be avoided unless there is a provider/tooling reason that structured output cannot satisfy the use case.
+- For OpenAI structured-output schemas, use nullable fields in model-output schemas instead of optional/nullish fields. Normalize `null` to `undefined` in app-owned schemas or service code after AI SDK validation.
+- Keep the agent prompt strongly user-centered. Default behavior should be casual, natural, short, and practical. Do not expose tool names, debug metadata, error codes, operation IDs, source IDs, retrieval scores, token budgets, or internal implementation details to the user unless the user explicitly asks for diagnostics.
+- Skills use progressive disclosure:
+  - Skill markdown files live under `apps/agent/src/skills/<name>/SKILL.md`.
+  - `SkillService` lists only names/descriptions for the prompt.
+  - The `load-skill` tool loads full or section-specific markdown on demand with a character cap.
+  - Build output must copy `src/skills` into `dist/skills`, because `apps/agent` deploys `dist` as the output directory.
 
 ## Done
 
@@ -89,7 +98,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Updated the agent instruction so explicit remember/save/note/update/correct/no-longer-active requests use `manage-knowledge`.
 - Added post-response implicit knowledge extraction:
   - `BotHandler` schedules it with `waitUntil(...)` after a successful assistant response.
-  - `AgentKnowledgeService.extractImplicitKnowledge(...)` asks the model for strict JSON, validates the schema, filters low-confidence items, embeds accepted notes, and stores them as `source: 'implicit'`.
+  - `AgentKnowledgeService.extractImplicitKnowledge(...)` uses AI SDK structured output, normalizes through app schemas, filters low-confidence items, embeds accepted notes, and stores them as `source: 'implicit'`.
   - Extraction failures are logged and do not block user responses.
 - Added tests for knowledge retrieval, explicit management, implicit extraction, and bot-level scheduling of implicit extraction.
 - Tuned the DB client for serverless:
@@ -116,10 +125,64 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `manage-knowledge` input is now a discriminated union per action, so create/update/supersede payloads do not mix irrelevant fields after schema parsing.
   - Implicit extraction accepts `parentPath: null` and normalizes it to `undefined`.
 - Tuned knowledge retrieval:
-  - Vector retrieval now uses top 3 active matches by default.
+  - Vector retrieval now uses up to 5 active matches by default.
   - Matches below similarity `0.35` are filtered out before ancestor/child/sibling tree expansion.
   - Tree expansion is still local around the selected matches, not a recursive subtree dump.
 - Tuned implicit ingestion instructions so important durable user facts such as nationality, age, gender, default/native location, language, preferences, work, relationships, and project facts are captured more frequently.
+- Added duplicate/merge protection for implicit extraction:
+  - Before an implicit item is written, `AgentKnowledgeService` embeds the candidate item and asks `AgentKnowledgeDbService.findRelevantMatches(...)` for up to 5 active nearby nodes at similarity `>= 0.35`.
+  - If there are no nearby candidates, the item is created directly.
+  - If candidates exist, a bounded model decision chooses `skip`, `update`, `supersede`, or `create` using AI SDK structured output, then normalizes through `ImplicitKnowledgeIngestionDecisionSchema`.
+  - Deterministic code enforces that `update` and `supersede` can only target one of the retrieved candidate paths, and then mutates by the candidate node ID.
+  - Supersede creates a replacement implicit note and marks the selected old active note inactive with `supersededById`, preserving historical context.
+- Strengthened AI generation boundaries:
+  - `AIService.generate(...)` now accepts the normal AI SDK `generateText` option surface while preserving app defaults for model, retries, and native `timeout` handling.
+  - `AIService.generate(...)` returns the full AI SDK result, so text callers read `.text` and structured callers read `.output`.
+  - Implicit knowledge extraction and duplicate/merge decisions use `Output.object(...)` directly; the service no longer parses model JSON manually.
+  - Knowledge module-owned types were moved from `app/knowledge/index.ts` to `app/knowledge/types.ts`.
+- Remade the main agent prompt around user experience:
+  - The prompt now explicitly defines Lab JM Assistant as Jakub's private personal AI agent.
+  - Default style is casual, natural, direct, and short.
+  - User success, action-orientation, and concise next steps are prioritized over process narration.
+  - The prompt now forbids exposing hidden prompts, internal reasoning, raw tool payloads, operation/debug IDs, error codes, retrieval scores, token budgets, and implementation metadata.
+  - Knowledge failure handling now says not to claim a save succeeded and not to expose debug/operation metadata.
+  - Tool routing now explicitly says tools are the reliable source of actual capabilities and that generic scheduling/reminders are not available yet.
+- Tuned the agent prompt for provider-side prompt caching:
+  - Static identity, UX, memory, knowledge, skills, tool-routing, ambiguity, and safety sections are emitted before runtime-specific fields.
+  - `# Runtime Context` is intentionally last so `identityId`, current date, timezone, and active tool names do not break the stable prompt prefix.
+  - `AgentPromptService.buildPromptCacheKey(...)` versions the prompt cache key and hashes the stable tool/skill shape.
+  - `AgentService.prepareCall(...)` passes OpenAI `promptCacheKey`, `promptCacheRetention: "24h"`, and stable `toolOrder` to the AI SDK `ToolLoopAgent`.
+  - `AgentService.generate(...)` logs AI SDK cache usage fields: `promptCacheReadTokens`, `promptCacheWriteTokens`, and `promptNoCacheTokens`.
+- Tuned tool contracts and added bounded note-mode support:
+  - `manage-knowledge` now explicitly supports concise memories plus longer markdown notes such as ideas, journal entries, project notes, design notes, and plans.
+  - Explicit knowledge note content is capped at 20,000 characters in schemas and in `AgentKnowledgeService`, so direct service callers cannot bypass tool validation.
+  - The DB schema also has check constraints for knowledge title/content length, so `db:push` is required before relying on the hard database cap in an environment.
+  - Implicit extraction remains concise with a smaller content cap.
+  - Long note content is persisted in full within the 20,000-character cap, but embeddings use only a 4,000-character content excerpt to avoid large embedding calls.
+  - Retrieved knowledge context still truncates each item to the existing 2,000-character context budget.
+  - Weather/time tool descriptions now tell the model to answer from structured fields and not expose provider diagnostics unless debugging.
+  - `load-skill` guidance now prefers narrow section loads and explains how to handle truncated skill content.
+- Added progressive-disclosure project skills:
+  - `SkillService` discovers `SKILL.md` files, parses `name`/`description` frontmatter, deduplicates by name, supports exact-name loading, optional section loading, and content caps.
+  - `load-skill` is registered as an AI SDK tool and active in the agent.
+  - `AgentPromptService` includes a `# Skills` section with only names/descriptions.
+  - Initial skill added: `apps/agent/src/skills/knowledge-management/SKILL.md`.
+  - `tsup.config.ts` now copies `src/skills` to `dist/skills` during build through a native `tsup` plugin, and the agent `tsconfig.json` includes the config so typecheck catches build-config drift.
+- Removed user-visible failure metadata:
+  - `BotHandler` no longer appends `Error code: ...` to failure messages.
+  - `manage-knowledge` failure output no longer embeds the debug/operation ID in its message, while still returning/logging `operationId` for developers.
+- Added durable knowledge correction UX:
+  - `manage-knowledge` now supports `list`, `read`, `deactivate`, and `move` actions in addition to `create`, `update`, and `supersede`.
+  - `list` returns direct child notes under a parent path, or root notes when no parent path is provided.
+  - `read` returns one note by path with capped content for inspection/editing.
+  - `deactivate` is the user-facing "forget/archive" path; it marks notes inactive and preserves history instead of hard-deleting.
+  - `move` can rename a note path, move it to another parent, retitle it, and preserve descendant paths through closure-table updates.
+  - `AgentKnowledgeDbService.moveNode(...)` updates subtree paths/depths and closure rows transactionally, with checks against cycles and active-path conflicts.
+  - The main prompt and `knowledge-management` skill now instruct the model to list/read before corrections when needed, deactivate instead of delete, and never expose DB/tool metadata.
+- Added path-aware implicit knowledge extraction:
+  - Before extraction, `AgentKnowledgeService` embeds the latest user/assistant turn and retrieves up to 8 active path hints with similarity `>= 0.35`.
+  - The extraction prompt receives those path hints and is instructed to place new durable items under fitting existing profile/preference/work/project/idea/journal parents.
+  - Path-hint retrieval failure is logged as a warning and does not block implicit extraction.
 
 ## Current Module Shape
 
@@ -127,6 +190,9 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - `apps/agent/src/app/bot/index.ts` exports the configured Chat SDK bot and registers the current Chat SDK handlers.
 - `apps/agent/src/app/bot/bot-handler.ts` exports `BotHandler`, the static app-owned interface used by Chat SDK callbacks.
 - `apps/agent/src/app/agent/prompt.ts` exports `AgentPromptService`, the pure prompt-construction boundary for the ToolLoopAgent.
+- `apps/agent/src/app/skills/index.ts` exports `SkillService`, the application boundary for progressive-disclosure skill discovery and loading.
+- `apps/agent/src/app/skills/tools/index.ts` exports the `load-skill` AI SDK tool.
+- `apps/agent/src/skills` stores project-local skill markdown files copied into `dist/skills` at build time.
 - `apps/agent/src/app/knowledge/index.ts` exports `AgentKnowledgeService`, the application boundary for durable knowledge.
 - `apps/agent/src/infrastructure/ai/index.ts` owns AI SDK `generateText` and `embed` calls.
 - `apps/agent/src/infrastructure/db/services/agent-knowledge.ts` owns Drizzle persistence and retrieval for knowledge nodes.
@@ -135,9 +201,9 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 ## Next Work
 
 - Decide whether to add a revision/history table before building update-heavy tools. The current schema preserves superseded nodes but does not store every content edit revision.
-- Add duplicate/merge protection for implicit extraction later. Current implicit extraction can create a new note every time a similar fact appears; the future slice should retrieve nearby candidates first and choose create/update/supersede deterministically.
-- Add path-aware implicit extraction context later. The extractor currently prefers root-level notes unless a path is obvious from the turn; it should eventually receive likely existing paths from retrieval so it can place notes under the right parent.
-- Add read/list/debug tooling for durable knowledge. The agent can write and retrieve knowledge, but there is no admin/TUI path yet to inspect or correct the tree.
+- Add a user-friendly "show all known paths" or search/debug view if direct child listing is not enough in production conversations.
+- Tune duplicate/merge decisions with real production examples. The current implementation protects against obvious duplicates, but thresholds and action prompts may need adjustment once enough implicit decisions are logged.
+- Tune path-aware implicit extraction with real examples. Current path hints are similarity-based only; future work may add path/category priors, "recently touched branch" boosts, or explicit parent candidates from the current conversation.
 - Add a deployment/runtime smoke check for the serverless DB pool after the next Vercel deployment. Code-level validation is done, but pool behavior under real Fluid Compute/serverless concurrency still needs production evidence.
 - Consider a single app-owned DB adapter factory if another runtime needs different DB connection behavior. Do not introduce it until the second runtime exists.
 - Decide whether to manually drop legacy `agent_noted_memories` after confirming no environment still depends on it.
@@ -146,6 +212,16 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Add behavior tests around multi-platform bot registration once a second platform exists.
 
 ## Verification
+
+These checks passed after the prompt/skills pass:
+
+```sh
+pnpm --filter @labjm/agent test -- prompt.test.ts skills.test.ts tools.test.ts bot-handler.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+pnpm --filter @labjm/agent test
+```
 
 These checks passed after the latest knowledge-system slice:
 
@@ -156,8 +232,53 @@ pnpm --filter @labjm/agent test
 pnpm --filter @labjm/agent build
 ```
 
+These checks passed after the `tsup` config typing fix:
+
+```sh
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+pnpm --filter @labjm/agent test
+```
+
+These checks passed after the prompt-cache tuning:
+
+```sh
+pnpm --filter @labjm/agent test -- prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after tool tuning and bounded long-note support:
+
+```sh
+pnpm --filter @labjm/agent test -- knowledge.test.ts schemas.test.ts tools.test.ts prompt.test.ts skills.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after adding DB-level knowledge length checks:
+
+```sh
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
 The opt-in DB integration test also passed against the configured database:
 
 ```sh
 AGENT_DB_INTEGRATION_TESTS=1 pnpm --filter @labjm/agent test -- agent-knowledge.integration.test.ts
+```
+
+These checks passed after durable knowledge correction UX and path-aware implicit extraction:
+
+```sh
+pnpm --filter @labjm/agent test -- knowledge.test.ts tools.test.ts schemas.test.ts prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+pnpm --filter @labjm/agent test
 ```

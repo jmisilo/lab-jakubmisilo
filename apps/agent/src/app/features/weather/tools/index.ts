@@ -56,6 +56,8 @@ export const getWeatherTool: GetWeatherTool = tool({
     - Use requestType "forecast" for future weather questions.
     - Use metric units by default unless the user asks for Fahrenheit/imperial.
     - For relative dates, pass daysFromNow. For broad times, pass timeOfDay. For exact local hours, pass hour.
+    - After ok=true, answer from weather/forecast fields directly. Do not say only that weather was loaded.
+    - After ok=false, give a short useful failure. Do not expose providerStatus or providerMessage unless the user is explicitly debugging the integration.
 
     # Examples
     - "Weather in Warsaw?" -> current, location Warsaw.
@@ -166,6 +168,8 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
     # Usage
     - Pass an explicit city/place or a remembered default/native location.
     - If the user provides a one-off city, use it only for this request.
+    - After ok=true, answer with the resolved local date/time and UTC offset when useful.
+    - After ok=false, ask for a clearer city/place or state the safe limitation. Do not expose providerStatus or providerMessage unless the user is explicitly debugging the integration.
 
     # Examples
     - "What time is it in Tokyo?" -> location Tokyo.

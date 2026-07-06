@@ -94,7 +94,7 @@ export class AgentMemoryService {
       const transcript = messages
         .map((message) => `${message.role}: ${message.content}`)
         .join('\n');
-      const summary = await AIService.generate({
+      const summaryResult = await AIService.generate({
         messages: [
           {
             role: 'user',
@@ -115,6 +115,7 @@ export class AgentMemoryService {
           },
         ],
       });
+      const summary = summaryResult.text;
 
       await AgentMemoryDbService.createMemoryChunk({
         identityId,

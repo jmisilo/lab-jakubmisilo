@@ -10,6 +10,7 @@ import {
   gt,
   inArray,
   isNotNull,
+  isNull,
   notInArray,
   sql,
 } from 'drizzle-orm';
@@ -50,10 +51,34 @@ type UpdateKnowledgeNodeContentInput = {
   embeddingContentHash?: string;
 };
 
+type ListKnowledgeNodesInput = {
+  identityId: string;
+  parentPath?: string | null;
+  includeInactive?: boolean;
+  limit?: number;
+};
+
+type GetKnowledgeNodeByPathInput = {
+  identityId: string;
+  path: string;
+  includeInactive?: boolean;
+};
+
 type SupersedeKnowledgeNodeInput = {
   identityId: string;
   nodeId: string;
   supersededById?: string;
+};
+
+type MoveKnowledgeNodeInput = {
+  identityId: string;
+  nodeId: string;
+  parentId: string | null;
+  slug?: string;
+  title?: string;
+  embedding?: number[];
+  embeddingModel?: string;
+  embeddingContentHash?: string;
 };
 
 type GetRelevantContextNodesInput = {
@@ -65,7 +90,14 @@ type GetRelevantContextNodesInput = {
   siblingLimit?: number;
 };
 
-type NodeMatch = AgentKnowledgeNode & {
+type FindRelevantMatchesInput = {
+  identityId: string;
+  embedding: number[];
+  limit?: number;
+  minSimilarity?: number;
+};
+
+export type AgentKnowledgeSimilarNode = AgentKnowledgeNode & {
   similarity: number;
 };
 
@@ -120,6 +152,61 @@ export class AgentKnowledgeDbService extends DbService {
       .limit(1);
 
     return node ?? null;
+  }
+
+  static async getNodeByPath({
+    identityId,
+    path,
+    includeInactive = false,
+  }: GetKnowledgeNodeByPathInput) {
+    const [node] = await this.client
+      .select()
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.path, path),
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .limit(1);
+
+    if (!node) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+        message: 'Knowledge node was not found by path.',
+        context: { identityId, path, includeInactive },
+        retryable: false,
+      });
+    }
+
+    return node;
+  }
+
+  static async listNodes({
+    identityId,
+    parentPath,
+    includeInactive = false,
+    limit = 50,
+  }: ListKnowledgeNodesInput) {
+    const parent = parentPath
+      ? await this.getNodeByPath({ identityId, path: parentPath, includeInactive })
+      : null;
+
+    return this.client
+      .select()
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          parent
+            ? eq(agentKnowledgeNodes.parentId, parent.id)
+            : isNull(agentKnowledgeNodes.parentId),
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .orderBy(asc(agentKnowledgeNodes.path))
+      .limit(limit);
   }
 
   static async createNode(input: CreateKnowledgeNodeInput) {
@@ -243,15 +330,193 @@ export class AgentKnowledgeDbService extends DbService {
     return node;
   }
 
+  static async moveNode({
+    identityId,
+    nodeId,
+    parentId,
+    slug,
+    title,
+    embedding,
+    embeddingModel,
+    embeddingContentHash,
+  }: MoveKnowledgeNodeInput) {
+    const node = await this.getNode({ identityId, nodeId });
+
+    if (!node.active) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+        message: 'Inactive knowledge node cannot be moved.',
+        context: { identityId, nodeId },
+        retryable: false,
+      });
+    }
+
+    const parent = await this.#getParentNode({ identityId, parentId });
+    const subtreeRows = await this.#getSubtreeRows({ identityId, nodeId });
+
+    if (parent && subtreeRows.some((subtreeNode) => subtreeNode.id === parent.id)) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+        message: 'Knowledge node cannot be moved below itself or one of its descendants.',
+        context: { identityId, nodeId, parentId },
+        retryable: false,
+      });
+    }
+
+    const nextSlug = slug ? this.#normalizeSlug(slug) : node.slug;
+    const nextPath = this.#createPath({ parentPath: parent?.path ?? null, slug: nextSlug });
+    const pathConflict = await this.findActiveNodeByPath({ identityId, path: nextPath });
+
+    if (pathConflict && pathConflict.id !== node.id) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+        message: 'Knowledge node path already exists.',
+        context: { identityId, nodeId, path: nextPath },
+        retryable: false,
+      });
+    }
+
+    const parentClosures = parent
+      ? await this.#getClosureRowsForParent({ identityId, parentId: parent.id })
+      : [];
+    const subtreeIds = subtreeRows.map((subtreeNode) => subtreeNode.id);
+    const nextDepth = parent ? parent.depth + 1 : 0;
+    const depthDelta = nextDepth - node.depth;
+    const nextPathByNodeId = new Map(
+      subtreeRows.map((subtreeNode) => [
+        subtreeNode.id,
+        subtreeNode.id === node.id
+          ? nextPath
+          : `${nextPath}${subtreeNode.path.slice(node.path.length)}`,
+      ]),
+    );
+    const [subtreePathConflict] = await this.client
+      .select({
+        id: agentKnowledgeNodes.id,
+        path: agentKnowledgeNodes.path,
+      })
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.active, true),
+          inArray(agentKnowledgeNodes.path, [...nextPathByNodeId.values()]),
+          notInArray(agentKnowledgeNodes.id, subtreeIds),
+        ),
+      )
+      .limit(1);
+
+    if (subtreePathConflict) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+        message: 'Knowledge subtree move would conflict with an existing active path.',
+        context: {
+          identityId,
+          nodeId,
+          conflictingPath: subtreePathConflict.path,
+        },
+        retryable: false,
+      });
+    }
+
+    return this.client.transaction(async (tx) => {
+      let movedNode: AgentKnowledgeNode | null = null;
+      const updatedAt = new Date();
+
+      for (const subtreeNode of subtreeRows) {
+        const descendantPath = nextPathByNodeId.get(subtreeNode.id);
+
+        if (!descendantPath) {
+          throw new AppError({
+            code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+            message: 'Knowledge subtree path could not be resolved.',
+            context: { identityId, nodeId: subtreeNode.id },
+            retryable: true,
+          });
+        }
+
+        const update: Partial<NewAgentKnowledgeNode> = {
+          path: descendantPath,
+          depth: subtreeNode.depth + depthDelta,
+          updatedAt,
+        };
+
+        if (subtreeNode.id === node.id) {
+          update.parentId = parent?.id ?? null;
+          update.slug = nextSlug;
+
+          if (title !== undefined) {
+            update.title = title.trim();
+          }
+
+          if (embedding !== undefined) {
+            update.embedding = embedding;
+            update.embeddingModel = embeddingModel;
+            update.embeddingContentHash = embeddingContentHash;
+          }
+        }
+
+        const [updatedNode] = await tx
+          .update(agentKnowledgeNodes)
+          .set(update)
+          .where(
+            and(
+              eq(agentKnowledgeNodes.identityId, identityId),
+              eq(agentKnowledgeNodes.id, subtreeNode.id),
+            ),
+          )
+          .returning();
+
+        if (subtreeNode.id === node.id) {
+          movedNode = updatedNode ?? null;
+        }
+      }
+
+      await tx
+        .delete(agentKnowledgeNodeClosure)
+        .where(
+          and(
+            eq(agentKnowledgeNodeClosure.identityId, identityId),
+            inArray(agentKnowledgeNodeClosure.descendantId, subtreeIds),
+            notInArray(agentKnowledgeNodeClosure.ancestorId, subtreeIds),
+          ),
+        );
+
+      if (parentClosures.length > 0) {
+        await tx.insert(agentKnowledgeNodeClosure).values(
+          parentClosures.flatMap((parentClosure) =>
+            subtreeRows.map((subtreeNode) => ({
+              identityId,
+              ancestorId: parentClosure.ancestorId,
+              descendantId: subtreeNode.id,
+              depth: parentClosure.depth + 1 + subtreeNode.depthFromMovedNode,
+            })),
+          ),
+        );
+      }
+
+      if (!movedNode) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+          message: 'Knowledge node was not moved.',
+          context: { identityId, nodeId },
+          retryable: true,
+        });
+      }
+
+      return movedNode;
+    });
+  }
+
   static async getRelevantContextNodes({
     identityId,
     embedding,
-    matchLimit = 3,
+    matchLimit = 5,
     minSimilarity = 0.35,
     childLimit = 8,
     siblingLimit = 8,
   }: GetRelevantContextNodesInput): Promise<AgentKnowledgeContextNode[]> {
-    const matches = await this.#findRelevantMatches({
+    const matches = await this.findRelevantMatches({
       identityId,
       embedding,
       limit: matchLimit,
@@ -304,6 +569,33 @@ export class AgentKnowledgeDbService extends DbService {
     return [...nodes.values()].sort(this.#compareContextNodes);
   }
 
+  static async findRelevantMatches({
+    identityId,
+    embedding,
+    limit = 5,
+    minSimilarity = 0.35,
+  }: FindRelevantMatchesInput): Promise<AgentKnowledgeSimilarNode[]> {
+    const distance = cosineDistance(agentKnowledgeNodes.embedding, embedding);
+    const similarity = sql<number>`1 - (${distance})`;
+
+    return this.client
+      .select({
+        ...getTableColumns(agentKnowledgeNodes),
+        similarity,
+      })
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.active, true),
+          isNotNull(agentKnowledgeNodes.embedding),
+          sql`${similarity} >= ${minSimilarity}`,
+        ),
+      )
+      .orderBy(asc(distance))
+      .limit(limit);
+  }
+
   static async #getParentNode({
     identityId,
     parentId,
@@ -337,6 +629,37 @@ export class AgentKnowledgeDbService extends DbService {
     }
 
     return parent;
+  }
+
+  static async #getSubtreeRows({ identityId, nodeId }: { identityId: string; nodeId: string }) {
+    const rows = await this.client
+      .select({
+        ...getTableColumns(agentKnowledgeNodes),
+        depthFromMovedNode: agentKnowledgeNodeClosure.depth,
+      })
+      .from(agentKnowledgeNodeClosure)
+      .innerJoin(
+        agentKnowledgeNodes,
+        eq(agentKnowledgeNodeClosure.descendantId, agentKnowledgeNodes.id),
+      )
+      .where(
+        and(
+          eq(agentKnowledgeNodeClosure.identityId, identityId),
+          eq(agentKnowledgeNodeClosure.ancestorId, nodeId),
+        ),
+      )
+      .orderBy(asc(agentKnowledgeNodeClosure.depth), asc(agentKnowledgeNodes.path));
+
+    if (rows.length === 0) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+        message: 'Knowledge node has no closure rows.',
+        context: { identityId, nodeId },
+        retryable: false,
+      });
+    }
+
+    return rows;
   }
 
   static async #getClosureRowsForParent({
@@ -400,38 +723,6 @@ export class AgentKnowledgeDbService extends DbService {
     }
 
     return `${baseSlug}-${randomUUID().slice(0, 8)}`;
-  }
-
-  static async #findRelevantMatches({
-    identityId,
-    embedding,
-    limit,
-    minSimilarity,
-  }: {
-    identityId: string;
-    embedding: number[];
-    limit: number;
-    minSimilarity: number;
-  }): Promise<NodeMatch[]> {
-    const distance = cosineDistance(agentKnowledgeNodes.embedding, embedding);
-    const similarity = sql<number>`1 - (${distance})`;
-
-    return this.client
-      .select({
-        ...getTableColumns(agentKnowledgeNodes),
-        similarity,
-      })
-      .from(agentKnowledgeNodes)
-      .where(
-        and(
-          eq(agentKnowledgeNodes.identityId, identityId),
-          eq(agentKnowledgeNodes.active, true),
-          isNotNull(agentKnowledgeNodes.embedding),
-          sql`${similarity} >= ${minSimilarity}`,
-        ),
-      )
-      .orderBy(asc(distance))
-      .limit(limit);
   }
 
   static async #getAncestorNodes({

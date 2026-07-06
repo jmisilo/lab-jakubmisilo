@@ -1,5 +1,9 @@
 import {
+  ImplicitKnowledgeExtractionModelOutputSchema,
   ImplicitKnowledgeExtractionSchema,
+  ImplicitKnowledgeIngestionDecisionModelOutputSchema,
+  ImplicitKnowledgeIngestionDecisionSchema,
+  KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS,
   ManageKnowledgeToolInputSchema,
 } from '@/app/knowledge/schemas';
 
@@ -32,18 +36,107 @@ describe('knowledge schemas', () => {
     });
   });
 
+  it('accepts bounded long explicit notes and rejects unbounded note content', () => {
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'create',
+        node: {
+          title: 'Long note',
+          content: 'a'.repeat(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS),
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'create',
+        node: {
+          title: 'Too long note',
+          content: 'a'.repeat(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS + 1),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('normalizes null implicit parent paths to undefined', () => {
     const parsed = ImplicitKnowledgeExtractionSchema.parse({
       items: [
         {
           parentPath: null,
+          slug: null,
           title: 'User gender',
           content: 'The user is male.',
           confidence: 0.9,
+          reason: null,
         },
       ],
     });
 
     expect(parsed.items[0]?.parentPath).toBeUndefined();
+    expect(parsed.items[0]?.slug).toBeUndefined();
+    expect(parsed.items[0]?.reason).toBeUndefined();
+  });
+
+  it('accepts nullable fields in structured implicit extraction model output', () => {
+    const parsed = ImplicitKnowledgeExtractionModelOutputSchema.parse({
+      items: [
+        {
+          parentPath: null,
+          slug: null,
+          title: 'User gender',
+          content: 'The user is male.',
+          confidence: 0.9,
+          reason: null,
+        },
+      ],
+    });
+
+    expect(parsed.items[0]?.parentPath).toBeNull();
+    expect(parsed.items[0]?.slug).toBeNull();
+    expect(parsed.items[0]?.reason).toBeNull();
+  });
+
+  it('normalizes null implicit ingestion decision fields to undefined', () => {
+    const parsed = ImplicitKnowledgeIngestionDecisionSchema.parse({
+      action: 'create',
+      targetPath: null,
+      parentPath: null,
+      slug: null,
+      title: null,
+      content: null,
+      reason: null,
+    });
+
+    expect(parsed).toEqual({
+      action: 'create',
+      targetPath: undefined,
+      parentPath: undefined,
+      slug: undefined,
+      title: undefined,
+      content: undefined,
+      reason: undefined,
+    });
+  });
+
+  it('accepts nullable fields in structured ingestion decision model output', () => {
+    const parsed = ImplicitKnowledgeIngestionDecisionModelOutputSchema.parse({
+      action: 'skip',
+      targetPath: 'profile/age',
+      parentPath: null,
+      slug: null,
+      title: null,
+      content: null,
+      reason: null,
+    });
+
+    expect(parsed).toEqual({
+      action: 'skip',
+      targetPath: 'profile/age',
+      parentPath: null,
+      slug: null,
+      title: null,
+      content: null,
+      reason: null,
+    });
   });
 });

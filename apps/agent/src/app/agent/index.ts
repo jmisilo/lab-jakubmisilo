@@ -1,4 +1,5 @@
 import type { AgentTools } from '@/app/agent/tools';
+import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai';
 import type { ModelMessage } from 'ai';
 
 import { openai } from '@ai-sdk/openai';
@@ -7,6 +8,7 @@ import { z } from 'zod';
 
 import { AgentPromptService } from '@/app/agent/prompt';
 import { agentTools } from '@/app/agent/tools';
+import { SkillService } from '@/app/skills';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
@@ -21,6 +23,7 @@ type AgentRuntimeContext = z.infer<typeof AgentRuntimeContextSchema>;
 
 const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
 const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
+const PROMPT_CACHE_RETENTION = '24h';
 
 export class AgentService {
   static #timeout = {
@@ -37,6 +40,7 @@ export class AgentService {
       currentDate: 'provided-at-call-time',
       timeZone: DEFAULT_USER_TIME_ZONE,
       tools: Object.keys(agentTools),
+      skills: SkillService.listSkills(),
     }),
     tools: agentTools,
     /**
@@ -62,28 +66,42 @@ export class AgentService {
     prepareCall: ({ options, ...input }) => {
       const timeZone = options?.timeZone ?? DEFAULT_USER_TIME_ZONE;
       const activeTools = this.#getActiveTools(options);
+      const skills = SkillService.listSkills();
+      const identityId = options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT;
 
       return {
         ...input,
         instructions: AgentPromptService.buildSystemPrompt({
-          identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+          identityId,
           currentDate: this.#getCurrentDate({ timeZone }),
           timeZone,
           tools: activeTools,
+          skills,
         }),
         activeTools,
+        toolOrder: activeTools,
+        providerOptions: {
+          openai: {
+            promptCacheKey: AgentPromptService.buildPromptCacheKey({
+              identityId,
+              tools: activeTools,
+              skills,
+            }),
+            promptCacheRetention: PROMPT_CACHE_RETENTION,
+          } satisfies OpenAILanguageModelResponsesOptions,
+        },
         toolsContext: {
           'manage-knowledge': {
-            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            identityId,
             sourceMessageId: options?.sourceMessageId,
           },
           'manage-world-cup-subscription': {
-            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            identityId,
             threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
             sourceMessageId: options?.sourceMessageId,
           },
           'get-world-cup-tracking': {
-            identityId: options?.identityId ?? UNAVAILABLE_TOOL_CONTEXT,
+            identityId,
             threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
           },
           'get-world-cup-context': {
@@ -119,6 +137,7 @@ export class AgentService {
 
   static #getActiveTools(options?: AgentRuntimeContext): (keyof AgentTools & string)[] {
     const activeTools: (keyof AgentTools)[] = [
+      'load-skill',
       'webSearch',
       'get-world-cup-context',
       'get-weather',
@@ -199,7 +218,18 @@ export class AgentService {
         },
       });
 
-      logger.info({ model: this.#model }, '[AI_AGENT]: response generated');
+      logger.info(
+        {
+          model: this.#model,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          promptCacheReadTokens: result.usage.inputTokenDetails.cacheReadTokens,
+          promptCacheWriteTokens: result.usage.inputTokenDetails.cacheWriteTokens,
+          promptNoCacheTokens: result.usage.inputTokenDetails.noCacheTokens,
+        },
+        '[AI_AGENT]: response generated',
+      );
 
       return { text: result.text };
     } catch (error) {

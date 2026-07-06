@@ -13,6 +13,15 @@ jest.mock('@/infrastructure/ai', () => ({
   },
 }));
 
+jest.mock('ai', () => ({
+  Output: {
+    object: jest.fn((input: Record<string, unknown>) => ({
+      type: 'object-output',
+      ...input,
+    })),
+  },
+}));
+
 jest.mock('@/app/features/world-cup/tracking/notification/attachment', () => ({
   WorldCupNotificationAttachmentService: {
     createAttachment: jest.fn(),
@@ -32,7 +41,9 @@ const memoryMock = jest.mocked(AgentMemoryService);
 describe('WorldCupNotificationService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    aiMock.generate.mockResolvedValue('Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.');
+    aiMock.generate.mockResolvedValue({
+      text: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
+    } as Awaited<ReturnType<typeof AIService.generate>>);
     attachmentMock.createAttachment.mockResolvedValue(attachment);
     memoryMock.buildContext.mockResolvedValue([]);
     threadMock.mockReturnValue({

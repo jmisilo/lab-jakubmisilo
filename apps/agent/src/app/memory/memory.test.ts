@@ -129,9 +129,9 @@ describe('AgentMemoryService', () => {
       mockAgentMemoryDbService.getUncompressedMessages.mockResolvedValue(messages);
       mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
       jest.spyOn(AgentContextService, 'getCompressionTriggerTokenLimit').mockReturnValue(1);
-      mockAIService.generate.mockResolvedValue(
-        'The user prefers service-based domain logic and no Eve routes.',
-      );
+      mockAIService.generate.mockResolvedValue({
+        text: 'The user prefers service-based domain logic and no Eve routes.',
+      });
       mockAgentMemoryDbService.createMemoryChunk.mockResolvedValue(
         createMemoryChunk({
           id: 'chunk-1',

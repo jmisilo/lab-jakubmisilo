@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+export const KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS = 180;
+export const KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS = 20_000;
+export const IMPLICIT_KNOWLEDGE_CONTENT_MAX_CHARACTERS = 2_000;
+export const KNOWLEDGE_TOOL_LIST_MAX_ITEMS = 50;
+
 export const ManageKnowledgeToolContextSchema = z.object({
   identityId: z.string().min(1),
   sourceMessageId: z.string().optional(),
@@ -21,14 +26,46 @@ const KnowledgeNodeDraftSchema = z.object({
     .min(1)
     .optional()
     .describe('Optional URL-safe slug for the note path. Omit it unless a stable slug is obvious.'),
-  title: z.string().min(1).describe('Human-readable note title.'),
+  title: z
+    .string()
+    .min(1)
+    .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+    .describe('Human-readable note title. Keep it specific and concise.'),
   content: z
     .string()
     .min(1)
-    .describe('Markdown note content. Preserve durable facts, preferences, decisions, or history.'),
+    .max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS)
+    .describe(
+      `Markdown note content. Preserve durable facts, preferences, decisions, history, project notes, ideas, or journal entries. Maximum ${KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS} characters; if the user provides more, ask to split it into multiple notes.`,
+    ),
 });
 
 export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('list').describe('List direct child notes under a parent path.'),
+    parentPath: KnowledgeNodePathSchema.optional().describe(
+      'Optional parent path to list. Omit it to list root-level notes.',
+    ),
+    includeInactive: z
+      .boolean()
+      .optional()
+      .describe('Whether to include inactive/superseded notes. Defaults to false.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(KNOWLEDGE_TOOL_LIST_MAX_ITEMS)
+      .optional()
+      .describe(`Maximum notes to return. Defaults to ${KNOWLEDGE_TOOL_LIST_MAX_ITEMS}.`),
+  }),
+  z.object({
+    action: z.literal('read').describe('Read one existing knowledge note by path.'),
+    path: KnowledgeNodePathSchema.describe("Existing node path for 'read'."),
+    includeInactive: z
+      .boolean()
+      .optional()
+      .describe('Whether an inactive/superseded note may be read. Defaults to false.'),
+  }),
   z.object({
     action: z.literal('create').describe('Create a new durable note.'),
     node: KnowledgeNodeDraftSchema.describe("Node draft for 'create'."),
@@ -38,8 +75,19 @@ export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
     path: KnowledgeNodePathSchema.describe("Existing active node path for 'update'."),
     update: z
       .object({
-        title: z.string().min(1).optional().describe('Optional updated title.'),
-        content: z.string().min(1).describe('Updated markdown note content.'),
+        title: z
+          .string()
+          .min(1)
+          .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+          .optional()
+          .describe('Optional updated title. Keep it specific and concise.'),
+        content: z
+          .string()
+          .min(1)
+          .max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS)
+          .describe(
+            `Updated complete standalone markdown note content. Maximum ${KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS} characters.`,
+          ),
       })
       .describe("Updated note data for 'update'."),
   }),
@@ -55,12 +103,46 @@ export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
       "Optional existing active replacement path for 'supersede'. Use this instead of node when the replacement already exists.",
     ),
   }),
+  z.object({
+    action: z
+      .literal('deactivate')
+      .describe(
+        'Mark an active note inactive without deleting it. Use for forget/archive requests.',
+      ),
+    path: KnowledgeNodePathSchema.describe("Existing active node path for 'deactivate'."),
+  }),
+  z.object({
+    action: z
+      .literal('move')
+      .describe('Move and/or rename an active note path while preserving its subtree.'),
+    path: KnowledgeNodePathSchema.describe("Existing active node path for 'move'."),
+    move: z
+      .object({
+        parentPath: KnowledgeNodePathSchema.nullable()
+          .optional()
+          .describe('New parent path. Use null to move to root. Omit to keep the same parent.'),
+        slug: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Optional new path slug. Omit to keep the current slug.'),
+        title: z
+          .string()
+          .min(1)
+          .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+          .optional()
+          .describe('Optional updated note title. Omit to keep the current title.'),
+      })
+      .describe("Move/rename data for 'move'."),
+  }),
 ]);
 
 const KnowledgeToolNodeSchema = z.object({
   id: z.string(),
   path: z.string(),
+  parentPath: z.string().nullable().optional(),
   title: z.string(),
+  content: z.string().optional(),
   active: z.boolean(),
 });
 
@@ -69,6 +151,7 @@ export const ManageKnowledgeToolOutputSchema = z.object({
   message: z.string(),
   operationId: z.string().optional(),
   node: KnowledgeToolNodeSchema.optional(),
+  nodes: z.array(KnowledgeToolNodeSchema).optional(),
   supersededNode: KnowledgeToolNodeSchema.optional(),
 });
 
@@ -77,12 +160,73 @@ export const ImplicitKnowledgeExtractionSchema = z.object({
     .array(
       z.object({
         parentPath: KnowledgeNodePathSchema.nullish().transform((value) => value ?? undefined),
-        slug: z.string().min(1).optional(),
-        title: z.string().min(1),
-        content: z.string().min(1),
+        slug: z
+          .string()
+          .min(1)
+          .nullish()
+          .transform((value) => value ?? undefined),
+        title: z.string().min(1).max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS),
+        content: z.string().min(1).max(IMPLICIT_KNOWLEDGE_CONTENT_MAX_CHARACTERS),
         confidence: z.number().min(0).max(1),
-        reason: z.string().min(1).optional(),
+        reason: z
+          .string()
+          .min(1)
+          .nullish()
+          .transform((value) => value ?? undefined),
       }),
     )
     .max(5),
+});
+
+export const ImplicitKnowledgeExtractionModelOutputSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        parentPath: KnowledgeNodePathSchema.nullable(),
+        slug: z.string().min(1).nullable(),
+        title: z.string().min(1).max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS),
+        content: z.string().min(1).max(IMPLICIT_KNOWLEDGE_CONTENT_MAX_CHARACTERS),
+        confidence: z.number().min(0).max(1),
+        reason: z.string().min(1).nullable(),
+      }),
+    )
+    .max(5),
+});
+
+export const ImplicitKnowledgeIngestionDecisionSchema = z.object({
+  action: z.enum(['skip', 'update', 'supersede', 'create']),
+  targetPath: KnowledgeNodePathSchema.nullish().transform((value) => value ?? undefined),
+  parentPath: KnowledgeNodePathSchema.nullish().transform((value) => value ?? undefined),
+  slug: z
+    .string()
+    .min(1)
+    .nullish()
+    .transform((value) => value ?? undefined),
+  title: z
+    .string()
+    .min(1)
+    .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+    .nullish()
+    .transform((value) => value ?? undefined),
+  content: z
+    .string()
+    .min(1)
+    .max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS)
+    .nullish()
+    .transform((value) => value ?? undefined),
+  reason: z
+    .string()
+    .min(1)
+    .nullish()
+    .transform((value) => value ?? undefined),
+});
+
+export const ImplicitKnowledgeIngestionDecisionModelOutputSchema = z.object({
+  action: z.enum(['skip', 'update', 'supersede', 'create']),
+  targetPath: KnowledgeNodePathSchema.nullable(),
+  parentPath: KnowledgeNodePathSchema.nullable(),
+  slug: z.string().min(1).nullable(),
+  title: z.string().min(1).max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS).nullable(),
+  content: z.string().min(1).max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS).nullable(),
+  reason: z.string().min(1).nullable(),
 });
