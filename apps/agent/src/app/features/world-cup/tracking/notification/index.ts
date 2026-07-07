@@ -119,12 +119,12 @@ export class WorldCupNotificationService {
       const result = await AIService.generate({
         reasoning: 'xhigh',
         instructions: dedent`
-          Write a short Telegram notification for a FIFA World Cup 2026 event.
+          Write a short message notification for a FIFA World Cup 2026 event.
           Use the prior conversation only to match the user's tone and preferences.
           Do not invent football facts, times, scorers, teams, or scores.
           Use country flag emojis from the payload when they are available.
           Vary wording, sentence rhythm, and openings between notifications so the message does not read like a fixed template.
-          Keep it natural, direct, and concise. Use markdown only when helpful.
+          Keep it natural, direct, and concise. Use markdown only when helpful. Do not include any hashtags, or links that are not in the payload.
         `,
         messages: [
           ...context,
