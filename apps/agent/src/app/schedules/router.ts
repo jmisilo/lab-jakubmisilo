@@ -39,6 +39,8 @@ export const ScheduleRouter = new Hono()
       const result = await AgentScheduleRunner.executeTask({
         bot,
         taskId: parsedPayload.data.taskId,
+        scheduleKind: parsedPayload.data.scheduleKind,
+        scheduledFor: parseOptionalDate(parsedPayload.data.scheduledFor),
       });
 
       return c.json({ ok: true, result });
@@ -74,6 +76,8 @@ export const ScheduleRouter = new Hono()
 
       const result = await AgentScheduleRunner.handleExecutionExhausted({
         taskId: parsedFailure.taskId,
+        scheduleKind: parsedFailure.scheduleKind,
+        scheduledFor: parsedFailure.scheduledFor,
         failure: parsedFailure.failure,
       });
 
@@ -165,6 +169,8 @@ function parseFailureCallbackBody(body: string):
   | {
       ok: true;
       taskId: string;
+      scheduleKind?: 'one_time' | 'recurring';
+      scheduledFor?: Date;
       failure: {
         status?: number;
         retried?: number;
@@ -191,6 +197,8 @@ function parseFailureCallbackBody(body: string):
   return {
     ok: true,
     taskId: parsedSourceBody.data.taskId,
+    scheduleKind: parsedSourceBody.data.scheduleKind,
+    scheduledFor: parseOptionalDate(parsedSourceBody.data.scheduledFor),
     failure: {
       status: parsedCallback.data.status,
       retried: parsedCallback.data.retried,
@@ -203,6 +211,16 @@ function parseFailureCallbackBody(body: string):
 
 function decodeBase64Text(value: string) {
   return Buffer.from(value, 'base64').toString('utf8');
+}
+
+function parseOptionalDate(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function parseJsonBody(body: string) {

@@ -2,8 +2,11 @@ import type {
   CancelScheduleTaskInput,
   CreateScheduleTaskInput,
   ListScheduleTasksInput,
+  PauseScheduleTaskInput,
+  ResumeScheduleTaskInput,
   ScheduleDayOfWeek,
   ScheduledTaskRecurrence,
+  UpdateScheduleTaskInput,
 } from '@/app/schedules/types';
 import type { AgentScheduledTask } from '@/types';
 
@@ -213,20 +216,186 @@ export class AgentScheduleService {
       },
     });
 
-    await QStashService.cancelScheduledTask({
+    await this.#cancelExternalTrigger({
+      taskId,
       qstashMessageId: task.qstashMessageId,
       qstashScheduleId: task.qstashScheduleId,
-    }).catch((error: unknown) => {
-      logger.error(
-        {
-          taskId,
-          error,
-        },
-        '[AGENT_SCHEDULE]: external trigger cancellation failed',
-      );
+      logMessage: '[AGENT_SCHEDULE]: external trigger cancellation failed',
     });
 
     return task;
+  }
+
+  static async updateTask({
+    identityId,
+    threadId,
+    taskId,
+    title,
+    prompt,
+    schedule,
+    userFacingSchedule,
+  }: UpdateScheduleTaskInput) {
+    if (!title && !prompt && !schedule) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_INVALID,
+        message: 'Scheduled task update must include title, prompt, or schedule.',
+        context: { identityId, threadId, taskId },
+        retryable: false,
+        userMessage: 'Tell me what to change on that schedule.',
+      });
+    }
+
+    const task = await this.#getMutableTask({ identityId, threadId, taskId });
+    const normalizedTitle =
+      title === undefined
+        ? undefined
+        : this.#normalizeRequiredText({
+            value: title,
+            field: 'title',
+            maxCharacters: this.taskTitleCharacterLimit,
+          });
+    const normalizedPrompt =
+      prompt === undefined
+        ? undefined
+        : this.#normalizeRequiredText({
+            value: prompt,
+            field: 'prompt',
+            maxCharacters: this.taskPromptCharacterLimit,
+          });
+    const resolvedSchedule = schedule
+      ? this.#resolveSchedule({
+          schedule,
+          now: new Date(),
+        })
+      : undefined;
+
+    if (
+      resolvedSchedule &&
+      task.status === 'active' &&
+      resolvedSchedule.scheduleKind !== task.scheduleKind
+    ) {
+      await this.#assertActiveTaskLimit({
+        identityId,
+        scheduleKind: resolvedSchedule.scheduleKind,
+      });
+    }
+
+    const externalTrigger =
+      resolvedSchedule && task.status === 'active'
+        ? await this.#scheduleExternalTrigger({
+            taskId,
+            resolvedSchedule,
+          })
+        : undefined;
+
+    try {
+      const updatedTask = await AgentScheduleDbService.updateTask({
+        identityId,
+        threadId,
+        taskId,
+        title: normalizedTitle,
+        prompt: normalizedPrompt,
+        scheduleKind: resolvedSchedule?.scheduleKind,
+        timeZone: resolvedSchedule?.timeZone,
+        nextRunAt: resolvedSchedule?.nextRunAt,
+        recurrence: resolvedSchedule?.recurrence,
+        qstashMessageId: externalTrigger
+          ? externalTrigger.qstashMessageId
+          : resolvedSchedule && task.status === 'paused'
+            ? null
+            : undefined,
+        qstashScheduleId: externalTrigger
+          ? externalTrigger.qstashScheduleId
+          : resolvedSchedule && task.status === 'paused'
+            ? null
+            : undefined,
+        metadata: this.#buildScheduleMetadata({ userFacingSchedule }),
+      });
+
+      if (externalTrigger) {
+        await this.#cancelPreviousExternalTrigger({ task, externalTrigger });
+      }
+
+      return updatedTask;
+    } catch (error) {
+      if (externalTrigger) {
+        await this.#cancelExternalTrigger({
+          taskId,
+          qstashMessageId: externalTrigger.qstashMessageId,
+          qstashScheduleId: externalTrigger.qstashScheduleId,
+          logMessage: '[AGENT_SCHEDULE]: new external trigger cleanup failed after update error',
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  static async pauseTask({ identityId, threadId, taskId, reason }: PauseScheduleTaskInput) {
+    const task = await AgentScheduleDbService.pauseTask({
+      identityId,
+      threadId,
+      taskId,
+      metadata: this.#definedMetadata({
+        pausedAt: new Date().toISOString(),
+        pauseReason: reason,
+      }),
+    });
+
+    await this.#cancelExternalTrigger({
+      taskId,
+      qstashMessageId: task.qstashMessageId,
+      qstashScheduleId: task.qstashScheduleId,
+      logMessage: '[AGENT_SCHEDULE]: external trigger pause cancellation failed',
+    });
+
+    return task;
+  }
+
+  static async resumeTask({ identityId, threadId, taskId }: ResumeScheduleTaskInput) {
+    const task = await this.#getMutableTask({ identityId, threadId, taskId });
+
+    if (task.status !== 'paused') {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_INVALID,
+        message: 'Only paused scheduled tasks can be resumed.',
+        context: { identityId, threadId, taskId, status: task.status },
+        retryable: false,
+        userMessage: 'That schedule is not paused.',
+      });
+    }
+
+    const resolvedSchedule = this.#resolveStoredScheduleForResume({
+      task,
+      now: new Date(),
+    });
+    const externalTrigger = await this.#scheduleExternalTrigger({
+      taskId,
+      resolvedSchedule,
+    });
+
+    try {
+      return await AgentScheduleDbService.resumeTask({
+        identityId,
+        threadId,
+        taskId,
+        nextRunAt: resolvedSchedule.nextRunAt,
+        qstashMessageId: externalTrigger.qstashMessageId,
+        qstashScheduleId: externalTrigger.qstashScheduleId,
+        metadata: {
+          resumedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      await this.#cancelExternalTrigger({
+        taskId,
+        qstashMessageId: externalTrigger.qstashMessageId,
+        qstashScheduleId: externalTrigger.qstashScheduleId,
+        logMessage: '[AGENT_SCHEDULE]: resumed external trigger cleanup failed',
+      });
+
+      throw error;
+    }
   }
 
   static getNextRunAtForTask({ task, now }: { task: AgentScheduledTask; now: Date }) {
@@ -265,6 +434,131 @@ export class AgentScheduleService {
           : `each ${recurrence.daysOfWeek.join(', ')}`;
 
     return `Recurring task ${days} at ${recurrence.timeOfDay} (${task.timeZone}).`;
+  }
+
+  static async #getMutableTask({
+    identityId,
+    threadId,
+    taskId,
+  }: {
+    identityId: string;
+    threadId: string;
+    taskId: string;
+  }) {
+    const task = await AgentScheduleDbService.getTaskForUser({
+      identityId,
+      threadId,
+      taskId,
+    });
+
+    if (!task || !['active', 'paused'].includes(task.status)) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
+        message: 'Active or paused scheduled task was not found.',
+        context: { identityId, threadId, taskId },
+        retryable: false,
+      });
+    }
+
+    return task;
+  }
+
+  static #resolveStoredScheduleForResume({ task, now }: { task: AgentScheduledTask; now: Date }) {
+    if (task.scheduleKind === 'one_time') {
+      if (task.nextRunAt <= now) {
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_INVALID,
+          message: 'Paused one-time schedule time has already passed.',
+          context: {
+            taskId: task.id,
+            nextRunAt: task.nextRunAt.toISOString(),
+            now: now.toISOString(),
+          },
+          retryable: false,
+          userMessage: 'That reminder time has already passed. Move it to a future time first.',
+        });
+      }
+
+      return {
+        scheduleKind: 'one_time' as const,
+        timeZone: task.timeZone,
+        nextRunAt: task.nextRunAt,
+        recurrence: {},
+      };
+    }
+
+    const recurrence = this.#parseStoredRecurrence(task);
+
+    return {
+      scheduleKind: 'recurring' as const,
+      timeZone: task.timeZone,
+      nextRunAt: this.#findNextRecurringRunAt({
+        daysOfWeek: recurrence.daysOfWeek,
+        timeOfDay: recurrence.timeOfDay,
+        timeZone: task.timeZone,
+        now,
+      }),
+      recurrence,
+    };
+  }
+
+  static async #cancelPreviousExternalTrigger({
+    task,
+    externalTrigger,
+  }: {
+    task: AgentScheduledTask;
+    externalTrigger: {
+      qstashMessageId: string | null;
+      qstashScheduleId: string | null;
+    };
+  }) {
+    await this.#cancelExternalTrigger({
+      taskId: task.id,
+      qstashMessageId:
+        task.qstashMessageId !== externalTrigger.qstashMessageId ? task.qstashMessageId : null,
+      qstashScheduleId:
+        task.qstashScheduleId !== externalTrigger.qstashScheduleId ? task.qstashScheduleId : null,
+      logMessage: '[AGENT_SCHEDULE]: previous external trigger cancellation failed',
+    });
+  }
+
+  static async #cancelExternalTrigger({
+    taskId,
+    qstashMessageId,
+    qstashScheduleId,
+    logMessage,
+  }: {
+    taskId: string;
+    qstashMessageId?: string | null;
+    qstashScheduleId?: string | null;
+    logMessage: string;
+  }) {
+    if (!qstashMessageId && !qstashScheduleId) {
+      return;
+    }
+
+    await QStashService.cancelScheduledTask({
+      qstashMessageId,
+      qstashScheduleId,
+    }).catch((error: unknown) => {
+      logger.error(
+        {
+          taskId,
+          error,
+        },
+        logMessage,
+      );
+    });
+  }
+
+  static #buildScheduleMetadata({ userFacingSchedule }: { userFacingSchedule?: string }) {
+    return this.#definedMetadata({
+      userFacingSchedule,
+    });
+  }
+
+  static #definedMetadata(metadata: Record<string, unknown>) {
+    return Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined));
   }
 
   static #resolveSchedule({

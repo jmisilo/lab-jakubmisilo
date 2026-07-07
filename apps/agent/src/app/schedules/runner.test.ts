@@ -3,6 +3,7 @@ import type { AgentScheduleRunner as AgentScheduleRunnerType } from '@/app/sched
 const mockAgentScheduleDbService = {
   getTaskById: jest.fn(),
   createTaskRun: jest.fn(),
+  getTaskRunByScheduledFor: jest.fn(),
   markTaskRunSent: jest.fn(),
   markTaskRunFailed: jest.fn(),
   completeTask: jest.fn(),
@@ -65,17 +66,16 @@ describe('AgentScheduleRunner', () => {
         qstashFailureCallback: true,
       },
     });
-    const thread = {
-      id: 'telegram:1',
-      post: jest.fn(),
-    };
-    const bot = {
-      thread: jest.fn(() => thread),
-      transcripts: {
-        list: jest.fn().mockResolvedValue([]),
-        append: jest.fn(),
-      },
-    };
+    const thread = createThread();
+    const bot = createBot({
+      thread,
+      shortTermMemory: [
+        {
+          role: 'user',
+          text: 'I prefer short reminders.',
+        },
+      ],
+    });
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
     mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
@@ -85,6 +85,12 @@ describe('AgentScheduleRunner', () => {
     mockAgentService.generate.mockResolvedValue({
       text: 'Tennis starts at 7pm.',
     });
+    mockAgentMemoryService.buildContext.mockResolvedValue([
+      {
+        role: 'user',
+        content: 'Durable knowledge: the user prefers short reminders.',
+      },
+    ]);
 
     const result = await AgentScheduleRunner.executeTask({
       bot: bot as never,
@@ -96,6 +102,24 @@ describe('AgentScheduleRunner', () => {
       taskId: 'task-1',
       scheduledFor: new Date('2026-07-06T17:00:00.000Z'),
     });
+    expect(bot.initialize).toHaveBeenCalledTimes(1);
+    expect(bot.initialize.mock.invocationCallOrder[0]!).toBeLessThan(
+      mockAgentScheduleDbService.createTaskRun.mock.invocationCallOrder[0]!,
+    );
+    expect(mockAgentMemoryService.buildContext).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      shortTermMemory: [
+        {
+          role: 'user',
+          text: 'I prefer short reminders.',
+        },
+        {
+          role: 'user',
+          text: task.prompt,
+        },
+      ],
+    });
     expect(mockAgentService.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         identityId: 'identity-1',
@@ -104,6 +128,18 @@ describe('AgentScheduleRunner', () => {
         mode: 'scheduled_task',
       }),
     );
+    const generateInput = mockAgentService.generate.mock.calls[0][0];
+
+    expect(generateInput.messages).toEqual(
+      expect.arrayContaining([
+        {
+          role: 'user',
+          content: 'Durable knowledge: the user prefers short reminders.',
+        },
+      ]),
+    );
+    expect(generateInput.messages.at(-1)?.content).toContain('# Context Available');
+    expect(generateInput.messages.at(-1)?.content).toContain('# Tool Use');
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Tennis starts at 7pm.' });
     expect(bot.transcripts.append).toHaveBeenCalledWith(
       thread,
@@ -130,7 +166,7 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
-  it('skips a triggered task when another delivery already claimed the scheduled run', async () => {
+  it('recovers task advancement when another delivery already posted the scheduled run', async () => {
     const task = createTask({
       id: 'task-1',
       scheduleKind: 'one_time',
@@ -142,25 +178,65 @@ describe('AgentScheduleRunner', () => {
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
     mockAgentScheduleDbService.createTaskRun.mockResolvedValue(null);
+    mockAgentScheduleDbService.getTaskRunByScheduledFor.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+      status: 'sent',
+      scheduledFor: new Date('2026-07-06T17:00:00.000Z'),
+    });
 
     const result = await AgentScheduleRunner.executeTask({
-      bot: {
-        thread: jest.fn(),
-        transcripts: {
-          list: jest.fn(),
-          append: jest.fn(),
-        },
-      } as never,
+      bot: createBot() as never,
       taskId: 'task-1',
       now: new Date('2026-07-06T17:00:30.000Z'),
     });
 
     expect(mockAgentService.generate).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.completeTask).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+    });
     expect(result).toEqual({
       taskId: 'task-1',
-      status: 'skipped',
-      reason: 'already_claimed',
+      status: 'sent',
+      reason: 'already_sent_recovered',
     });
+  });
+
+  it('retries instead of swallowing a task when another delivery is still running', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      metadata: {
+        qstashFailureCallback: true,
+      },
+    });
+
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue(null);
+    mockAgentScheduleDbService.getTaskRunByScheduledFor.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+      status: 'running',
+      scheduledFor: new Date('2026-07-06T17:00:00.000Z'),
+    });
+
+    await expect(
+      AgentScheduleRunner.executeTask({
+        bot: createBot() as never,
+        taskId: 'task-1',
+        now: new Date('2026-07-06T17:00:30.000Z'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_TASK_EXECUTION_FAILED',
+      retryable: true,
+      context: expect.objectContaining({
+        runStatus: 'running',
+      }),
+    });
+
+    expect(mockAgentService.generate).not.toHaveBeenCalled();
   });
 
   it('skips when the task is inactive', async () => {
@@ -174,13 +250,7 @@ describe('AgentScheduleRunner', () => {
     );
 
     const result = await AgentScheduleRunner.executeTask({
-      bot: {
-        thread: jest.fn(),
-        transcripts: {
-          list: jest.fn(),
-          append: jest.fn(),
-        },
-      } as never,
+      bot: createBot() as never,
       taskId: 'task-1',
       now: new Date('2026-07-06T17:00:30.000Z'),
     });
@@ -193,18 +263,36 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
+  it('skips stale deliveries from an old schedule kind after a task is changed', async () => {
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        scheduleKind: 'one_time',
+        nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      }),
+    );
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot() as never,
+      taskId: 'task-1',
+      scheduleKind: 'recurring',
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      taskId: 'task-1',
+      status: 'skipped',
+      reason: 'stale_payload',
+    });
+  });
+
   it('fails retryably when QStash delivers before the task exists in DB', async () => {
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(null);
 
     await expect(
       AgentScheduleRunner.executeTask({
-        bot: {
-          thread: jest.fn(),
-          transcripts: {
-            list: jest.fn(),
-            append: jest.fn(),
-          },
-        } as never,
+        bot: createBot() as never,
         taskId: 'task-1',
         now: new Date('2026-07-06T17:00:30.000Z'),
       }),
@@ -221,17 +309,8 @@ describe('AgentScheduleRunner', () => {
       scheduleKind: 'one_time',
       nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
     });
-    const thread = {
-      id: 'telegram:1',
-      post: jest.fn(),
-    };
-    const bot = {
-      thread: jest.fn(() => thread),
-      transcripts: {
-        list: jest.fn().mockResolvedValue([]),
-        append: jest.fn(),
-      },
-    };
+    const thread = createThread();
+    const bot = createBot({ thread });
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
     mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
@@ -264,17 +343,8 @@ describe('AgentScheduleRunner', () => {
         qstashFailureCallback: true,
       },
     });
-    const thread = {
-      id: 'telegram:1',
-      post: jest.fn(),
-    };
-    const bot = {
-      thread: jest.fn(() => thread),
-      transcripts: {
-        list: jest.fn().mockResolvedValue([]),
-        append: jest.fn(),
-      },
-    };
+    const thread = createThread();
+    const bot = createBot({ thread });
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
     mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
@@ -320,17 +390,8 @@ describe('AgentScheduleRunner', () => {
         qstashFailureCallback: true,
       },
     });
-    const thread = {
-      id: 'telegram:1',
-      post: jest.fn(),
-    };
-    const bot = {
-      thread: jest.fn(() => thread),
-      transcripts: {
-        list: jest.fn().mockResolvedValue([]),
-        append: jest.fn(),
-      },
-    };
+    const thread = createThread();
+    const bot = createBot({ thread });
     const error = new Error('model unavailable');
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
@@ -366,17 +427,8 @@ describe('AgentScheduleRunner', () => {
       scheduleKind: 'one_time',
       nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
     });
-    const thread = {
-      id: 'telegram:1',
-      post: jest.fn(),
-    };
-    const bot = {
-      thread: jest.fn(() => thread),
-      transcripts: {
-        list: jest.fn().mockResolvedValue([]),
-        append: jest.fn(),
-      },
-    };
+    const thread = createThread();
+    const bot = createBot({ thread });
     const error = new Error('model unavailable');
 
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
@@ -478,5 +530,29 @@ function createTask({
     failedAt: null,
     createdAt: new Date('2026-07-06T10:00:00.000Z'),
     updatedAt: new Date('2026-07-06T10:00:00.000Z'),
+  };
+}
+
+function createThread() {
+  return {
+    id: 'telegram:1',
+    post: jest.fn(),
+  };
+}
+
+function createBot({
+  thread = createThread(),
+  shortTermMemory = [],
+}: {
+  thread?: ReturnType<typeof createThread>;
+  shortTermMemory?: Array<{ role: 'user' | 'assistant'; text: string }>;
+} = {}) {
+  return {
+    initialize: jest.fn(),
+    thread: jest.fn(() => thread),
+    transcripts: {
+      list: jest.fn().mockResolvedValue(shortTermMemory),
+      append: jest.fn(),
+    },
   };
 }

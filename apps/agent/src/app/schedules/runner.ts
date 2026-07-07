@@ -3,7 +3,7 @@ import type {
   ExecuteScheduleTaskResult,
   HandleScheduleTaskExecutionExhaustedInput,
 } from '@/app/schedules/types';
-import type { AgentScheduledTask } from '@/types';
+import type { AgentScheduledTask, AgentScheduledTaskRun } from '@/types';
 
 import dedent from 'dedent';
 
@@ -21,6 +21,8 @@ export class AgentScheduleRunner {
   static async executeTask({
     bot,
     taskId,
+    scheduleKind: payloadScheduleKind,
+    scheduledFor: payloadScheduledFor,
     now = new Date(),
   }: ExecuteScheduleTaskInput): Promise<ExecuteScheduleTaskResult> {
     logger.info(
@@ -51,7 +53,35 @@ export class AgentScheduleRunner {
       return { taskId, status: 'skipped', reason: 'task_not_active' };
     }
 
-    const earlyByMs = task.nextRunAt.getTime() - now.getTime();
+    if (payloadScheduleKind && payloadScheduleKind !== task.scheduleKind) {
+      logger.info(
+        {
+          taskId,
+          payloadScheduleKind,
+          taskScheduleKind: task.scheduleKind,
+        },
+        '[AGENT_SCHEDULE]: stale task execution payload skipped by schedule kind',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
+    const scheduledFor = payloadScheduledFor ?? task.nextRunAt;
+
+    if (payloadScheduledFor && !this.#isSameInstant(payloadScheduledFor, task.nextRunAt)) {
+      logger.info(
+        {
+          taskId,
+          payloadScheduledFor: payloadScheduledFor.toISOString(),
+          taskNextRunAt: task.nextRunAt.toISOString(),
+        },
+        '[AGENT_SCHEDULE]: stale task execution payload skipped',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
+    const earlyByMs = scheduledFor.getTime() - now.getTime();
 
     if (earlyByMs > EARLY_DELIVERY_TOLERANCE_MS) {
       throw new AppError({
@@ -59,6 +89,7 @@ export class AgentScheduleRunner {
         message: 'Scheduled task was delivered too early.',
         context: {
           taskId,
+          scheduledFor: scheduledFor.toISOString(),
           nextRunAt: task.nextRunAt.toISOString(),
           now: now.toISOString(),
           earlyByMs,
@@ -71,6 +102,7 @@ export class AgentScheduleRunner {
       logger.warn(
         {
           taskId,
+          scheduledFor: scheduledFor.toISOString(),
           nextRunAt: task.nextRunAt.toISOString(),
           now: now.toISOString(),
           earlyByMs,
@@ -79,15 +111,15 @@ export class AgentScheduleRunner {
       );
     }
 
+    await bot.initialize();
+
     const run = await AgentScheduleDbService.createTaskRun({
       taskId: task.id,
-      scheduledFor: task.nextRunAt,
+      scheduledFor,
     });
 
     if (!run) {
-      logger.info({ taskId }, '[AGENT_SCHEDULE]: task execution already claimed');
-
-      return { taskId, status: 'skipped', reason: 'already_claimed' };
+      return this.#handleAlreadyClaimedRun({ task, scheduledFor, now });
     }
 
     let output: string;
@@ -175,6 +207,8 @@ export class AgentScheduleRunner {
 
   static async handleExecutionExhausted({
     taskId,
+    scheduleKind: payloadScheduleKind,
+    scheduledFor: payloadScheduledFor,
     now = new Date(),
     failure,
   }: HandleScheduleTaskExecutionExhaustedInput): Promise<ExecuteScheduleTaskResult> {
@@ -204,9 +238,117 @@ export class AgentScheduleRunner {
       return { taskId, status: 'skipped', reason: 'task_not_active' };
     }
 
+    if (payloadScheduleKind && payloadScheduleKind !== task.scheduleKind) {
+      logger.info(
+        {
+          taskId,
+          payloadScheduleKind,
+          taskScheduleKind: task.scheduleKind,
+        },
+        '[AGENT_SCHEDULE]: stale exhausted execution payload skipped by schedule kind',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
+    if (payloadScheduledFor && !this.#isSameInstant(payloadScheduledFor, task.nextRunAt)) {
+      logger.info(
+        {
+          taskId,
+          payloadScheduledFor: payloadScheduledFor.toISOString(),
+          taskNextRunAt: task.nextRunAt.toISOString(),
+        },
+        '[AGENT_SCHEDULE]: stale exhausted execution payload skipped',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
     await this.#advanceTaskAfterFailure({ task, ranAt: now });
 
     return { taskId, status: 'failed', reason: 'retries_exhausted' };
+  }
+
+  static async #handleAlreadyClaimedRun({
+    task,
+    scheduledFor,
+    now,
+  }: {
+    task: AgentScheduledTask;
+    scheduledFor: Date;
+    now: Date;
+  }): Promise<ExecuteScheduleTaskResult> {
+    const existingRun = await AgentScheduleDbService.getTaskRunByScheduledFor({
+      taskId: task.id,
+      scheduledFor,
+    });
+
+    if (!existingRun) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_EXECUTION_FAILED,
+        message: 'Scheduled task run claim conflicted but no existing run was found.',
+        context: {
+          taskId: task.id,
+          scheduledFor: scheduledFor.toISOString(),
+        },
+        retryable: true,
+      });
+    }
+
+    if (existingRun.status === 'sent') {
+      return this.#recoverAlreadySentRun({ task, run: existingRun, scheduledFor, now });
+    }
+
+    throw new AppError({
+      code: AppErrorCode.SCHEDULE_TASK_EXECUTION_FAILED,
+      message: 'Scheduled task run is already claimed and not complete yet.',
+      context: {
+        taskId: task.id,
+        runId: existingRun.id,
+        runStatus: existingRun.status,
+        scheduledFor: scheduledFor.toISOString(),
+      },
+      retryable: true,
+    });
+  }
+
+  static async #recoverAlreadySentRun({
+    task,
+    run,
+    scheduledFor,
+    now,
+  }: {
+    task: AgentScheduledTask;
+    run: AgentScheduledTaskRun;
+    scheduledFor: Date;
+    now: Date;
+  }): Promise<ExecuteScheduleTaskResult> {
+    if (!this.#isSameInstant(scheduledFor, task.nextRunAt)) {
+      logger.info(
+        {
+          taskId: task.id,
+          runId: run.id,
+          scheduledFor: scheduledFor.toISOString(),
+          taskNextRunAt: task.nextRunAt.toISOString(),
+        },
+        '[AGENT_SCHEDULE]: duplicate already-sent task execution skipped',
+      );
+
+      return { taskId: task.id, status: 'skipped', reason: 'already_sent' };
+    }
+
+    logger.warn(
+      {
+        taskId: task.id,
+        runId: run.id,
+        scheduledFor: scheduledFor.toISOString(),
+      },
+      '[AGENT_SCHEDULE]: recovering task advancement for already-sent run',
+    );
+
+    await this.#advanceTaskAfterSuccess({ task, ranAt: now });
+
+    return { taskId: task.id, status: 'sent', reason: 'already_sent_recovered' };
   }
 
   static async #generateTaskMessage({
@@ -262,10 +404,22 @@ export class AgentScheduleRunner {
 
             Title: ${task.title}
             Schedule: ${AgentScheduleService.formatTaskSchedule(task)}
+            Stored due time: ${task.nextRunAt.toISOString()} (${task.timeZone})
 
             # Stored Prompt
 
             ${task.prompt}
+
+            # Context Available
+
+            Relevant recent chat, compressed memory, durable knowledge, and current runtime time may already be included before this message.
+            Use that context when the task depends on the user's plans, preferences, location, projects, todo items, or recent conversation.
+            If the context does not contain enough information, ask a short useful follow-up instead of pretending.
+
+            # Tool Use
+
+            Use available tools when the stored prompt requires current information, such as web search, weather, local time, or World Cup context.
+            Do not claim that background work, searches, or external checks were completed unless you actually used the available tool or the needed information is already in context.
 
             # Output Rules
 
@@ -426,5 +580,9 @@ export class AgentScheduleRunner {
         '[AGENT_SCHEDULE]: task run failure recording failed',
       );
     }
+  }
+
+  static #isSameInstant(left: Date, right: Date) {
+    return left.getTime() === right.getTime();
   }
 }

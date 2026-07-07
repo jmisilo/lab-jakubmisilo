@@ -264,6 +264,7 @@ const delivery = {
 };
 
 const bot = {
+  initialize: jest.fn(),
   thread: jest.fn(),
   transcripts: {
     list: jest.fn(),

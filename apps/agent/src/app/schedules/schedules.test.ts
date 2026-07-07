@@ -2,6 +2,10 @@ import type { AgentScheduleService as AgentScheduleServiceType } from '.';
 
 const mockAgentScheduleDbService = {
   createTask: jest.fn(),
+  getTaskForUser: jest.fn(),
+  updateTask: jest.fn(),
+  pauseTask: jest.fn(),
+  resumeTask: jest.fn(),
   listTasks: jest.fn(),
   cancelTask: jest.fn(),
   countActiveTasksByKind: jest.fn(),
@@ -245,16 +249,159 @@ describe('AgentScheduleService', () => {
       qstashScheduleId: null,
     });
   });
+
+  it('updates an active one-time schedule and cancels the previous external trigger', async () => {
+    const existingTask = createTask({
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+      recurrence: {},
+      qstashMessageId: 'msg-old',
+    });
+    const updatedTask = {
+      ...existingTask,
+      title: 'Updated shopping',
+      nextRunAt: new Date('2026-07-06T15:00:00.000Z'),
+      qstashMessageId: 'msg-new',
+    };
+
+    mockAgentScheduleDbService.getTaskForUser.mockResolvedValue(existingTask);
+    mockAgentScheduleDbService.updateTask.mockResolvedValue(updatedTask);
+    mockQStashService.scheduleOneTimeTask.mockResolvedValue('msg-new');
+
+    const task = await AgentScheduleService.updateTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      title: 'Updated shopping',
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T17:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      userFacingSchedule: 'today at 17:00 Europe/Warsaw',
+    });
+
+    expect(task).toBe(updatedTask);
+    expect(mockQStashService.scheduleOneTimeTask).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      runAt: new Date('2026-07-06T15:00:00.000Z'),
+    });
+    expect(mockAgentScheduleDbService.updateTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        threadId: 'telegram:1',
+        taskId: 'task-1',
+        title: 'Updated shopping',
+        scheduleKind: 'one_time',
+        nextRunAt: new Date('2026-07-06T15:00:00.000Z'),
+        qstashMessageId: 'msg-new',
+        qstashScheduleId: null,
+        metadata: {
+          userFacingSchedule: 'today at 17:00 Europe/Warsaw',
+        },
+      }),
+    );
+    expect(mockQStashService.cancelScheduledTask).toHaveBeenCalledWith({
+      qstashMessageId: 'msg-old',
+      qstashScheduleId: null,
+    });
+  });
+
+  it('pauses an active task and cancels the external trigger', async () => {
+    mockAgentScheduleDbService.pauseTask.mockResolvedValue(
+      createTask({
+        scheduleKind: 'one_time',
+        status: 'paused',
+        nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+        recurrence: {},
+        qstashMessageId: 'msg-task-1',
+      }),
+    );
+
+    const task = await AgentScheduleService.pauseTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      reason: 'User asked to pause it.',
+    });
+
+    expect(task.status).toBe('paused');
+    expect(mockAgentScheduleDbService.pauseTask).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      metadata: expect.objectContaining({
+        pauseReason: 'User asked to pause it.',
+      }),
+    });
+    expect(mockQStashService.cancelScheduledTask).toHaveBeenCalledWith({
+      qstashMessageId: 'msg-task-1',
+      qstashScheduleId: null,
+    });
+  });
+
+  it('resumes a paused recurring task with a fresh next run and QStash schedule', async () => {
+    const pausedTask = createTask({
+      status: 'paused',
+      nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+      recurrence: {
+        frequency: 'weekdays',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+        timeOfDay: '09:00',
+      },
+      qstashScheduleId: 'agent-task-task-1',
+    });
+    const resumedTask = {
+      ...pausedTask,
+      status: 'active' as const,
+      nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+    };
+
+    mockAgentScheduleDbService.getTaskForUser.mockResolvedValue(pausedTask);
+    mockAgentScheduleDbService.resumeTask.mockResolvedValue(resumedTask);
+    mockQStashService.scheduleRecurringTask.mockResolvedValue('agent-task-task-1');
+
+    const task = await AgentScheduleService.resumeTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+    });
+
+    expect(task).toBe(resumedTask);
+    expect(mockQStashService.scheduleRecurringTask).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      recurrence: {
+        frequency: 'weekdays',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+        timeOfDay: '09:00',
+      },
+      timeZone: 'Europe/Warsaw',
+    });
+    expect(mockAgentScheduleDbService.resumeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        threadId: 'telegram:1',
+        taskId: 'task-1',
+        nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+        qstashMessageId: null,
+        qstashScheduleId: 'agent-task-task-1',
+      }),
+    );
+  });
 });
 
 function createTask({
   nextRunAt,
   recurrence,
+  scheduleKind = 'recurring',
+  status = 'active',
   qstashMessageId = null,
   qstashScheduleId = null,
 }: {
   nextRunAt: Date;
   recurrence: Record<string, unknown>;
+  scheduleKind?: 'one_time' | 'recurring';
+  status?: 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
   qstashMessageId?: string | null;
   qstashScheduleId?: string | null;
 }) {
@@ -264,8 +411,8 @@ function createTask({
     threadId: 'telegram:1',
     title: 'Shopping',
     prompt: 'Remind the user about shopping.',
-    scheduleKind: 'recurring',
-    status: 'active',
+    scheduleKind,
+    status,
     timeZone: 'Europe/Warsaw',
     nextRunAt,
     recurrence,

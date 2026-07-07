@@ -1,6 +1,9 @@
 const mockAgentScheduleService = {
   createTask: jest.fn(),
   listTasks: jest.fn(),
+  updateTask: jest.fn(),
+  pauseTask: jest.fn(),
+  resumeTask: jest.fn(),
   cancelTask: jest.fn(),
   formatTaskSchedule: jest.fn(),
 };
@@ -169,6 +172,112 @@ describe('manageScheduleTool', () => {
       },
     });
   });
+
+  it('updates an existing scheduled task', async () => {
+    mockAgentScheduleService.updateTask.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        title: 'Moved reminder',
+        prompt: 'Send the user a short reminder.',
+        scheduleKind: 'one_time',
+        nextRunAt: new Date('2026-07-06T18:00:00.000Z'),
+      }),
+    );
+
+    const result = await executeManageScheduleTool({
+      action: 'update',
+      taskId: 'task-1',
+      title: 'Moved reminder',
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T20:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      userFacingSchedule: 'today at 20:00 Europe/Warsaw',
+    });
+
+    expect(mockAgentScheduleService.updateTask).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      title: 'Moved reminder',
+      prompt: undefined,
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T20:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      userFacingSchedule: 'today at 20:00 Europe/Warsaw',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message: 'Update confirmed: "Moved reminder" is set for today at 19:00 Europe/Warsaw',
+      }),
+    );
+  });
+
+  it('pauses an active scheduled task', async () => {
+    mockAgentScheduleService.pauseTask.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        title: 'Daily todo prep',
+        prompt: 'Ask the user to prepare their todo list.',
+        scheduleKind: 'recurring',
+        status: 'paused',
+        nextRunAt: new Date('2026-07-07T07:00:00.000Z'),
+      }),
+    );
+
+    const result = await executeManageScheduleTool({
+      action: 'pause',
+      taskId: 'task-1',
+      reason: 'User asked to pause it.',
+    });
+
+    expect(mockAgentScheduleService.pauseTask).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      reason: 'User asked to pause it.',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message: 'Pause confirmed: "Daily todo prep" is paused.',
+      }),
+    );
+  });
+
+  it('resumes a paused scheduled task', async () => {
+    mockAgentScheduleService.resumeTask.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        title: 'Daily todo prep',
+        prompt: 'Ask the user to prepare their todo list.',
+        scheduleKind: 'recurring',
+        nextRunAt: new Date('2026-07-07T07:00:00.000Z'),
+      }),
+    );
+
+    const result = await executeManageScheduleTool({
+      action: 'resume',
+      taskId: 'task-1',
+    });
+
+    expect(mockAgentScheduleService.resumeTask).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message:
+          'Resume confirmed: "Daily todo prep" is active again for today at 19:00 Europe/Warsaw',
+      }),
+    );
+  });
 });
 
 async function executeManageScheduleTool(
@@ -201,7 +310,7 @@ function createTask({
   title: string;
   prompt: string;
   scheduleKind: 'one_time' | 'recurring';
-  status?: 'active' | 'completed' | 'cancelled' | 'failed';
+  status?: 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
   nextRunAt: Date;
 }) {
   return {

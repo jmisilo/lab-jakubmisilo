@@ -27,6 +27,8 @@ export class WorldCupNotificationService {
       { eventKey: event.eventKey, identityId, threadId },
       '[WORLD_CUP]: composing notification',
     );
+    await bot.initialize();
+
     const thread = bot.thread(threadId);
     const message = await this.#composeNotification({
       bot,
@@ -177,6 +179,7 @@ export class WorldCupNotificationService {
 }
 
 export type WorldCupNotificationBot = {
+  initialize(): Promise<void>;
   thread(threadId: string): Thread;
   transcripts: {
     list(input: { userKey: string; threadId: string; limit: number }): Promise<ShortTermMemory[]>;
