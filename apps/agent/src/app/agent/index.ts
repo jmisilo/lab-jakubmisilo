@@ -39,6 +39,9 @@ export class AgentService {
      * AI SDK requires initial context objects for tools with context schemas. These sentinels are not used for persistence because `prepareCall` disables context-dependent tools until real call options provide the required identity/thread context.
      */
     toolsContext: {
+      'read-knowledge': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
       'manage-knowledge': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
@@ -84,6 +87,10 @@ export class AgentService {
           } satisfies OpenAILanguageModelResponsesOptions,
         },
         toolsContext: {
+          'read-knowledge': {
+            identityId,
+            sourceMessageId: options?.sourceMessageId,
+          },
           'manage-knowledge': {
             identityId,
             sourceMessageId: options?.sourceMessageId,
@@ -194,6 +201,11 @@ export class AgentService {
       'get-weather',
       'get-local-time',
     ];
+
+    if (options?.identityId) {
+      activeTools.push('read-knowledge');
+    }
+
     if (options?.mode === 'scheduled_task') {
       return activeTools;
     }

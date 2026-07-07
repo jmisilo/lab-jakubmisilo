@@ -22,6 +22,24 @@ Each node can be a concise memory, a group description, a project note, an idea 
 
 The same database table stores both short memories and longer notes. Long notes are allowed, but one note is capped at 20,000 characters. If the user provides more than that, split it into multiple focused notes or ask how they want it split.
 
+## Tool Split
+
+Use `read-knowledge` for inspection only:
+
+- `list`
+- `explore`
+- `read`
+
+Use `manage-knowledge` for changes only:
+
+- `create`
+- `update`
+- `deactivate`
+- `move`
+- `supersede`
+
+If you need to edit an existing note but do not know the exact path or current content, use `read-knowledge` first, then call `manage-knowledge` only after the target is clear.
+
 ## Save Rules
 
 Save information when it is durable and useful later:
@@ -41,23 +59,25 @@ Do not save:
 
 ## Inspect And Correct
 
-Use `list` when the user asks what is remembered/saved under a topic, or when you need to locate a note before editing it. Omit `parentPath` to list root notes.
+Use `read-knowledge` `list` when the user asks what is remembered/saved under a topic, or when you need to locate a note before editing it. Omit `parentPath` to list root notes.
 
-Use `read` when the user asks what a note contains, asks to show saved information, or when you need the complete current content before rewriting a note.
+Use `read-knowledge` `explore` when a broad topic may map to multiple related notes or deeper child notes. Start from a known path when available, or provide a query when the path is not obvious. Explore returns bounded previews and tree relationships; use `read` afterward for the full content of selected notes.
 
-Use `deactivate` for forget/archive/no-longer-active requests when no replacement note is needed. Do not hard-delete knowledge through chat. Deactivated notes preserve history and stop being active context.
+Use `read-knowledge` `read` when the user asks what a note contains, asks to show saved information, or when you need the complete current content before rewriting a note.
 
-Use `move` when the user asks to rename a note path, move a note under another parent, retitle a note, or reorganize a subtree. Moving a note should preserve its child notes.
+Use `manage-knowledge` `deactivate` for forget/archive/no-longer-active requests when no replacement note is needed. Do not hard-delete knowledge through chat. Deactivated notes preserve history and stop being active context.
+
+Use `manage-knowledge` `move` when the user asks to rename a note path, move a note under another parent, retitle a note, or reorganize a subtree. Moving a note should preserve its child notes.
 
 When answering "what do you remember?", do not expose database IDs, operation IDs, retrieval scores, source message IDs, or raw tool payloads. Summarize the note content naturally.
 
 ## Create, Update, Supersede
 
-Use `create` when no active note already covers the fact.
+Use `manage-knowledge` `create` when no active note already covers the fact.
 
-Use `update` when the same active note should be edited in place. The updated content must be complete standalone markdown, not a diff.
+Use `manage-knowledge` `update` when the same active note should be edited in place. The updated content must be complete standalone markdown, not a diff.
 
-Use `supersede` when a new fact replaces an older useful fact and the old fact should remain as inactive history. Example: if the user says they now work at Company Y and Company X was known as current work, create Company Y and supersede the Company X current-work fact.
+Use `manage-knowledge` `supersede` when a new fact replaces an older useful fact and the old fact should remain as inactive history. Example: if the user says they now work at Company Y and Company X was known as current work, create Company Y and supersede the Company X current-work fact.
 
 For explicit longer notes, preserve the user's wording and structure unless they ask you to rewrite, summarize, or clean it up. Use headings and bullets only when they clarify the note.
 

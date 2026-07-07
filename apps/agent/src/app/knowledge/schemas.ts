@@ -4,11 +4,14 @@ export const KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS = 180;
 export const KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS = 20_000;
 export const IMPLICIT_KNOWLEDGE_CONTENT_MAX_CHARACTERS = 2_000;
 export const KNOWLEDGE_TOOL_LIST_MAX_ITEMS = 50;
+export const KNOWLEDGE_TOOL_EXPLORE_MAX_ITEMS = 30;
+export const KNOWLEDGE_TOOL_EXPLORE_MAX_DEPTH = 5;
 
 export const ManageKnowledgeToolContextSchema = z.object({
   identityId: z.string().min(1),
   sourceMessageId: z.string().optional(),
 });
+export const ReadKnowledgeToolContextSchema = ManageKnowledgeToolContextSchema;
 
 const KnowledgeNodePathSchema = z
   .string()
@@ -40,7 +43,16 @@ const KnowledgeNodeDraftSchema = z.object({
     ),
 });
 
-export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
+export const KnowledgeExploreDirectionSchema = z.enum([
+  'auto',
+  'children',
+  'descendants',
+  'ancestors',
+  'siblings',
+  'neighborhood',
+]);
+
+export const ReadKnowledgeToolInputSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('list').describe('List direct child notes under a parent path.'),
     parentPath: KnowledgeNodePathSchema.optional().describe(
@@ -66,6 +78,54 @@ export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
       .optional()
       .describe('Whether an inactive/superseded note may be read. Defaults to false.'),
   }),
+  z.object({
+    action: z
+      .literal('explore')
+      .describe(
+        'Explore related notes around a start path or query without loading full note content.',
+      ),
+    startPath: KnowledgeNodePathSchema.optional().describe(
+      'Optional existing note path to explore from. Use this when a relevant path is known.',
+    ),
+    query: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe(
+        'Optional topic to find a useful start note or rank explored notes. Provide this for broad topic questions.',
+      ),
+    direction: KnowledgeExploreDirectionSchema.optional().describe(
+      "Traversal direction. Defaults to 'auto'. Use descendants for deeper project/topic notes, ancestors for parent context, and neighborhood for nearby context.",
+    ),
+    maxDepth: z
+      .number()
+      .int()
+      .min(0)
+      .max(KNOWLEDGE_TOOL_EXPLORE_MAX_DEPTH)
+      .optional()
+      .describe(
+        `Maximum tree distance from the start note. Defaults to 2 and cannot exceed ${KNOWLEDGE_TOOL_EXPLORE_MAX_DEPTH}.`,
+      ),
+    includeInactive: z
+      .boolean()
+      .optional()
+      .describe('Whether inactive/superseded notes may be explored. Defaults to false.'),
+    includeContentPreview: z
+      .boolean()
+      .optional()
+      .describe('Whether to include capped note content previews. Defaults to true.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(KNOWLEDGE_TOOL_EXPLORE_MAX_ITEMS)
+      .optional()
+      .describe(`Maximum explored notes to return. Defaults to 12.`),
+  }),
+]);
+
+export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('create').describe('Create a new durable note.'),
     node: KnowledgeNodeDraftSchema.describe("Node draft for 'create'."),
@@ -143,6 +203,10 @@ const KnowledgeToolNodeSchema = z.object({
   parentPath: z.string().nullable().optional(),
   title: z.string(),
   content: z.string().optional(),
+  contentPreview: z.string().optional(),
+  relationship: z.enum(['start', 'ancestor', 'child', 'descendant', 'sibling']).optional(),
+  depthFromStart: z.number().int().optional(),
+  childCount: z.number().int().min(0).optional(),
   active: z.boolean(),
 });
 
@@ -153,7 +217,11 @@ export const ManageKnowledgeToolOutputSchema = z.object({
   node: KnowledgeToolNodeSchema.optional(),
   nodes: z.array(KnowledgeToolNodeSchema).optional(),
   supersededNode: KnowledgeToolNodeSchema.optional(),
+  truncated: z.boolean().optional(),
+  startPaths: z.array(z.string()).optional(),
+  suggestedNextPaths: z.array(z.string()).optional(),
 });
+export const ReadKnowledgeToolOutputSchema = ManageKnowledgeToolOutputSchema;
 
 export const ImplicitKnowledgeExtractionSchema = z.object({
   items: z

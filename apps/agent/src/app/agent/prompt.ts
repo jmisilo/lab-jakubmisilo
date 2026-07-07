@@ -108,11 +108,13 @@ export class AgentPromptService {
 
       # Knowledge Use
 
-      Use manage-knowledge when durable user-scoped knowledge should be listed, read, created, corrected, updated, moved, renamed, superseded, or marked inactive.
-      If manage-knowledge returns ok=false, do not say the memory was saved or noted. Say briefly that you could not save it yet, without exposing debug or operation metadata.
+      Use read-knowledge when durable user-scoped knowledge should be listed, explored, or read.
+      Use manage-knowledge when durable user-scoped knowledge should be created, corrected, updated, moved, renamed, superseded, deactivated, or marked inactive.
+      If a knowledge tool returns ok=false, do not claim the memory was saved, changed, or loaded. Say briefly that it could not be done yet, without exposing debug or operation metadata.
       Durable knowledge nodes can hold concise memories or longer markdown notes such as ideas, journal entries, project notes, design notes, and plans.
       Preserve explicit note content naturally. Do not over-compress user-provided notes unless the user asks for summarization.
-      If the user asks what you remember or what is saved about a topic, use manage-knowledge list/read when the visible context is insufficient or the user wants inspection.
+      If the user asks what you remember or what is saved about a broad topic, use read-knowledge explore before reading specific notes when the visible context is insufficient.
+      Use read-knowledge read after explore when you need complete note content from one selected path.
 
       ## When To Save
       - The user explicitly says remember, save, note, store, update, correct, forget, rename, move, archive, or no longer active.
@@ -135,9 +137,9 @@ export class AgentPromptService {
       ## Correction Examples
       - "I now work at Company Y" after Company X is known: create or identify Company Y, then supersede Company X so history remains.
       - "My default city is Warsaw" after a different default is active: update the same default-location note if it is the same fact, or supersede if the old fact is historically useful.
-      - "What do you remember about my work?": list/read relevant work notes and answer from note content, not from guessed memory.
-      - "Forget this" or "no longer remember X": deactivate the relevant active note; do not hard-delete.
-      - "Rename/move this note": use move so the note path and child paths stay consistent.
+      - "What do you remember about my work?": use read-knowledge to explore relevant work notes, read selected paths if needed, and answer from note content, not from guessed memory.
+      - "Forget this" or "no longer remember X": use manage-knowledge to deactivate the relevant active note; do not hard-delete.
+      - "Rename/move this note": use manage-knowledge move so the note path and child paths stay consistent.
 
       # Skills
 
@@ -161,6 +163,8 @@ export class AgentPromptService {
       - Use manage-world-cup-subscription only for explicit future notification subscription changes.
       - Use get-world-cup-tracking only to inspect existing World Cup notification tracking.
       - Use load-skill only for skills listed in # Skills.
+      - Use read-knowledge for listing, exploring, or reading saved durable knowledge.
+      - Use manage-knowledge for creating, updating, deactivating, moving, or superseding saved durable knowledge.
       - Use manage-schedule for generic reminders, recurring tasks, scheduled messages, and background AI reports.
 
       # Scheduling

@@ -43,7 +43,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - The app runs as Vercel Node serverless output, not Edge. The `pg.Pool` approach is acceptable only with serverless pooling hygiene: global pool, low idle timeout, bounded max connections, and `attachDatabasePool(...)`.
 - Do not move back to `neon-http` only for serverless aesthetics unless the knowledge write path is redesigned around non-interactive transactions/batches. Interactive Drizzle transactions are the current reason for `node-postgres`.
 - Normalize database URLs that use `sslmode=require`, `prefer`, or `verify-ca` to `sslmode=verify-full` before passing them to `pg`. This preserves current `pg` behavior and avoids the pg v9 SSL-mode warning seen against the Neon pooled host.
-- Keep old PoC tables out of Drizzle ownership. `agent_noted_memories` is excluded from `db:push`; it has not been manually dropped.
+- `agent_noted_memories` is no longer excluded from Drizzle ownership. The flat noted-memory PoC path is gone, so `db:push` may now propose dropping the legacy table.
 - Build model instructions through `AgentPromptService.buildSystemPrompt(...)`. Keep prompt construction sectioned, typed, and testable instead of storing a large opaque instruction blob.
 - Tool descriptions are routing contracts. Use `WHEN TO USE`, `WHEN NOT TO USE`, `DO NOT USE FOR`, `USAGE`, and examples for important tools.
 - Keep provider calls behind `AIService` where practical. Do not add shallow helper methods that only rename AI SDK utilities; use native AI SDK helpers such as `Output.object(...)` directly at call sites when they express the behavior clearly.
@@ -60,6 +60,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 
 - Removed the flat noted-memory PoC path in a prior cleanup:
   - `agent_noted_memories` schema/type export removed.
+  - `agent_noted_memories` removed from the Drizzle table filter so `db:push` can drop the legacy table.
   - `create-noted-memory` tool removed.
   - Context assembly now uses Chat SDK transcripts plus rolling compressed memory chunks only.
 - Rewrote the Chat SDK bot setup into a practical composition plus handler split:
@@ -93,7 +94,8 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `agent_knowledge_node_closure`
   - pgvector index on knowledge-node embeddings
 - Added an opt-in DB integration test for `AgentKnowledgeDbService`. It is skipped by default and runs when `AGENT_DB_INTEGRATION_TESTS=1`.
-- Added `manage-knowledge` as a constrained AI SDK tool:
+- Added `read-knowledge` and `manage-knowledge` as constrained AI SDK tools:
+  - `read-knowledge` lists, explores, and reads durable notes.
   - `create` saves explicit durable notes.
   - `update` rewrites an active note by path.
   - `supersede` marks old active facts inactive while optionally creating or linking a replacement note.
@@ -187,13 +189,14 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `BotHandler` no longer appends `Error code: ...` to failure messages.
   - `manage-knowledge` failure output no longer embeds the debug/operation ID in its message, while still returning/logging `operationId` for developers.
 - Added durable knowledge correction UX:
-  - `manage-knowledge` now supports `list`, `read`, `deactivate`, and `move` actions in addition to `create`, `update`, and `supersede`.
+  - `read-knowledge` supports `list`, `read`, and `explore` actions for safe inspection.
+  - `manage-knowledge` supports `create`, `update`, `deactivate`, `move`, and `supersede` actions for mutations.
   - `list` returns direct child notes under a parent path, or root notes when no parent path is provided.
   - `read` returns one note by path with capped content for inspection/editing.
   - `deactivate` is the user-facing "forget/archive" path; it marks notes inactive and preserves history instead of hard-deleting.
   - `move` can rename a note path, move it to another parent, retitle it, and preserve descendant paths through closure-table updates.
   - `AgentKnowledgeDbService.moveNode(...)` updates subtree paths/depths and closure rows transactionally, with checks against cycles and active-path conflicts.
-  - The main prompt and `knowledge-management` skill now instruct the model to list/read before corrections when needed, deactivate instead of delete, and never expose DB/tool metadata.
+  - The main prompt and `knowledge-management` skill now instruct the model to use `read-knowledge` before corrections when needed, use `manage-knowledge` for changes, deactivate instead of delete, and never expose DB/tool metadata.
 - Added path-aware implicit knowledge extraction:
   - Before extraction, `AgentKnowledgeService` embeds the latest user/assistant turn and retrieves up to 8 active path hints with similarity `>= 0.35`.
   - The extraction prompt receives those path hints and is instructed to place new durable items under fitting existing profile/preference/work/project/idea/journal parents.
@@ -206,7 +209,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - Scheduling uses QStash as the timing provider, not DB polling. One-time tasks create QStash delayed messages with `notBefore`; recurring tasks create QStash schedules with `CRON_TZ=<timezone> ...`.
   - `AgentScheduleRunner` executes a specific task ID delivered by QStash, claims the run, executes the stored prompt with `AgentService.generate({ mode: "scheduled_task" })`, posts the result with Chat SDK via `bot.thread(threadId).post(...)`, records the assistant message in transcripts/memory, then completes or advances the task.
 - Scheduled-task mode disables `manage-schedule` so background prompts cannot recursively create schedules.
-- Scheduled-task mode still has tool access, but only to safe/read/action tools that can help complete the task: `load-skill`, `webSearch`, `get-world-cup-context`, `get-weather`, and `get-local-time`. It does not get `manage-schedule`, `manage-knowledge`, World Cup subscription mutation, or World Cup tracking inspection.
+- Scheduled-task mode still has tool access, but only to safe/read/action tools that can help complete the task: `load-skill`, `read-knowledge`, `webSearch`, `get-world-cup-context`, `get-weather`, and `get-local-time`. It does not get `manage-schedule`, `manage-knowledge`, World Cup subscription mutation, or World Cup tracking inspection.
   - The execution endpoint is `POST /jobs/schedules/execute` and verifies QStash signatures with the same signing-key pattern as the World Cup polling route.
   - Current limits are enforced in app code: 10 active one-time schedules and 10 active recurring schedules per user; one-time schedules are capped at 7 days ahead for the QStash free plan; recurring schedules are constrained to at most hourly, currently daily/weekdays/weekly only.
   - QStash one-time deduplication IDs must not contain `:`. Use `agent-schedule-<taskId>`, not `agent-schedule:<taskId>`. A production save failed with `DeduplicationId cannot contain ':'`; `qstash.test.ts` now covers this.
@@ -243,21 +246,16 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 
 ## Next Work
 
+- Run `pnpm --filter @labjm/agent db:push` and accept the `DROP TABLE agent_noted_memories` statement after confirming the generated SQL does not touch Chat SDK `chat_state_*` tables or other unexpected objects.
 - Decide whether to add a revision/history table before building update-heavy tools. The current schema preserves superseded nodes but does not store every content edit revision.
-- Add a user-friendly "show all known paths" or search/debug view if direct child listing is not enough in production conversations.
-- Run `pnpm --filter=agent db:push` before deploying this scheduling slice, because it adds QStash ID columns to `agent_scheduled_tasks`.
-- Set `QSTASH_TOKEN` before enabling `manage-schedule`. Set `AGENT_PUBLIC_URL` only when the Vercel-provided deployment URL is not the desired public schedule target.
-- Add schedule update/reschedule UX after create/list/cancel is proven in production.
-- Add production logs review for recurring task accuracy, especially around timezone and DST boundaries.
-- Consider a stronger scheduled-delivery state machine with occurrence IDs or a posted/persisted split if duplicate-free recovery after post-send DB failures becomes necessary. Current MVP chooses retryability over silent recurring-task loss.
+- Add a user-friendly knowledge inspection view such as "show all known paths" or a search/debug view if `read-knowledge` list/explore is not enough in production conversations.
+- Review production logs for recurring schedule accuracy after enough real runs, especially around timezone and DST boundaries.
+- Revisit the scheduled-delivery state machine only if production still shows duplicate or lost occurrences after the current payload/stale-run recovery changes.
 - Tune duplicate/merge decisions with real production examples. The current implementation protects against obvious duplicates, but thresholds and action prompts may need adjustment once enough implicit decisions are logged.
 - Tune path-aware implicit extraction with real examples. Current path hints are similarity-based only; future work may add path/category priors, "recently touched branch" boosts, or explicit parent candidates from the current conversation.
-- Add a deployment/runtime smoke check for the serverless DB pool after the next Vercel deployment. Code-level validation is done, but pool behavior under real Fluid Compute/serverless concurrency still needs production evidence.
-- Consider a single app-owned DB adapter factory if another runtime needs different DB connection behavior. Do not introduce it until the second runtime exists.
-- Decide whether to manually drop legacy `agent_noted_memories` after confirming no environment still depends on it.
 - Revisit retrieval ranking with real conversations. The current expansion includes matches, ancestors, children, and siblings; it may need thresholds, per-relationship budgets, or path-based boosts after usage data.
-- If another chat platform appears, register it through `app/bot/index.ts` first; split platform-specific modules only when behavior differs enough to justify it.
-- Add behavior tests around multi-platform bot registration once a second platform exists.
+- If another runtime needs different DB connection behavior, consider a single app-owned DB adapter factory. Do not introduce it until the second runtime exists.
+- If another chat platform appears, register it through `app/bot/index.ts` first; split platform-specific modules and add multi-platform registration tests only when behavior differs enough to justify it.
 
 ## Verification
 
@@ -483,4 +481,28 @@ These checks passed after initializing Chat SDK in non-webhook scheduled/World C
 ```sh
 pnpm --filter @labjm/agent test -- runner.test.ts notification.test.ts polling.test.ts
 pnpm --filter @labjm/agent typecheck
+```
+
+Durable knowledge exploration decision:
+
+- Do not add knowledge chunk tables/indexes for now. Knowledge nodes remain the source of truth and retrieval still uses node-level embeddings plus tree structure.
+- `read-knowledge` owns `list`, `read`, and `explore`. `explore` handles bounded tree traversal around a known path or query-selected start nodes.
+- `manage-knowledge` is mutation-only: `create`, `update`, `deactivate`, `move`, and `supersede`.
+- `explore` uses the existing closure table to return relationship-aware previews (`start`, `ancestor`, `child`, `descendant`, `sibling`) plus child counts and suggested next paths. Full note content should still be loaded through `read-knowledge` `read`.
+- The main prompt and `knowledge-management` skill instruct the agent to use `read-knowledge` for broad saved-knowledge questions before reading selected notes, and `manage-knowledge` only for changes.
+
+These checks passed after adding durable knowledge exploration and splitting read/write knowledge tools:
+
+```sh
+pnpm --filter @labjm/agent test -- knowledge.test.ts schemas.test.ts tools.test.ts prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+git diff --check -- apps/agent/src/app/knowledge apps/agent/src/app/agent apps/agent/src/skills/knowledge-management/SKILL.md apps/agent/docs/handoff.md
+```
+
+These checks passed after allowing `db:push` to drop `agent_noted_memories` and cleaning the `Next Work` list:
+
+```sh
+pnpm --filter @labjm/agent typecheck
+git diff --check -- apps/agent/drizzle.config.ts apps/agent/docs/handoff.md
 ```

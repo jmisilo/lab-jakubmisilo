@@ -1,6 +1,7 @@
 import type {
   ImplicitKnowledgeExtractionSchema,
   ImplicitKnowledgeIngestionDecisionSchema,
+  KnowledgeExploreDirectionSchema,
 } from '@/app/knowledge/schemas';
 import type { ShortTermMemory } from '@/app/memory/types';
 import type { AgentKnowledgeSource } from '@/types';
@@ -55,6 +56,17 @@ export type MoveKnowledgeNodeByPathInput = {
   title?: string;
 };
 
+export type ExploreKnowledgeNodesInput = {
+  identityId: string;
+  startPath?: string;
+  query?: string;
+  direction?: KnowledgeExploreDirection;
+  maxDepth?: number;
+  includeInactive?: boolean;
+  includeContentPreview?: boolean;
+  limit?: number;
+};
+
 export type SupersedeKnowledgeNodeInput = {
   identityId: string;
   nodeId: string;
@@ -95,3 +107,5 @@ export type ImplicitKnowledgeIngestionOutcome = {
   path?: string;
   targetPath?: string;
 };
+
+export type KnowledgeExploreDirection = z.infer<typeof KnowledgeExploreDirectionSchema>;
