@@ -22,6 +22,12 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('# Privacy And Metadata');
     expect(prompt).toContain('operation IDs, debug IDs, error codes');
     expect(prompt).toContain('# Knowledge Use');
+    expect(prompt).toContain(
+      'Use read-knowledge when durable user-scoped knowledge should be listed',
+    );
+    expect(prompt).toContain(
+      'Use manage-knowledge when durable user-scoped knowledge should be created',
+    );
     expect(prompt).toContain('without exposing debug or operation metadata');
     expect(prompt).toContain('work/history/company-x');
     expect(prompt).toContain('create or identify Company Y, then supersede Company X');
@@ -39,7 +45,7 @@ describe('AgentPromptService', () => {
   it('builds a stable provider prompt cache key from identity and prompt shape', () => {
     const context = {
       identityId: 'identity-1',
-      tools: ['load-skill', 'manage-knowledge', 'get-weather'],
+      tools: ['load-skill', 'read-knowledge', 'manage-knowledge', 'get-weather'],
       skills: [
         {
           name: 'knowledge-management',

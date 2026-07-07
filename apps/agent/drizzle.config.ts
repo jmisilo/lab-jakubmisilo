@@ -10,13 +10,7 @@ export default defineConfig({
   },
   out: './src/infrastructure/db/drizzle',
   schema: './src/infrastructure/db/schema.ts',
-  tablesFilter: [
-    '!chat_state_*',
-    '!chat_subscriptions',
-    '!chat_locks',
-    '!chat_cache',
-    '!agent_noted_memories',
-  ],
+  tablesFilter: ['!chat_state_*', '!chat_subscriptions', '!chat_locks', '!chat_cache'],
   strict: true,
   verbose: true,
 });

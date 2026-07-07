@@ -1,6 +1,7 @@
 import type {
   CreateKnowledgeNodeInput,
   DeactivateKnowledgeNodeByPathInput,
+  ExploreKnowledgeNodesInput,
   ExtractImplicitKnowledgeInput,
   GetContextItemsInput,
   ImplicitKnowledgeIngestionAction,
@@ -16,7 +17,10 @@ import type {
   UpdateKnowledgeNodeContentInput,
 } from '@/app/knowledge/types';
 import type { ShortTermMemory } from '@/app/memory/types';
-import type { AgentKnowledgeSimilarNode } from '@/infrastructure/db/services/agent-knowledge';
+import type {
+  AgentKnowledgeExploreNode,
+  AgentKnowledgeSimilarNode,
+} from '@/infrastructure/db/services/agent-knowledge';
 import type { AgentKnowledgeSource } from '@/types';
 
 import { createHash } from 'node:crypto';
@@ -54,6 +58,13 @@ export class AgentKnowledgeService {
   static readonly implicitExtractionPathHintContentCharacterLimit = 500;
   static readonly implicitMergeCandidateLimit = 5;
   static readonly implicitMergeMinSimilarity = 0.35;
+  static readonly exploreDefaultLimit = 12;
+  static readonly exploreMaxLimit = 30;
+  static readonly exploreDefaultMaxDepth = 2;
+  static readonly exploreMaxDepth = 5;
+  static readonly exploreQuerySeedLimit = 3;
+  static readonly exploreQueryMinSimilarity = 0.35;
+  static readonly exploreCandidateFetchLimit = 80;
 
   static async createNode(input: CreateKnowledgeNodeInput) {
     const parentId = await this.#resolveParentId(input);
@@ -107,6 +118,79 @@ export class AgentKnowledgeService {
       path: this.#normalizePath(path),
       includeInactive,
     });
+  }
+
+  static async exploreNodes({
+    identityId,
+    startPath,
+    query,
+    direction,
+    maxDepth,
+    includeInactive,
+    limit,
+  }: ExploreKnowledgeNodesInput) {
+    const normalizedStartPath = startPath ? this.#normalizePath(startPath) : undefined;
+    const normalizedQuery = query?.trim();
+
+    if (!normalizedStartPath && !normalizedQuery) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+        message: 'Knowledge exploration requires a start path or query.',
+        context: { identityId },
+        retryable: false,
+      });
+    }
+
+    const selectedLimit = this.#clampNumber({
+      value: limit ?? this.exploreDefaultLimit,
+      min: 1,
+      max: this.exploreMaxLimit,
+    });
+    const selectedMaxDepth = this.#clampNumber({
+      value: maxDepth ?? this.exploreDefaultMaxDepth,
+      min: 0,
+      max: this.exploreMaxDepth,
+    });
+    const queryEmbedding = normalizedQuery ? await AIService.embed(normalizedQuery) : undefined;
+    const startNodeIds = await this.#resolveExploreStartNodeIds({
+      identityId,
+      startPath: normalizedStartPath,
+      queryEmbedding,
+      includeInactive,
+    });
+
+    if (startNodeIds.length === 0) {
+      return {
+        nodes: [],
+        truncated: false,
+        startPaths: [],
+        suggestedNextPaths: [],
+      };
+    }
+
+    const candidates = await AgentKnowledgeDbService.exploreNodes({
+      identityId,
+      startNodeIds,
+      direction,
+      maxDepth: selectedMaxDepth,
+      includeInactive,
+      limit: this.exploreCandidateFetchLimit,
+    });
+    const rankedNodes = this.#rankExploreNodes({
+      nodes: candidates,
+      query: normalizedQuery,
+      queryEmbedding,
+    });
+    const selectedNodes = rankedNodes.slice(0, selectedLimit);
+
+    return {
+      nodes: selectedNodes,
+      truncated: rankedNodes.length > selectedLimit,
+      startPaths: rankedNodes
+        .filter((node) => node.relationship === 'start')
+        .map((node) => node.path),
+      suggestedNextPaths: this.#getSuggestedExploreNextPaths(selectedNodes),
+    };
   }
 
   static async deactivateNodeByPath({ identityId, path }: DeactivateKnowledgeNodeByPathInput) {
@@ -1231,5 +1315,166 @@ export class AgentKnowledgeService {
 
   static #hashText(value: string) {
     return createHash('sha256').update(value).digest('hex');
+  }
+
+  static async #resolveExploreStartNodeIds({
+    identityId,
+    startPath,
+    queryEmbedding,
+    includeInactive,
+  }: {
+    identityId: string;
+    startPath?: string;
+    queryEmbedding?: number[];
+    includeInactive?: boolean;
+  }) {
+    if (startPath) {
+      const node = await AgentKnowledgeDbService.getNodeByPath({
+        identityId,
+        path: startPath,
+        includeInactive,
+      });
+
+      return [node.id];
+    }
+
+    if (!queryEmbedding) {
+      return [];
+    }
+
+    const matches = await AgentKnowledgeDbService.findRelevantMatches({
+      identityId,
+      embedding: queryEmbedding,
+      limit: this.exploreQuerySeedLimit,
+      minSimilarity: this.exploreQueryMinSimilarity,
+    });
+
+    return matches.map((match) => match.id);
+  }
+
+  static #rankExploreNodes({
+    nodes,
+    query,
+    queryEmbedding,
+  }: {
+    nodes: AgentKnowledgeExploreNode[];
+    query?: string;
+    queryEmbedding?: number[];
+  }) {
+    return [...nodes].sort((left, right) => {
+      const scoreDifference =
+        this.#scoreExploreNode({
+          node: right,
+          query,
+          queryEmbedding,
+        }) -
+        this.#scoreExploreNode({
+          node: left,
+          query,
+          queryEmbedding,
+        });
+
+      if (scoreDifference !== 0) {
+        return scoreDifference;
+      }
+
+      if (left.path === right.path) {
+        return 0;
+      }
+
+      return left.path < right.path ? -1 : 1;
+    });
+  }
+
+  static #scoreExploreNode({
+    node,
+    query,
+    queryEmbedding,
+  }: {
+    node: AgentKnowledgeExploreNode;
+    query?: string;
+    queryEmbedding?: number[];
+  }) {
+    const relationshipScore: Record<AgentKnowledgeExploreNode['relationship'], number> = {
+      start: 100,
+      child: 85,
+      descendant: 75,
+      ancestor: 60,
+      sibling: 45,
+    };
+    const depthPenalty = Math.min(Math.max(node.depthFromStart, 0), this.exploreMaxDepth) * 2;
+    const lexicalScore = query ? this.#getExploreLexicalScore({ node, query }) : 0;
+    const semanticScore =
+      queryEmbedding && node.embedding
+        ? this.#cosineSimilarity(queryEmbedding, node.embedding) * 40
+        : 0;
+
+    return relationshipScore[node.relationship] - depthPenalty + lexicalScore + semanticScore;
+  }
+
+  static #getExploreLexicalScore({
+    node,
+    query,
+  }: {
+    node: AgentKnowledgeExploreNode;
+    query: string;
+  }) {
+    const normalizedQuery = query.toLowerCase();
+    const normalizedTitle = node.title.toLowerCase();
+    const normalizedPath = node.path.toLowerCase();
+    let score = 0;
+
+    if (normalizedTitle.includes(normalizedQuery)) {
+      score += 20;
+    }
+
+    if (normalizedPath.includes(normalizedQuery.replace(/\s+/g, '-'))) {
+      score += 15;
+    }
+
+    for (const term of normalizedQuery.split(/\s+/g).filter(Boolean)) {
+      if (normalizedTitle.includes(term)) {
+        score += 4;
+      }
+
+      if (normalizedPath.includes(term)) {
+        score += 3;
+      }
+    }
+
+    return score;
+  }
+
+  static #cosineSimilarity(left: number[], right: number[]) {
+    let dotProduct = 0;
+    let leftMagnitude = 0;
+    let rightMagnitude = 0;
+    const length = Math.min(left.length, right.length);
+
+    for (let index = 0; index < length; index += 1) {
+      const leftValue = left[index] ?? 0;
+      const rightValue = right[index] ?? 0;
+
+      dotProduct += leftValue * rightValue;
+      leftMagnitude += leftValue * leftValue;
+      rightMagnitude += rightValue * rightValue;
+    }
+
+    if (leftMagnitude === 0 || rightMagnitude === 0) {
+      return 0;
+    }
+
+    return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
+  }
+
+  static #getSuggestedExploreNextPaths(nodes: AgentKnowledgeExploreNode[]) {
+    return nodes
+      .filter((node) => node.childCount > 0)
+      .map((node) => node.path)
+      .slice(0, 5);
+  }
+
+  static #clampNumber({ value, min, max }: { value: number; min: number; max: number }) {
+    return Math.min(Math.max(value, min), max);
   }
 }
