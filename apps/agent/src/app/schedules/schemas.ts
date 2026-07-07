@@ -113,12 +113,61 @@ export const ManageScheduleToolInputSchema = z.discriminatedUnion('action', [
       .describe('Task id returned by list/create. Do not expose this id to the user.'),
     reason: z.string().min(1).optional().describe('Optional cancellation reason.'),
   }),
+  z.object({
+    action: z.literal('update').describe('Edit an existing active or paused scheduled task.'),
+    taskId: z
+      .string()
+      .min(1)
+      .describe(
+        'Task id returned by list/create. Use list first if the user identified a task naturally.',
+      ),
+    title: z
+      .string()
+      .min(1)
+      .max(SCHEDULE_TASK_TITLE_MAX_CHARACTERS)
+      .optional()
+      .describe('Updated short user-facing title.'),
+    prompt: z
+      .string()
+      .min(1)
+      .max(SCHEDULE_TASK_PROMPT_MAX_CHARACTERS)
+      .optional()
+      .describe('Updated durable instruction for the scheduled subagent.'),
+    schedule: z
+      .discriminatedUnion('type', [OneTimeScheduleSchema, RecurringScheduleSchema])
+      .optional()
+      .describe('Updated schedule when the user asks to move, reschedule, or change recurrence.'),
+    userFacingSchedule: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Updated short natural-language schedule summary for acknowledgement.'),
+  }),
+  z.object({
+    action: z.literal('pause').describe('Pause an active scheduled task without deleting it.'),
+    taskId: z
+      .string()
+      .min(1)
+      .describe(
+        'Task id returned by list/create. Use list first if the user identified a task naturally.',
+      ),
+    reason: z.string().min(1).optional().describe('Optional pause reason.'),
+  }),
+  z.object({
+    action: z.literal('resume').describe('Resume a paused scheduled task.'),
+    taskId: z
+      .string()
+      .min(1)
+      .describe(
+        'Task id returned by list/create. Use list first if the user identified a task naturally.',
+      ),
+  }),
 ]);
 
 export const ScheduleToolTaskSchema = z.object({
   id: z.string(),
   title: z.string(),
-  status: z.enum(['active', 'completed', 'cancelled', 'failed']),
+  status: z.enum(['active', 'paused', 'completed', 'cancelled', 'failed']),
   scheduleKind: z.enum(['one_time', 'recurring']),
   timeZone: z.string(),
   nextRunAt: z.string().nullable(),
@@ -135,6 +184,8 @@ export const ManageScheduleToolOutputSchema = z.object({
 
 export const ScheduleExecutionPayloadSchema = z.object({
   taskId: z.string().min(1),
+  scheduleKind: z.enum(['one_time', 'recurring']).optional(),
+  scheduledFor: z.string().min(1).optional(),
 });
 
 export const ScheduleFailureCallbackPayloadSchema = z

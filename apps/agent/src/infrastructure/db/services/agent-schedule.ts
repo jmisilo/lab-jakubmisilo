@@ -1,6 +1,6 @@
 import type { AgentScheduledTask, NewAgentScheduledTask } from '@/types';
 
-import { and, asc, count, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { agentScheduledTaskRuns, agentScheduledTasks } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
@@ -28,7 +28,7 @@ export class AgentScheduleDbService extends DbService {
         and(
           eq(agentScheduledTasks.identityId, identityId),
           eq(agentScheduledTasks.threadId, threadId),
-          includeInactive ? undefined : eq(agentScheduledTasks.status, 'active'),
+          includeInactive ? undefined : inArray(agentScheduledTasks.status, ['active', 'paused']),
         ),
       )
       .orderBy(asc(agentScheduledTasks.nextRunAt))
@@ -53,12 +53,65 @@ export class AgentScheduleDbService extends DbService {
     return result?.count ?? 0;
   }
 
-  static async cancelTask({ identityId, threadId, taskId, metadata }: CancelScheduledTaskInput) {
+  static async getTaskForUser({ identityId, threadId, taskId }: GetScheduledTaskForUserInput) {
+    const [task] = await this.client
+      .select()
+      .from(agentScheduledTasks)
+      .where(
+        and(
+          eq(agentScheduledTasks.identityId, identityId),
+          eq(agentScheduledTasks.threadId, threadId),
+          eq(agentScheduledTasks.id, taskId),
+        ),
+      )
+      .limit(1);
+
+    return task ?? null;
+  }
+
+  static async updateTask({
+    identityId,
+    threadId,
+    taskId,
+    metadata,
+    ...updates
+  }: UpdateScheduledTaskInput) {
     const [task] = await this.client
       .update(agentScheduledTasks)
       .set({
-        status: 'cancelled',
-        cancelledAt: new Date(),
+        ...this.#withoutUndefined(updates),
+        metadata: metadata
+          ? sql`${agentScheduledTasks.metadata} || ${metadata}`
+          : agentScheduledTasks.metadata,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(agentScheduledTasks.identityId, identityId),
+          eq(agentScheduledTasks.threadId, threadId),
+          eq(agentScheduledTasks.id, taskId),
+          inArray(agentScheduledTasks.status, ['active', 'paused']),
+        ),
+      )
+      .returning();
+
+    if (!task) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
+        message: 'Active or paused scheduled task was not found.',
+        context: { identityId, threadId, taskId },
+        retryable: false,
+      });
+    }
+
+    return task;
+  }
+
+  static async pauseTask({ identityId, threadId, taskId, metadata }: PauseScheduledTaskInput) {
+    const [task] = await this.client
+      .update(agentScheduledTasks)
+      .set({
+        status: 'paused',
         metadata: metadata
           ? sql`${agentScheduledTasks.metadata} || ${metadata}`
           : agentScheduledTasks.metadata,
@@ -78,6 +131,82 @@ export class AgentScheduleDbService extends DbService {
       throw new AppError({
         code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
         message: 'Active scheduled task was not found.',
+        context: { identityId, threadId, taskId },
+        retryable: false,
+      });
+    }
+
+    return task;
+  }
+
+  static async resumeTask({
+    identityId,
+    threadId,
+    taskId,
+    nextRunAt,
+    qstashMessageId,
+    qstashScheduleId,
+    metadata,
+  }: ResumeScheduledTaskInput) {
+    const [task] = await this.client
+      .update(agentScheduledTasks)
+      .set({
+        status: 'active',
+        nextRunAt,
+        qstashMessageId,
+        qstashScheduleId,
+        metadata: metadata
+          ? sql`${agentScheduledTasks.metadata} || ${metadata}`
+          : agentScheduledTasks.metadata,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(agentScheduledTasks.identityId, identityId),
+          eq(agentScheduledTasks.threadId, threadId),
+          eq(agentScheduledTasks.id, taskId),
+          eq(agentScheduledTasks.status, 'paused'),
+        ),
+      )
+      .returning();
+
+    if (!task) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
+        message: 'Paused scheduled task was not found.',
+        context: { identityId, threadId, taskId },
+        retryable: false,
+      });
+    }
+
+    return task;
+  }
+
+  static async cancelTask({ identityId, threadId, taskId, metadata }: CancelScheduledTaskInput) {
+    const [task] = await this.client
+      .update(agentScheduledTasks)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        metadata: metadata
+          ? sql`${agentScheduledTasks.metadata} || ${metadata}`
+          : agentScheduledTasks.metadata,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(agentScheduledTasks.identityId, identityId),
+          eq(agentScheduledTasks.threadId, threadId),
+          eq(agentScheduledTasks.id, taskId),
+          inArray(agentScheduledTasks.status, ['active', 'paused']),
+        ),
+      )
+      .returning();
+
+    if (!task) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
+        message: 'Active or paused scheduled task was not found.',
         context: { identityId, threadId, taskId },
         retryable: false,
       });
@@ -135,6 +264,24 @@ export class AgentScheduleDbService extends DbService {
         ),
       })
       .returning();
+
+    return run ?? null;
+  }
+
+  static async getTaskRunByScheduledFor({
+    taskId,
+    scheduledFor,
+  }: GetScheduledTaskRunByScheduledForInput) {
+    const [run] = await this.client
+      .select()
+      .from(agentScheduledTaskRuns)
+      .where(
+        and(
+          eq(agentScheduledTaskRuns.taskId, taskId),
+          eq(agentScheduledTaskRuns.scheduledFor, scheduledFor),
+        ),
+      )
+      .limit(1);
 
     return run ?? null;
   }
@@ -213,6 +360,12 @@ export class AgentScheduleDbService extends DbService {
     });
   }
 
+  static #withoutUndefined<T extends Record<string, unknown>>(value: T) {
+    return Object.fromEntries(
+      Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+    ) as Partial<T>;
+  }
+
   static async #updateTaskAfterRun({
     taskId,
     status,
@@ -275,11 +428,54 @@ type CancelScheduledTaskInput = {
   metadata?: Record<string, unknown>;
 };
 
+type GetScheduledTaskForUserInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+};
+
+type UpdateScheduledTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  title?: string;
+  prompt?: string;
+  scheduleKind?: AgentScheduledTask['scheduleKind'];
+  timeZone?: string;
+  nextRunAt?: Date;
+  recurrence?: Record<string, unknown>;
+  qstashMessageId?: string | null;
+  qstashScheduleId?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type PauseScheduledTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  metadata?: Record<string, unknown>;
+};
+
+type ResumeScheduledTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  nextRunAt: Date;
+  qstashMessageId?: string | null;
+  qstashScheduleId?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
 type GetScheduledTaskInput = {
   taskId: string;
 };
 
 type CreateScheduledTaskRunInput = {
+  taskId: string;
+  scheduledFor: Date;
+};
+
+type GetScheduledTaskRunByScheduledForInput = {
   taskId: string;
   scheduledFor: Date;
 };

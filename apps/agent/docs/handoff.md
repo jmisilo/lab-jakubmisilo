@@ -446,6 +446,21 @@ future calls can choose a lower effort explicitly.
 `apps/agent/README.md` now contains a short onboarding section with request/scheduling lifecycle diagrams,
 core module ownership, scheduling state transitions, and working conventions for new contributors.
 
+As of 2026-07-07, scheduling has three follow-up hardening changes:
+
+- QStash payloads include `scheduleKind`; one-time payloads also include `scheduledFor`. The runner uses these fields to skip stale deliveries after edits or schedule-kind changes.
+- Already-claimed scheduled runs are no longer blindly acknowledged. If the existing run is `sent`, the runner recovers task advancement without reposting; if it is still `running` or otherwise unfinished, the runner throws retryably so QStash can retry instead of dropping the occurrence.
+- `manage-schedule` supports `update`, `pause`, and `resume` in addition to create/list/cancel. Paused tasks keep metadata and can be resumed with a fresh QStash trigger.
+
+Scheduled task execution now explicitly tells the subagent that recent chat, compressed memory, durable knowledge,
+runtime time, and available tools may be present. The context retrieval path is still `AgentMemoryService.buildContext`
+fed by recent transcripts plus the stored task prompt.
+
+After production logs showed duplicate one-time reminders caused by `PostgresStateAdapter is not connected. Call connect() first.`,
+scheduled task execution now calls `bot.initialize()` before claiming a run. The same initialization was added to World Cup
+notification delivery because it also posts outside the Telegram webhook lifecycle. This fixes the Chat SDK state lifecycle issue
+for QStash-triggered delivery paths.
+
 These checks passed after adding inline generation reasoning and the short agent README:
 
 ```sh
@@ -453,4 +468,19 @@ pnpm --filter @labjm/agent typecheck
 pnpm --filter @labjm/agent test -- knowledge.test.ts memory.test.ts notification.test.ts
 pnpm --filter @labjm/agent lint
 git diff --check -- apps/agent/src apps/agent/README.md apps/agent/docs/handoff.md
+```
+
+These checks passed after schedule reliability hardening, update/pause/resume UX, and scheduled subagent context tuning:
+
+```sh
+pnpm --filter @labjm/agent test -- runner.test.ts schedules.test.ts tools.test.ts qstash.test.ts prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+```
+
+These checks passed after initializing Chat SDK in non-webhook scheduled/World Cup delivery paths:
+
+```sh
+pnpm --filter @labjm/agent test -- runner.test.ts notification.test.ts polling.test.ts
+pnpm --filter @labjm/agent typecheck
 ```

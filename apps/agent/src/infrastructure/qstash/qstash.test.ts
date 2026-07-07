@@ -37,19 +37,25 @@ describe('QStashService', () => {
     mockPublishJSON.mockResolvedValue({ messageId: 'msg-1' });
     const { QStashService } = await import('.');
 
+    const taskId = '54fc072f-f5eb-4c04-a31f-df1f767fb5f1';
+    const runAt = new Date('2026-07-06T17:00:00.000Z');
     const messageId = await QStashService.scheduleOneTimeTask({
-      taskId: '54fc072f-f5eb-4c04-a31f-df1f767fb5f1',
-      runAt: new Date('2026-07-06T17:00:00.000Z'),
+      taskId,
+      runAt,
     });
 
     expect(messageId).toBe('msg-1');
     expect(mockPublishJSON).toHaveBeenCalledWith(
       expect.objectContaining({
         url: 'https://agent.example.com/jobs/schedules/execute',
-        body: { taskId: '54fc072f-f5eb-4c04-a31f-df1f767fb5f1' },
+        body: {
+          taskId,
+          scheduleKind: 'one_time',
+          scheduledFor: '2026-07-06T17:00:00.000Z',
+        },
         notBefore: 1783357200,
         failureCallback: 'https://agent.example.com/jobs/schedules/failure',
-        deduplicationId: 'agent-schedule-54fc072f-f5eb-4c04-a31f-df1f767fb5f1',
+        deduplicationId: `agent-schedule-${taskId}`,
       }),
     );
     expect(mockPublishJSON.mock.calls[0][0].deduplicationId).not.toContain(':');
@@ -71,6 +77,27 @@ describe('QStashService', () => {
       expect.objectContaining({
         url: 'https://preview.example.vercel.app/jobs/schedules/execute',
         failureCallback: 'https://preview.example.vercel.app/jobs/schedules/failure',
+      }),
+    );
+  });
+
+  it('marks recurring schedule payloads as recurring', async () => {
+    mockScheduleCreate.mockResolvedValue({ scheduleId: 'agent-task-task-1' });
+    const { QStashService } = await import('.');
+
+    await QStashService.scheduleRecurringTask({
+      taskId: 'task-1',
+      recurrence: {
+        frequency: 'weekdays',
+        daysOfWeek: ['monday', 'tuesday'],
+        timeOfDay: '09:00',
+      },
+      timeZone: 'Europe/Warsaw',
+    });
+
+    expect(mockScheduleCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: JSON.stringify({ taskId: 'task-1', scheduleKind: 'recurring' }),
       }),
     );
   });

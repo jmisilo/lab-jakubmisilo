@@ -33,6 +33,7 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain(
       'Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.',
     );
+    expect(prompt).toContain('inspect, update, move, pause, resume, or cancel reminders');
   });
 
   it('builds a stable provider prompt cache key from identity and prompt shape', () => {
