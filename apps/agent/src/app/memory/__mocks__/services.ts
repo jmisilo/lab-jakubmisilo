@@ -11,7 +11,7 @@ export const agentKnowledgeServiceMock = {
 };
 
 export const aiServiceMock = {
-  model: 'gpt-5.5',
+  model: 'gpt-5.4-mini',
   embeddingModel: 'text-embedding-3-small',
   embeddingDimensions: 1536,
   embed: jest.fn(),

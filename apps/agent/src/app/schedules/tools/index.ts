@@ -13,12 +13,6 @@ import {
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
-export type ManageScheduleTool = Tool<
-  z.infer<typeof ManageScheduleToolInputSchema>,
-  z.infer<typeof ManageScheduleToolOutputSchema>,
-  z.infer<typeof ManageScheduleToolContextSchema>
->;
-
 const PROMPT_PREVIEW_CHARACTER_LIMIT = 500;
 
 export const manageScheduleTool: ManageScheduleTool = tool({
@@ -46,7 +40,8 @@ export const manageScheduleTool: ManageScheduleTool = tool({
 
     # Time Rules
     - Use the user's timezone from runtime context unless durable knowledge clearly says another timezone should be used.
-    - Resolve relative dates/times before calling this tool. "Today at 7pm" must become a future ISO datetime.
+    - Resolve relative dates/times before calling this tool. Prefer a future ISO datetime with an explicit offset, for example "2026-07-06T19:00:00+02:00".
+    - If runAt has no offset, it is interpreted as local wall-clock time in schedule.timeZone. Always set schedule.timeZone from runtime context or durable knowledge.
     - If a time has already passed today, ask whether the user meant tomorrow unless the intent is clear.
     - For recurring tasks without a time, choose a sensible time based on task context and user preferences. Use 09:00 as the neutral fallback.
     - For "work day" or "business day", use weekday recurrence.
@@ -60,7 +55,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - Do not include hidden metadata, operation IDs, database IDs, or raw tool payloads in the prompt.
 
     # Examples
-    - "Remind me about tennis at 7pm" -> one_time, prompt "Send Jakub a short reminder about his tennis game."
+    - "Remind me about tennis at 7pm" -> one_time, prompt "Send the user a short reminder about their tennis game."
     - "Each morning at 9 send me a todo prep message" -> recurring daily at 09:00.
     - "Every Monday and Friday remind me about shopping" -> recurring weekly monday/friday, choose a convenient time such as 08:30 if no user preference says otherwise.
     - "Each work day perform news search about latest AI things and send a report around 11am" -> recurring weekdays at 11:00, prompt instructs the subagent to search the web and send a concise AI-news report.
@@ -213,3 +208,9 @@ function truncateText(value: string, characterLimit: number) {
 
   return `${value.slice(0, characterLimit)}[truncated]`;
 }
+
+export type ManageScheduleTool = Tool<
+  z.infer<typeof ManageScheduleToolInputSchema>,
+  z.infer<typeof ManageScheduleToolOutputSchema>,
+  z.infer<typeof ManageScheduleToolContextSchema>
+>;

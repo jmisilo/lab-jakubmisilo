@@ -14,8 +14,6 @@ import {
 } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
 
-export type WorldCupSubscription = typeof worldCup2026Subscriptions.$inferSelect;
-
 export class WorldCupDbService extends DbService {
   static async getGameSnapshot(gameId: string) {
     const [snapshot] = await this.client
@@ -193,3 +191,5 @@ export class WorldCupDbService extends DbService {
       .where(eq(worldCup2026EventDeliveries.id, deliveryId));
   }
 }
+
+export type WorldCupSubscription = typeof worldCup2026Subscriptions.$inferSelect;

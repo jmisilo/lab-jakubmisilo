@@ -25,6 +25,9 @@ const MAX_RECURRENCE_LOOKAHEAD_DAYS = 370;
 const MAX_ACTIVE_ONE_TIME_TASKS_PER_USER = 10;
 const MAX_ACTIVE_RECURRING_TASKS_PER_USER = 10;
 const QSTASH_FREE_PLAN_MAX_ONE_TIME_DELAY_MS = 1000 * 60 * 60 * 24 * 7;
+const ISO_DATE_TIME_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/;
+const ISO_LOCAL_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 
 const ALL_DAYS: ScheduleDayOfWeek[] = [
   'monday',
@@ -273,7 +276,10 @@ export class AgentScheduleService {
   }) {
     if (schedule.type === 'one_time') {
       const timeZone = this.#normalizeTimeZone(schedule.timeZone);
-      const nextRunAt = new Date(schedule.runAt);
+      const nextRunAt = this.#resolveOneTimeRunAt({
+        runAt: schedule.runAt,
+        timeZone,
+      });
 
       if (Number.isNaN(nextRunAt.getTime()) || nextRunAt <= now) {
         throw new AppError({
@@ -476,6 +482,94 @@ export class AgentScheduleService {
     return timeZone;
   }
 
+  static #hasDateTimeOffset(value: string) {
+    return ISO_DATE_TIME_OFFSET_PATTERN.test(value);
+  }
+
+  static #resolveOneTimeRunAt({ runAt, timeZone }: { runAt: string; timeZone: string }) {
+    if (this.#hasDateTimeOffset(runAt)) {
+      return new Date(runAt);
+    }
+
+    const localDateTime = this.#parseLocalDateTime(runAt);
+
+    return this.#localDateTimeToUtc({
+      ...localDateTime,
+      timeZone,
+    });
+  }
+
+  static #parseLocalDateTime(value: string) {
+    const match = ISO_LOCAL_DATE_TIME_PATTERN.exec(value);
+
+    if (!match) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_INVALID,
+        message: 'One-time schedule has invalid local datetime format.',
+        context: { runAt: value },
+        retryable: false,
+        userMessage: 'I could not understand the schedule time.',
+      });
+    }
+
+    const [, year, month, day, hour, minute, second = '0', millisecond = '0'] = match;
+    const dateParts = {
+      year: Number(year),
+      month: Number(month),
+      day: Number(day),
+      hour: Number(hour),
+      minute: Number(minute),
+      second: Number(second),
+      millisecond: Number(millisecond.padEnd(3, '0')),
+    };
+
+    this.#assertValidLocalDateTime({ runAt: value, ...dateParts });
+
+    return dateParts;
+  }
+
+  static #assertValidLocalDateTime({
+    runAt,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond,
+  }: {
+    runAt: string;
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+    millisecond: number;
+  }) {
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+
+    if (
+      utcDate.getUTCFullYear() === year &&
+      utcDate.getUTCMonth() === month - 1 &&
+      utcDate.getUTCDate() === day &&
+      utcDate.getUTCHours() === hour &&
+      utcDate.getUTCMinutes() === minute &&
+      utcDate.getUTCSeconds() === second &&
+      utcDate.getUTCMilliseconds() === millisecond
+    ) {
+      return;
+    }
+
+    throw new AppError({
+      code: AppErrorCode.SCHEDULE_TASK_INVALID,
+      message: 'One-time schedule has invalid local datetime values.',
+      context: { runAt },
+      retryable: false,
+      userMessage: 'I could not understand the schedule time.',
+    });
+  }
+
   static #getLocalDateParts({ date, timeZone }: { date: Date; timeZone: string }) {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,
@@ -485,6 +579,7 @@ export class AgentScheduleService {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
     }).formatToParts(date);
 
     return {
@@ -493,6 +588,7 @@ export class AgentScheduleService {
       day: Number(this.#getDatePart(parts, 'day')),
       hour: Number(this.#getDatePart(parts, 'hour')),
       minute: Number(this.#getDatePart(parts, 'minute')),
+      second: Number(this.#getDatePart(parts, 'second')),
     };
   }
 
@@ -502,6 +598,8 @@ export class AgentScheduleService {
     day,
     hour,
     minute,
+    second = 0,
+    millisecond = 0,
     timeZone,
   }: {
     year: number;
@@ -509,9 +607,11 @@ export class AgentScheduleService {
     day: number;
     hour: number;
     minute: number;
+    second?: number;
+    millisecond?: number;
     timeZone: string;
   }) {
-    const desiredTimestamp = Date.UTC(year, month - 1, day, hour, minute);
+    const desiredTimestamp = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
     let candidate = new Date(desiredTimestamp);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -534,7 +634,7 @@ export class AgentScheduleService {
   static #getTimeZonePartsAsUtcTimestamp({ date, timeZone }: { date: Date; timeZone: string }) {
     const parts = this.#getLocalDateParts({ date, timeZone });
 
-    return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+    return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   }
 
   static #getDatePart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes) {

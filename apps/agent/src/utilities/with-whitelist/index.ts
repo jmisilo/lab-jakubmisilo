@@ -2,13 +2,6 @@ import type { Message, Thread } from 'chat';
 
 import { logger } from '@/infrastructure/logger';
 
-type TelegramMessageHandler = (thread: Thread, message: Message) => Promise<void>;
-type TelegramMessageHandlerWithEvent<TEvent extends string> = (
-  thread: Thread,
-  message: Message,
-  event: TEvent,
-) => Promise<void>;
-
 const TELEGRAM_ALLOWED_USER_IDS = new Set(
   (process.env.TELEGRAM_ALLOWED_USER_IDS ?? '')
     .split(',')
@@ -42,3 +35,10 @@ export const withWhitelist =
       '[TELEGRAM_AGENT]: message ignored because author is not allowlisted',
     );
   };
+
+type TelegramMessageHandler = (thread: Thread, message: Message) => Promise<void>;
+type TelegramMessageHandlerWithEvent<TEvent extends string> = (
+  thread: Thread,
+  message: Message,
+  event: TEvent,
+) => Promise<void>;

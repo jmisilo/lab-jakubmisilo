@@ -1,12 +1,3 @@
-export type WorldCupTeam = {
-  id: string;
-  name: string;
-  fifaCode: string;
-  iso2: string;
-  group: string;
-  aliases?: string[];
-};
-
 export const WORLD_CUP_TEAMS = [
   { id: '1', name: 'Mexico', fifaCode: 'MEX', iso2: 'MX', group: 'A' },
   { id: '2', name: 'South Africa', fifaCode: 'RSA', iso2: 'ZA', group: 'A' },
@@ -105,8 +96,6 @@ export const WORLD_CUP_TEAM_FIFA_CODES = WORLD_CUP_TEAMS.map((team) => team.fifa
   ...(typeof WORLD_CUP_TEAMS)[number]['fifaCode'][],
 ];
 
-export type WorldCupTeamFifaCode = (typeof WORLD_CUP_TEAM_FIFA_CODES)[number];
-
 export class WorldCupTeamRegistry {
   static resolve(query: string) {
     const normalizedQuery = this.#normalizeQuery(query);
@@ -177,3 +166,14 @@ export class WorldCupTeamRegistry {
     return [team.id, team.name, team.fifaCode, team.iso2, ...(team.aliases ?? [])];
   }
 }
+
+export type WorldCupTeam = {
+  id: string;
+  name: string;
+  fifaCode: string;
+  iso2: string;
+  group: string;
+  aliases?: string[];
+};
+
+export type WorldCupTeamFifaCode = (typeof WORLD_CUP_TEAM_FIFA_CODES)[number];

@@ -16,12 +16,6 @@ import {
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
-export type ManageKnowledgeTool = Tool<
-  z.infer<typeof ManageKnowledgeToolInputSchema>,
-  z.infer<typeof ManageKnowledgeToolOutputSchema>,
-  z.infer<typeof ManageKnowledgeToolContextSchema>
->;
-
 const KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT = 1_000;
 const KNOWLEDGE_TOOL_READ_CONTENT_CHARACTER_LIMIT = 12_000;
 const SHOULD_LOG_KNOWLEDGE_TOOL_CONTENT_PREVIEW =
@@ -461,3 +455,9 @@ function getParentPath(path: string) {
 
   return parts.slice(0, -1).join('/');
 }
+
+export type ManageKnowledgeTool = Tool<
+  z.infer<typeof ManageKnowledgeToolInputSchema>,
+  z.infer<typeof ManageKnowledgeToolOutputSchema>,
+  z.infer<typeof ManageKnowledgeToolContextSchema>
+>;

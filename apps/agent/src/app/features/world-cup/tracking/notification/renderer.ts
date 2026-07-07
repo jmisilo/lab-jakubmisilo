@@ -11,13 +11,6 @@ import satori from 'satori';
 
 import { logger } from '@/infrastructure/logger';
 
-type RenderWorldCupAttachmentOptions = {
-  graphemeImages?: Record<string, string>;
-  height: number;
-  scale?: number;
-  width: number;
-};
-
 const emojiAssetCache = new Map<string, Promise<string>>();
 
 const transparentSvgDataUrl =
@@ -115,4 +108,11 @@ const getEmojiCodepoints = (emoji: string) => {
     .filter((codepoint): codepoint is string => Boolean(codepoint) && codepoint !== 'fe0f');
 
   return codepoints.length > 0 ? codepoints.join('-') : null;
+};
+
+type RenderWorldCupAttachmentOptions = {
+  graphemeImages?: Record<string, string>;
+  height: number;
+  scale?: number;
+  width: number;
 };

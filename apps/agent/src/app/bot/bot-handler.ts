@@ -13,16 +13,6 @@ import { logger } from '@/infrastructure/logger';
 const TYPING_INDICATOR_REFRESH_MS = 3_000;
 const TYPING_INDICATOR_TIMEOUT_MS = 1_500;
 
-type BotHandlerConfig = {
-  bot: Chat;
-};
-
-type RespondToMessageInput = {
-  event: string;
-  thread: Thread;
-  message: Message;
-};
-
 export class BotHandler {
   static #bot: Chat | null = null;
 
@@ -325,3 +315,13 @@ export class BotHandler {
     });
   }
 }
+
+type BotHandlerConfig = {
+  bot: Chat;
+};
+
+type RespondToMessageInput = {
+  event: string;
+  thread: Thread;
+  message: Message;
+};

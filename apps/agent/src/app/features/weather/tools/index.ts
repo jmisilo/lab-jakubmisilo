@@ -13,16 +13,6 @@ import {
 } from '@/app/features/weather/schemas';
 import { logger } from '@/infrastructure/logger';
 
-export type GetWeatherTool = Tool<
-  z.infer<typeof GetWeatherToolInputSchema>,
-  z.infer<typeof GetWeatherToolOutputSchema>
->;
-
-export type GetLocalTimeTool = Tool<
-  z.infer<typeof GetLocalTimeToolInputSchema>,
-  z.infer<typeof GetLocalTimeToolOutputSchema>
->;
-
 const _getProviderStatus = (result: object) =>
   'providerStatus' in result && typeof result.providerStatus === 'number'
     ? result.providerStatus
@@ -146,6 +136,16 @@ export const getWeatherTool: GetWeatherTool = tool({
     };
   },
 });
+
+export type GetWeatherTool = Tool<
+  z.infer<typeof GetWeatherToolInputSchema>,
+  z.infer<typeof GetWeatherToolOutputSchema>
+>;
+
+export type GetLocalTimeTool = Tool<
+  z.infer<typeof GetLocalTimeToolInputSchema>,
+  z.infer<typeof GetLocalTimeToolOutputSchema>
+>;
 
 export const getLocalTimeTool: GetLocalTimeTool = tool({
   description: dedent`

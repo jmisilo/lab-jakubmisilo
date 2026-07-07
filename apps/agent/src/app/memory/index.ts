@@ -95,6 +95,7 @@ export class AgentMemoryService {
         .map((message) => `${message.role}: ${message.content}`)
         .join('\n');
       const summaryResult = await AIService.generate({
+        reasoning: 'xhigh',
         messages: [
           {
             role: 'user',

@@ -8,6 +8,57 @@ Custom AI agent. Provide Telegram bot credentials to deploy the agent and receiv
 - **Telegram bot** — webhook endpoint for direct messages, mentions, and subscribed threads
 - **Memory** — PostgreSQL-backed chat state and agent memory
 
+## How The Agent Works
+
+Request lifecycle:
+
+```mermaid
+flowchart LR
+  Event[Chat SDK event] --> Gate[allowlist gate]
+  Gate --> Bot[BotHandler]
+  Bot --> Memory[record message and build context]
+  Memory --> Agent[AgentService]
+  Agent --> Tools[AI SDK tools]
+  Agent --> Reply[thread.post]
+  Reply --> After[compression and implicit knowledge]
+```
+
+Scheduled-task lifecycle:
+
+```mermaid
+flowchart LR
+  User[user request] --> Tool[manage-schedule]
+  Tool --> Db[(Postgres task metadata)]
+  Tool --> QStash[QStash message or cron]
+  QStash --> Runner[schedule runner]
+  Runner --> Agent[scheduled AgentService call]
+  Agent --> Post[post to thread]
+  Post --> Advance[complete, reschedule, or fail]
+```
+
+Core modules:
+
+- `src/app/bot` owns Chat SDK wiring and inbound message handling.
+- `src/app/agent` owns the AI SDK agent, prompt, and tool registry.
+- `src/app/memory` owns short-term transcripts, rolling summaries, and context assembly.
+- `src/app/knowledge` owns durable tree notes, retrieval, and implicit ingestion.
+- `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
+- `src/infrastructure/*` wraps AI, DB, QStash, logging, and app errors.
+
+Scheduling states:
+
+- Tasks are `active`, `completed`, `cancelled`, or `failed`.
+- Runs are claimed as `running`, then marked `sent` or `failed`.
+- Recurring active tasks advance `nextRunAt`; one-time active tasks complete after a sent run.
+- QStash owns delivery timing. Postgres owns task metadata, limits, and cancellation state.
+
+Working conventions:
+
+- Keep provider SDKs and database tables behind infrastructure services.
+- Use static service classes for app-owned domain modules, but keep framework edge files simple.
+- Put shared schemas/types in nearby `schemas.ts` or `types.ts`; keep file-local helper types below runtime code.
+- Prefer changing public module methods and tests over reaching through implementation details.
+
 ## Environment
 
 ```sh

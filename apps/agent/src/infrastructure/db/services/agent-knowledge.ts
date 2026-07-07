@@ -20,87 +20,6 @@ import { agentKnowledgeNodeClosure, agentKnowledgeNodes } from '@/infrastructure
 import { DbService } from '@/infrastructure/db/services';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
-export type AgentKnowledgeContextRelationship = 'match' | 'ancestor' | 'child' | 'sibling';
-
-export type AgentKnowledgeContextNode = AgentKnowledgeNode & {
-  relationship: AgentKnowledgeContextRelationship;
-  similarity?: number;
-};
-
-type CreateKnowledgeNodeInput = {
-  identityId: string;
-  parentId?: string | null;
-  slug?: string;
-  title: string;
-  content?: string;
-  source?: AgentKnowledgeSource;
-  sourceMessageId?: string;
-  metadata?: Record<string, unknown>;
-  embedding?: number[];
-  embeddingModel?: string;
-  embeddingContentHash?: string;
-};
-
-type UpdateKnowledgeNodeContentInput = {
-  identityId: string;
-  nodeId: string;
-  title?: string;
-  content: string;
-  embedding?: number[];
-  embeddingModel?: string;
-  embeddingContentHash?: string;
-};
-
-type ListKnowledgeNodesInput = {
-  identityId: string;
-  parentPath?: string | null;
-  includeInactive?: boolean;
-  limit?: number;
-};
-
-type GetKnowledgeNodeByPathInput = {
-  identityId: string;
-  path: string;
-  includeInactive?: boolean;
-};
-
-type SupersedeKnowledgeNodeInput = {
-  identityId: string;
-  nodeId: string;
-  supersededById?: string;
-};
-
-type MoveKnowledgeNodeInput = {
-  identityId: string;
-  nodeId: string;
-  parentId: string | null;
-  slug?: string;
-  title?: string;
-  embedding?: number[];
-  embeddingModel?: string;
-  embeddingContentHash?: string;
-};
-
-type GetRelevantContextNodesInput = {
-  identityId: string;
-  embedding: number[];
-  matchLimit?: number;
-  minSimilarity?: number;
-  childLimit?: number;
-  siblingLimit?: number;
-};
-
-type FindRelevantMatchesInput = {
-  identityId: string;
-  embedding: number[];
-  limit?: number;
-  minSimilarity?: number;
-};
-
-export type AgentKnowledgeSimilarNode = AgentKnowledgeNode & {
-  similarity: number;
-};
-
 export class AgentKnowledgeDbService extends DbService {
   static async getNode({ identityId, nodeId }: { identityId: string; nodeId: string }) {
     const [node] = await this.client
@@ -877,3 +796,84 @@ export class AgentKnowledgeDbService extends DbService {
     return [...new Set(values)];
   }
 }
+
+export type AgentKnowledgeContextRelationship = 'match' | 'ancestor' | 'child' | 'sibling';
+
+export type AgentKnowledgeContextNode = AgentKnowledgeNode & {
+  relationship: AgentKnowledgeContextRelationship;
+  similarity?: number;
+};
+
+type CreateKnowledgeNodeInput = {
+  identityId: string;
+  parentId?: string | null;
+  slug?: string;
+  title: string;
+  content?: string;
+  source?: AgentKnowledgeSource;
+  sourceMessageId?: string;
+  metadata?: Record<string, unknown>;
+  embedding?: number[];
+  embeddingModel?: string;
+  embeddingContentHash?: string;
+};
+
+type UpdateKnowledgeNodeContentInput = {
+  identityId: string;
+  nodeId: string;
+  title?: string;
+  content: string;
+  embedding?: number[];
+  embeddingModel?: string;
+  embeddingContentHash?: string;
+};
+
+type ListKnowledgeNodesInput = {
+  identityId: string;
+  parentPath?: string | null;
+  includeInactive?: boolean;
+  limit?: number;
+};
+
+type GetKnowledgeNodeByPathInput = {
+  identityId: string;
+  path: string;
+  includeInactive?: boolean;
+};
+
+type SupersedeKnowledgeNodeInput = {
+  identityId: string;
+  nodeId: string;
+  supersededById?: string;
+};
+
+type MoveKnowledgeNodeInput = {
+  identityId: string;
+  nodeId: string;
+  parentId: string | null;
+  slug?: string;
+  title?: string;
+  embedding?: number[];
+  embeddingModel?: string;
+  embeddingContentHash?: string;
+};
+
+type GetRelevantContextNodesInput = {
+  identityId: string;
+  embedding: number[];
+  matchLimit?: number;
+  minSimilarity?: number;
+  childLimit?: number;
+  siblingLimit?: number;
+};
+
+type FindRelevantMatchesInput = {
+  identityId: string;
+  embedding: number[];
+  limit?: number;
+  minSimilarity?: number;
+};
+
+export type AgentKnowledgeSimilarNode = AgentKnowledgeNode & {
+  similarity: number;
+};

@@ -7,30 +7,6 @@ import dedent from 'dedent';
 
 const PROMPT_CACHE_VERSION = 'agent-prompt:v1';
 
-export type AgentPromptContext = {
-  skills: readonly AgentSkillSummary[];
-};
-
-export type AgentPromptCacheKeyContext = {
-  identityId: string;
-  tools: readonly string[];
-  skills: readonly AgentSkillSummary[];
-};
-
-export type AgentRuntimeClockContext = {
-  currentDate: string;
-  currentDateTime: string;
-  currentUtcDateTime: string;
-  currentWeekday: string;
-  timeZone: string;
-  timeZoneOffset: string;
-};
-
-export type AgentMessagesWithRuntimeContextInput = {
-  messages: ModelMessage[];
-  runtimeClock: AgentRuntimeClockContext;
-};
-
 export class AgentPromptService {
   static buildSystemPrompt({ skills }: AgentPromptContext) {
     return this.#buildStaticPrompt({ skills });
@@ -87,21 +63,22 @@ export class AgentPromptService {
     return dedent`
       # Identity
 
-      You are Lab JM Assistant, Jakub's private personal AI agent.
-      Your job is to help Jakub succeed in the current conversation with the least friction possible.
+      You are Lab JM Assistant, a private personal AI agent for the current user.
+      Your job is to help the user succeed in the current conversation with the least friction possible.
       You operate through chat surfaces such as Telegram and the local TUI, but your core behavior is surface-agnostic.
-      Jakub is the user. Keep him, his context, and his outcome at the center.
+      The current user is the person you are talking with in this thread. Keep their context and outcome at the center.
 
       # User Experience
 
-      - Default style: casual, natural, direct, and short.
-      - Sound like a capable human assistant, not a generic AI chatbot.
-      - Avoid filler such as "Certainly", "As an AI", "I can help with that", recap paragraphs, and excessive caveats.
+      - Default style: casual, warm, natural, direct, and short.
+      - Sound like a sharp friend who works with the user, not a formal virtual assistant or generic AI chatbot.
+      - Avoid filler such as "Certainly", "As an AI", "I can help with that", corporate recap paragraphs, and excessive caveats.
       - Do not over-explain simple answers. One or two short paragraphs are usually enough.
       - Use bullets only when they make the answer easier to scan.
       - If the user asks for depth, provide depth. Otherwise, keep momentum.
       - Match the user's language when clear; otherwise reply in English.
       - Use chat-friendly markdown, but do not decorate messages unnecessarily.
+      - Use concise human phrasing such as "done", "yep", or "that failed on my side" when it fits.
 
       # User Success
 
@@ -232,3 +209,27 @@ export class AgentPromptService {
     return `${currentWeekday}, ${currentDateTime} ${timeZone} (${timeZoneOffset})`;
   }
 }
+
+export type AgentPromptContext = {
+  skills: readonly AgentSkillSummary[];
+};
+
+export type AgentPromptCacheKeyContext = {
+  identityId: string;
+  tools: readonly string[];
+  skills: readonly AgentSkillSummary[];
+};
+
+export type AgentRuntimeClockContext = {
+  currentDate: string;
+  currentDateTime: string;
+  currentUtcDateTime: string;
+  currentWeekday: string;
+  timeZone: string;
+  timeZoneOffset: string;
+};
+
+export type AgentMessagesWithRuntimeContextInput = {
+  messages: ModelMessage[];
+  runtimeClock: AgentRuntimeClockContext;
+};

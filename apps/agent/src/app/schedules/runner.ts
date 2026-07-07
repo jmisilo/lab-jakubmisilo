@@ -90,18 +90,11 @@ export class AgentScheduleRunner {
       return { taskId, status: 'skipped', reason: 'already_claimed' };
     }
 
+    let output: string;
+
     try {
-      const output = await this.#generateTaskMessage({ bot, task });
-
+      output = await this.#generateTaskMessage({ bot, task });
       await bot.thread(task.threadId).post({ markdown: output });
-      await Promise.all([
-        this.#recordPostedTaskMessage({ bot, task, output }),
-        this.#markRunSentAndAdvanceTask({ task, runId: run.id, output, ranAt: now }),
-      ]);
-
-      logger.info({ taskId, runId: run.id }, '[AGENT_SCHEDULE]: task execution completed');
-
-      return { taskId, status: 'sent' };
     } catch (error) {
       logger.error(
         {
@@ -136,6 +129,48 @@ export class AgentScheduleRunner {
         retryable: true,
       });
     }
+
+    await this.#recordPostedTaskMessage({ bot, task, output });
+
+    try {
+      await this.#markRunSentAndAdvanceTask({ task, runId: run.id, output, ranAt: now });
+    } catch (error) {
+      logger.error(
+        {
+          taskId: task.id,
+          runId: run.id,
+          identityId: task.identityId,
+          threadId: task.threadId,
+          error,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[AGENT_SCHEDULE]: posted task bookkeeping failed after delivery',
+      );
+
+      await this.#markRunFailedForRetry({ task, runId: run.id, error });
+
+      if (!this.#usesQStashFailureCallback(task)) {
+        return { taskId, status: 'failed', reason: 'legacy_failure_callback_unavailable' };
+      }
+
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_EXECUTION_FAILED,
+        message: 'Scheduled task was delivered, but post-send bookkeeping failed.',
+        cause: error,
+        context: {
+          taskId: task.id,
+          runId: run.id,
+          identityId: task.identityId,
+          threadId: task.threadId,
+          delivered: true,
+        },
+        retryable: true,
+      });
+    }
+
+    logger.info({ taskId, runId: run.id }, '[AGENT_SCHEDULE]: task execution completed');
+
+    return { taskId, status: 'sent' };
   }
 
   static async handleExecutionExhausted({
@@ -221,7 +256,7 @@ export class AgentScheduleRunner {
           content: dedent`
             # Scheduled Task
 
-            Execute this scheduled task now and return the exact message to send to Jakub.
+            Execute this scheduled task now and return the exact message to send to the user.
 
             # Task
 
@@ -304,25 +339,11 @@ export class AgentScheduleRunner {
     output: string;
     ranAt: Date;
   }) {
-    try {
-      await AgentScheduleDbService.markTaskRunSent({
-        runId,
-        output,
-      });
-      await this.#advanceTaskAfterSuccess({ task, ranAt });
-    } catch (error) {
-      logger.error(
-        {
-          taskId: task.id,
-          runId,
-          identityId: task.identityId,
-          threadId: task.threadId,
-          error,
-          safeError: ErrorService.toSafeLog(error),
-        },
-        '[AGENT_SCHEDULE]: posted task bookkeeping failed',
-      );
-    }
+    await AgentScheduleDbService.markTaskRunSent({
+      runId,
+      output,
+    });
+    await this.#advanceTaskAfterSuccess({ task, ranAt });
   }
 
   static async #advanceTaskAfterSuccess({

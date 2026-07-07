@@ -12,6 +12,6 @@ const app = new Hono()
   .route('/', ScheduleRouter)
   .post('/webhooks/telegram', (c) => bot.webhooks.telegram(c.req.raw, { waitUntil }));
 
-export type AppType = typeof app;
-
 export default app;
+
+export type AppType = typeof app;
