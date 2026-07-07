@@ -12,10 +12,8 @@ export const agentKnowledgeServiceMock = {
 
 export const aiServiceMock = {
   model: 'gpt-5.5',
-  timeout: 30_000,
   embeddingModel: 'text-embedding-3-small',
   embeddingDimensions: 1536,
-  embeddingTimeout: 10_000,
   embed: jest.fn(),
   generate: jest.fn(),
 };

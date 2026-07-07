@@ -1,3 +1,4 @@
+import type { AgentRuntimeClockContext } from '@/app/agent/prompt';
 import type { AgentTools } from '@/app/agent/tools';
 import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai';
 import type { ModelMessage } from 'ai';
@@ -9,13 +10,13 @@ import { z } from 'zod';
 import { AgentPromptService } from '@/app/agent/prompt';
 import { agentTools } from '@/app/agent/tools';
 import { SkillService } from '@/app/skills';
-import { AppError, AppErrorCode } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const AgentRuntimeContextSchema = z.object({
   identityId: z.string().min(1),
   threadId: z.string().min(1).optional(),
   sourceMessageId: z.string().optional(),
+  mode: z.enum(['chat', 'scheduled_task']).optional(),
   timeZone: z.string().min(1).optional(),
 });
 
@@ -26,22 +27,14 @@ const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
 const PROMPT_CACHE_RETENTION = '24h';
 
 export class AgentService {
-  static #timeout = {
-    total: 30_000,
-    step: 20_000,
-  };
-
   static #model = 'gpt-5.5';
 
   static readonly agent = new ToolLoopAgent({
     model: openai('gpt-5.5'),
     instructions: AgentPromptService.buildSystemPrompt({
-      identityId: UNAVAILABLE_TOOL_CONTEXT,
-      currentDate: 'provided-at-call-time',
-      timeZone: DEFAULT_USER_TIME_ZONE,
-      tools: Object.keys(agentTools),
       skills: SkillService.listSkills(),
     }),
+    allowSystemInMessages: true,
     tools: agentTools,
     /**
      * AI SDK requires initial context objects for tools with context schemas. These sentinels are not used for persistence because `prepareCall` disables context-dependent tools until real call options provide the required identity/thread context.
@@ -49,6 +42,10 @@ export class AgentService {
     toolsContext: {
       'manage-knowledge': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
+      'manage-schedule': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+        threadId: UNAVAILABLE_TOOL_CONTEXT,
       },
       'manage-world-cup-subscription': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
@@ -72,12 +69,9 @@ export class AgentService {
       return {
         ...input,
         instructions: AgentPromptService.buildSystemPrompt({
-          identityId,
-          currentDate: this.#getCurrentDate({ timeZone }),
-          timeZone,
-          tools: activeTools,
           skills,
         }),
+        allowSystemInMessages: true,
         activeTools,
         toolOrder: activeTools,
         providerOptions: {
@@ -93,6 +87,11 @@ export class AgentService {
         toolsContext: {
           'manage-knowledge': {
             identityId,
+            sourceMessageId: options?.sourceMessageId,
+          },
+          'manage-schedule': {
+            identityId,
+            threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
             sourceMessageId: options?.sourceMessageId,
           },
           'manage-world-cup-subscription': {
@@ -111,7 +110,7 @@ export class AgentService {
       };
     },
     maxRetries: 1,
-    stopWhen: isStepCount(5),
+    stopWhen: isStepCount(12),
     onStart: (event) => {
       logger.info(
         { model: this.#model, lastMessage: event.messages.at(-1) },
@@ -143,8 +142,12 @@ export class AgentService {
       'get-weather',
       'get-local-time',
     ];
+    if (options?.mode === 'scheduled_task') {
+      return activeTools;
+    }
 
     if (options?.identityId && options.threadId) {
+      activeTools.push('manage-schedule');
       activeTools.push('manage-knowledge');
       activeTools.push('manage-world-cup-subscription');
       activeTools.push('get-world-cup-tracking');
@@ -155,14 +158,31 @@ export class AgentService {
     return activeTools;
   }
 
-  static #getCurrentDate({ timeZone }: { timeZone: string }) {
+  static #getRuntimeClock({
+    timeZone,
+    now = new Date(),
+  }: {
+    timeZone: string;
+    now?: Date;
+  }): AgentRuntimeClockContext {
+    return {
+      currentDate: this.#getCurrentDate({ timeZone, now }),
+      currentDateTime: this.#getCurrentDateTime({ timeZone, now }),
+      currentUtcDateTime: now.toISOString(),
+      currentWeekday: this.#getCurrentWeekday({ timeZone, now }),
+      timeZone,
+      timeZoneOffset: this.#getTimeZoneOffset({ timeZone, now }),
+    };
+  }
+
+  static #getCurrentDate({ timeZone, now }: { timeZone: string; now: Date }) {
     try {
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
-      }).formatToParts(new Date());
+      }).formatToParts(now);
       const year = parts.find((part) => part.type === 'year')?.value;
       const month = parts.find((part) => part.type === 'month')?.value;
       const day = parts.find((part) => part.type === 'day')?.value;
@@ -174,13 +194,71 @@ export class AgentService {
       // Fall through to UTC when a stored timezone is invalid.
     }
 
-    return new Date().toISOString().slice(0, 10);
+    return now.toISOString().slice(0, 10);
+  }
+
+  static #getCurrentDateTime({ timeZone, now }: { timeZone: string; now: Date }) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).formatToParts(now);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+      const hour = parts.find((part) => part.type === 'hour')?.value;
+      const minute = parts.find((part) => part.type === 'minute')?.value;
+
+      if (year && month && day && hour && minute) {
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      }
+    } catch {
+      // Fall through to UTC when a stored timezone is invalid.
+    }
+
+    return now.toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  static #getCurrentWeekday({ timeZone, now }: { timeZone: string; now: Date }) {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'long',
+      }).format(now);
+    } catch {
+      return 'UTC day';
+    }
+  }
+
+  static #getTimeZoneOffset({ timeZone, now }: { timeZone: string; now: Date }) {
+    try {
+      const offset = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        timeZoneName: 'longOffset',
+      })
+        .formatToParts(now)
+        .find((part) => part.type === 'timeZoneName')?.value;
+
+      if (offset) {
+        return offset.replace('GMT', 'UTC');
+      }
+    } catch {
+      // Fall through to UTC when a stored timezone is invalid.
+    }
+
+    return 'UTC';
   }
 
   static async generate({
     identityId,
     threadId,
     sourceMessageId,
+    mode = 'chat',
     timeZone,
     messages,
   }: {
@@ -188,33 +266,23 @@ export class AgentService {
     identityId: string;
     threadId?: string;
     sourceMessageId?: string;
+    mode?: AgentRuntimeContext['mode'];
     timeZone?: string;
   }) {
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort(
-        AppError.timeout({
-          code: AppErrorCode.ASSISTANT_GENERATE_TIMEOUT,
-          message: 'Assistant response generation timed out.',
-          context: {
-            model: this.#model,
-            operation: 'assistant.generate',
-          },
-          timeoutMs: this.#timeout.total,
-        }),
-      );
-    }, this.#timeout.total);
-
     try {
       logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
 
+      const runtimeClock = this.#getRuntimeClock({
+        timeZone: timeZone ?? DEFAULT_USER_TIME_ZONE,
+      });
       const result = await this.agent.generate({
-        messages,
-        options: { identityId, threadId, sourceMessageId, timeZone },
-        abortSignal: abortController.signal,
-        timeout: {
-          totalMs: this.#timeout.total,
-          stepMs: this.#timeout.step,
+        messages: AgentPromptService.buildMessagesWithRuntimeContext({ messages, runtimeClock }),
+        options: {
+          identityId,
+          threadId,
+          sourceMessageId,
+          mode,
+          timeZone: runtimeClock.timeZone,
         },
       });
 
@@ -236,8 +304,6 @@ export class AgentService {
       logger.error({ error }, '[AI_AGENT]: response generation failed');
 
       throw error;
-    } finally {
-      clearTimeout(timeout);
     }
   }
 }
