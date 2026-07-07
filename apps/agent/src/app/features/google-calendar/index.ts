@@ -31,8 +31,8 @@ export const GoogleCalendarRouter = new Hono()
         renderCalendarPage({
           title: 'Calendar connection expired',
           body: recovery.sent
-            ? 'That Calendar connection link expired. I sent a fresh link in Telegram.'
-            : 'That Calendar connection link expired or is invalid. Return to Telegram and ask me to connect Calendar again.',
+            ? 'That Calendar connection link expired. A fresh link was sent in the conversation.'
+            : 'That Calendar connection link expired or is invalid. Ask for a new Calendar connection link.',
         }),
         400,
       );
@@ -49,7 +49,7 @@ export const GoogleCalendarRouter = new Hono()
       return c.html(
         renderCalendarPage({
           title: 'Calendar was not connected',
-          body: 'Google Calendar access was not granted. Return to Telegram if you want to try again.',
+          body: 'Google Calendar access was not granted. You can request a new connection link if you want to try again.',
         }),
         400,
       );
@@ -61,7 +61,7 @@ export const GoogleCalendarRouter = new Hono()
       return c.html(
         renderCalendarPage({
           title: 'Calendar was not connected',
-          body: 'The Google callback was missing required information. Return to Telegram and ask me to connect Calendar again.',
+          body: 'The Google callback was missing required information. Ask for a new Calendar connection link.',
         }),
         400,
       );
@@ -101,7 +101,7 @@ export const GoogleCalendarRouter = new Hono()
     c.html(
       renderCalendarPage({
         title: 'Calendar connected',
-        body: 'Google Calendar is connected. You can return to Telegram.',
+        body: 'Google Calendar is connected.',
       }),
     ),
   )
@@ -109,7 +109,7 @@ export const GoogleCalendarRouter = new Hono()
     c.html(
       renderCalendarPage({
         title: 'Calendar was not connected',
-        body: 'Google Calendar connection failed. Return to Telegram and ask me to try again.',
+        body: 'Google Calendar connection failed. Ask for a new Calendar connection link.',
       }),
       400,
     ),
@@ -167,12 +167,6 @@ function renderCalendarPage({ title, body }: { title: string; body: string }) {
         background: #ffffff;
         padding: 24px;
       }
-      .eyebrow {
-        margin: 0 0 18px;
-        color: #a1a1aa;
-        font-size: 14px;
-        line-height: 1.4;
-      }
       h1 {
         margin: 0;
         color: #09090b;
@@ -185,20 +179,6 @@ function renderCalendarPage({ title, body }: { title: string; body: string }) {
         margin: 10px 0 0;
         font-size: 15px;
         line-height: 1.6;
-      }
-      .divider {
-        height: 1px;
-        width: 100%;
-        margin: 22px 0 0;
-        background: #e4e4e7;
-      }
-      footer {
-        width: 100%;
-        max-width: 608px;
-        margin: 24px auto 0;
-        color: #a1a1aa;
-        font-size: 14px;
-        line-height: 1.4;
       }
       a {
         color: #3f3f46;
@@ -226,14 +206,11 @@ function renderCalendarPage({ title, body }: { title: string; body: string }) {
       <main>
         <div class="card">
           <section class="panel" aria-labelledby="calendar-status-title">
-            <p class="eyebrow">Lab JM Assistant / Google Calendar</p>
             <h1 id="calendar-status-title">${escapeHtml(title)}</h1>
             <p>${escapeHtml(body)}</p>
-            <div class="divider" aria-hidden="true"></div>
           </section>
         </div>
       </main>
-      <footer>Return to Telegram to continue.</footer>
     </div>
   </body>
 </html>`;
@@ -243,13 +220,13 @@ function renderConnectionFailurePage(error: unknown) {
   if (AppError.is(error) && error.code === AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID) {
     return renderCalendarPage({
       title: 'Calendar is not configured',
-      body: 'Google Calendar is not configured correctly on the server. Return to Telegram after the configuration is fixed.',
+      body: 'Google Calendar is not configured correctly on the server. Try again after the configuration is fixed.',
     });
   }
 
   return renderCalendarPage({
     title: 'Calendar was not connected',
-    body: 'Google Calendar connection failed. Return to Telegram and ask me to connect Calendar again.',
+    body: 'Google Calendar connection failed. Ask for a new Calendar connection link.',
   });
 }
 

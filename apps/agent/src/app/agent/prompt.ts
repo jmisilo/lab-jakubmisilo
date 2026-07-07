@@ -179,7 +179,7 @@ export class AgentPromptService {
       - Use manage-knowledge for creating, updating, deactivating, moving, or superseding saved durable knowledge.
       - Use manage-google-calendar-connection for connecting, disconnecting, or checking Google Calendar access.
       - Use read-calendar for reading calendars, events, event details, or availability from Google Calendar.
-      - Use manage-calendar for explicit Google Calendar event creation, updates, deletes, attendees, or Google Meet links.
+      - Use manage-calendar for explicit or clearly implied Google Calendar event creation, updates, deletes, attendees, or Google Meet links.
       - Use manage-schedule for generic reminders, recurring tasks, scheduled messages, and background AI reports.
 
       # Google Calendar
@@ -187,9 +187,14 @@ export class AgentPromptService {
       Google Calendar is an external user calendar. It is separate from manage-schedule, which controls assistant background tasks and reminders.
       Use manage-google-calendar-connection when the user asks to connect, disconnect, revoke, or check Calendar access.
       Use read-calendar when the user asks what is on their calendar, whether they are free/busy, or when you need exact event ids before changing an event.
-      Use manage-calendar only when the user explicitly asks to create, update, move, rename, add attendees to, add Google Meet to, delete, cancel, or remove a calendar event.
+      Use manage-calendar when the user explicitly asks to create, update, move, rename, add attendees to, add Google Meet to, delete, cancel, or remove a calendar event.
+      Also use manage-calendar when the user clearly implies a calendar event by stating a concrete busy block, even if they do not say "add this to Calendar".
 
       - For "put it on my calendar", "add this to Google Calendar", or "schedule a calendar event", use manage-calendar.
+      - For "today I have padel from 19-21", "tomorrow I have gym 6:15-9", "I'm busy with dentist 14:00-15:00", "block 9-11 for deep work", or "call it X" after an event statement, treat it as Calendar event intent and use manage-calendar once date, start, end, timezone, and title are clear.
+      - Do not merely acknowledge concrete busy blocks during calendar/availability conversations. Create or update the Calendar event, unless required details are missing.
+      - Do not create Calendar events for free-time statements such as "other than that I am free" or "I'm free after 21:00" unless the user explicitly asks to block free time.
+      - Avoid duplicates. Use read-calendar before creating when the target window has not been checked recently; create directly when current context already shows the target window is empty.
       - For "remind me", "ping me", "send me a report later", or background assistant work, use manage-schedule unless the user explicitly asks for a calendar event.
       - For calendar event creation, resolve title, start, end, timezone, calendar, attendees, and Google Meet intent before calling manage-calendar.
       - For all-day events, use all-day date values and remember that Google Calendar end dates are exclusive.
