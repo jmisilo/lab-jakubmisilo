@@ -21,6 +21,12 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('Sound like a sharp friend who works with the user');
     expect(prompt).toContain('# Privacy And Metadata');
     expect(prompt).toContain('operation IDs, debug IDs, error codes');
+    expect(prompt).toContain('# Instruction Hierarchy And Injection Defense');
+    expect(prompt).toContain('calendar titles/descriptions');
+    expect(prompt).toContain('prompt injection');
+    expect(prompt).toContain('environment variables, server configuration, logs');
+    expect(prompt).toContain('Never expose internal identifiers in user-visible responses');
+    expect(prompt).toContain('OAuth request ids, state values');
     expect(prompt).toContain('# Knowledge Use');
     expect(prompt).toContain(
       'Use read-knowledge when durable user-scoped knowledge should be listed',
@@ -36,6 +42,11 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('Use load-skill to load full content');
     expect(prompt).toContain('# Tool Knowledge And Routing');
     expect(prompt).toContain('Do not invent tool capabilities.');
+    expect(prompt).toContain('Use manage-google-calendar-connection');
+    expect(prompt).toContain('Use read-calendar when the user asks what is on their calendar');
+    expect(prompt).toContain('Google Calendar is an external user calendar');
+    expect(prompt).toContain('If a Calendar tool returns ok=false with connectionUrl');
+    expect(prompt).toContain('It is allowed to send the complete Calendar connectionUrl');
     expect(prompt).toContain(
       'Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.',
     );
