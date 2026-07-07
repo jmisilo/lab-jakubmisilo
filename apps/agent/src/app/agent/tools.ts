@@ -20,18 +20,6 @@ import { manageKnowledgeTool } from '@/app/knowledge/tools';
 import { manageScheduleTool } from '@/app/schedules/tools';
 import { loadSkillTool } from '@/app/skills/tools';
 
-export type AgentTools = {
-  'load-skill': LoadSkillTool;
-  webSearch: ReturnType<typeof openai.tools.webSearch>;
-  'manage-knowledge': ManageKnowledgeTool;
-  'manage-schedule': ManageScheduleTool;
-  'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
-  'get-world-cup-tracking': GetWorldCupTrackingTool;
-  'get-world-cup-context': GetWorldCupContextTool;
-  'get-weather': GetWeatherTool;
-  'get-local-time': GetLocalTimeTool;
-};
-
 /** @todo defer loading tools, upon having multiple choices */
 export const agentTools: AgentTools = {
   'load-skill': loadSkillTool,
@@ -46,4 +34,16 @@ export const agentTools: AgentTools = {
   'get-world-cup-context': getWorldCupContextTool,
   'get-weather': getWeatherTool,
   'get-local-time': getLocalTimeTool,
+};
+
+export type AgentTools = {
+  'load-skill': LoadSkillTool;
+  webSearch: ReturnType<typeof openai.tools.webSearch>;
+  'manage-knowledge': ManageKnowledgeTool;
+  'manage-schedule': ManageScheduleTool;
+  'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
+  'get-world-cup-tracking': GetWorldCupTrackingTool;
+  'get-world-cup-context': GetWorldCupContextTool;
+  'get-weather': GetWeatherTool;
+  'get-local-time': GetLocalTimeTool;
 };

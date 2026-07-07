@@ -11,13 +11,6 @@ import { AIService } from '@/infrastructure/ai';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
-export type WorldCupNotificationBot = {
-  thread(threadId: string): Thread;
-  transcripts: {
-    list(input: { userKey: string; threadId: string; limit: number }): Promise<ShortTermMemory[]>;
-  };
-};
-
 export class WorldCupNotificationService {
   static async postNotification({
     bot,
@@ -122,6 +115,7 @@ export class WorldCupNotificationService {
       );
 
       const result = await AIService.generate({
+        reasoning: 'xhigh',
         instructions: dedent`
           Write a short Telegram notification for a FIFA World Cup 2026 event.
           Use the prior conversation only to match the user's tone and preferences.
@@ -181,3 +175,10 @@ export class WorldCupNotificationService {
     return [team.flagEmoji, team.name].filter(Boolean).join(' ');
   }
 }
+
+export type WorldCupNotificationBot = {
+  thread(threadId: string): Thread;
+  transcripts: {
+    list(input: { userKey: string; threadId: string; limit: number }): Promise<ShortTermMemory[]>;
+  };
+};

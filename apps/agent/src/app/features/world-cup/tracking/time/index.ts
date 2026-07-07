@@ -1,11 +1,5 @@
 import type { WorldCupGameSnapshot } from '@/app/features/world-cup/types';
 
-type WorldCupStadiumTimeZone = {
-  name: string;
-  city: string;
-  timeZone: string;
-};
-
 export class WorldCupTimeService {
   static #defaultUserTimeZone = 'Europe/Warsaw';
 
@@ -210,3 +204,9 @@ export class WorldCupTimeService {
     );
   }
 }
+
+type WorldCupStadiumTimeZone = {
+  name: string;
+  city: string;
+  timeZone: string;
+};

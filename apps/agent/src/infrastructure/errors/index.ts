@@ -22,35 +22,6 @@ export const AppErrorCode = {
   WORLD_CUP_API_TIMEOUT: 'WORLD_CUP_API_TIMEOUT',
 } as const;
 
-export type AppErrorCode = (typeof AppErrorCode)[keyof typeof AppErrorCode];
-export type AppErrorContext = Record<string, unknown>;
-
-export type UserFacingFailure = {
-  code: AppErrorCode;
-  message: string;
-  retryable: boolean;
-};
-
-type AppErrorInput = {
-  code: AppErrorCode;
-  message: string;
-  cause?: unknown;
-  context?: AppErrorContext;
-  retryable?: boolean;
-  userMessage?: string;
-};
-
-type TimeoutErrorInput = Omit<AppErrorInput, 'context'> & {
-  context?: AppErrorContext;
-  timeoutMs: number;
-};
-
-type DescribeForUserInput = {
-  fallbackCode: AppErrorCode;
-  fallbackMessage: string;
-  fallbackRetryable?: boolean;
-};
-
 export class AppError extends Error {
   readonly code: AppErrorCode;
   readonly context: AppErrorContext;
@@ -166,3 +137,33 @@ export class ErrorService {
     return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : undefined;
   }
 }
+
+export type AppErrorContext = Record<string, unknown>;
+
+export type AppErrorCode = (typeof AppErrorCode)[keyof typeof AppErrorCode];
+
+export type UserFacingFailure = {
+  code: AppErrorCode;
+  message: string;
+  retryable: boolean;
+};
+
+type AppErrorInput = {
+  code: AppErrorCode;
+  message: string;
+  cause?: unknown;
+  context?: AppErrorContext;
+  retryable?: boolean;
+  userMessage?: string;
+};
+
+type TimeoutErrorInput = Omit<AppErrorInput, 'context'> & {
+  context?: AppErrorContext;
+  timeoutMs: number;
+};
+
+type DescribeForUserInput = {
+  fallbackCode: AppErrorCode;
+  fallbackMessage: string;
+  fallbackRetryable?: boolean;
+};

@@ -5,64 +5,6 @@ import { WORLD_CUP_TEAMS, WorldCupTeamRegistry } from '@/app/features/world-cup/
 import { WorldCupApiClient } from '@/app/features/world-cup/tracking/api';
 import { WorldCupTimeService } from '@/app/features/world-cup/tracking/time';
 
-type WorldCupContextFocus = 'all' | 'schedule' | 'team' | 'tables' | 'knockout' | 'stage';
-
-type WorldCupContextGame = {
-  gameId: string;
-  stage: string;
-  group: string;
-  matchday: string;
-  status: 'scheduled' | 'active' | 'finished';
-  kickoffAt: Date | null;
-  kickoffDate: string | null;
-  kickoffTime: string;
-  homeTeam: WorldCupContextTeam;
-  awayTeam: WorldCupContextTeam;
-  score: string;
-  winnerTeamId?: string;
-};
-
-type WorldCupContextTeam = {
-  id: string;
-  name: string;
-  fifaCode?: string;
-  flagEmoji?: string;
-  score: number;
-};
-
-type WorldCupGroupTableRow = {
-  team: WorldCupContextTeam;
-  played: number;
-  won: number;
-  drawn: number;
-  lost: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  goalDifference: number;
-  points: number;
-};
-
-type WorldCupContextInput = {
-  games: WorldCupGameSnapshot[];
-  timeZone: string;
-  now?: Date;
-  focus?: WorldCupContextFocus;
-  teamCodes?: WorldCupTeamFifaCode[];
-  date?: string;
-};
-
-export type WorldCupContext = {
-  timeZone: string;
-  generatedAt: string;
-  today: string;
-  currentStage: string;
-  summaryMarkdown: string;
-  scheduleMarkdown: string;
-  groupTablesMarkdown: string;
-  knockoutLadderMarkdown: string;
-  games: WorldCupContextGame[];
-};
-
 export class WorldCupContextService {
   static async getContext({
     timeZone,
@@ -544,3 +486,61 @@ export class WorldCupContextService {
     return 99;
   }
 }
+
+type WorldCupContextFocus = 'all' | 'schedule' | 'team' | 'tables' | 'knockout' | 'stage';
+
+type WorldCupContextGame = {
+  gameId: string;
+  stage: string;
+  group: string;
+  matchday: string;
+  status: 'scheduled' | 'active' | 'finished';
+  kickoffAt: Date | null;
+  kickoffDate: string | null;
+  kickoffTime: string;
+  homeTeam: WorldCupContextTeam;
+  awayTeam: WorldCupContextTeam;
+  score: string;
+  winnerTeamId?: string;
+};
+
+type WorldCupContextTeam = {
+  id: string;
+  name: string;
+  fifaCode?: string;
+  flagEmoji?: string;
+  score: number;
+};
+
+type WorldCupGroupTableRow = {
+  team: WorldCupContextTeam;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+};
+
+type WorldCupContextInput = {
+  games: WorldCupGameSnapshot[];
+  timeZone: string;
+  now?: Date;
+  focus?: WorldCupContextFocus;
+  teamCodes?: WorldCupTeamFifaCode[];
+  date?: string;
+};
+
+export type WorldCupContext = {
+  timeZone: string;
+  generatedAt: string;
+  today: string;
+  currentStage: string;
+  summaryMarkdown: string;
+  scheduleMarkdown: string;
+  groupTablesMarkdown: string;
+  knockoutLadderMarkdown: string;
+  games: WorldCupContextGame[];
+};

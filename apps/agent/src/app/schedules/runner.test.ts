@@ -255,11 +255,14 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
-  it('does not post a failure notice when post-send bookkeeping fails', async () => {
+  it('marks the run failed and retries when post-send bookkeeping fails after delivery', async () => {
     const task = createTask({
       id: 'task-1',
       scheduleKind: 'one_time',
       nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      metadata: {
+        qstashFailureCallback: true,
+      },
     });
     const thread = {
       id: 'telegram:1',
@@ -278,25 +281,34 @@ describe('AgentScheduleRunner', () => {
       id: 'run-1',
       taskId: task.id,
     });
-    mockAgentScheduleDbService.completeTask.mockRejectedValue(new Error('db update failed'));
+    const error = new Error('db update failed');
+
+    mockAgentScheduleDbService.completeTask.mockRejectedValue(error);
     mockAgentService.generate.mockResolvedValue({
       text: 'Time to walk the dog.',
     });
 
-    const result = await AgentScheduleRunner.executeTask({
-      bot: bot as never,
-      taskId: 'task-1',
-      now: new Date('2026-07-06T17:00:30.000Z'),
+    await expect(
+      AgentScheduleRunner.executeTask({
+        bot: bot as never,
+        taskId: 'task-1',
+        now: new Date('2026-07-06T17:00:30.000Z'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_TASK_EXECUTION_FAILED',
+      retryable: true,
+      context: expect.objectContaining({
+        delivered: true,
+      }),
     });
 
     expect(thread.post).toHaveBeenCalledTimes(1);
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time to walk the dog.' });
-    expect(mockAgentScheduleDbService.markTaskRunFailed).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.failTask).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      taskId: 'task-1',
-      status: 'sent',
+    expect(mockAgentScheduleDbService.markTaskRunFailed).toHaveBeenCalledWith({
+      runId: 'run-1',
+      error,
     });
+    expect(mockAgentScheduleDbService.failTask).not.toHaveBeenCalled();
   });
 
   it('marks the run failed and retries through QStash when generation fails before posting', async () => {
@@ -452,7 +464,7 @@ function createTask({
     identityId: 'identity-1',
     threadId: 'telegram:1',
     title: 'Tennis reminder',
-    prompt: 'Send Jakub a short reminder about his tennis game.',
+    prompt: 'Send the user a short reminder about their tennis game.',
     scheduleKind,
     status,
     timeZone: 'Europe/Warsaw',

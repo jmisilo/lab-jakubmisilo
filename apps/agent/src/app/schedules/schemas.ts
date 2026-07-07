@@ -4,6 +4,9 @@ export const SCHEDULE_TASK_TITLE_MAX_CHARACTERS = 180;
 export const SCHEDULE_TASK_PROMPT_MAX_CHARACTERS = 4_000;
 export const SCHEDULE_TASK_LIST_MAX_ITEMS = 50;
 
+const ISO_DATE_TIME_WITH_OPTIONAL_OFFSET_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/;
+
 export const ScheduleDayOfWeekSchema = z.enum([
   'monday',
   'tuesday',
@@ -41,8 +44,9 @@ const OneTimeScheduleSchema = z.object({
   runAt: z
     .string()
     .min(1)
+    .regex(ISO_DATE_TIME_WITH_OPTIONAL_OFFSET_PATTERN)
     .describe(
-      'Future ISO 8601 datetime for the first execution, with timezone offset when possible.',
+      'Future ISO 8601 datetime for the first execution. Include Z or a numeric offset when possible; if omitted, timeZone is used as the local wall-clock timezone.',
     ),
   timeZone: z.string().min(1).describe('IANA timezone used to interpret the schedule.'),
 });

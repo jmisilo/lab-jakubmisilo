@@ -146,6 +146,7 @@ describe('AgentMemoryService', () => {
       });
 
       expect(mockAIService.generate).toHaveBeenCalledWith({
+        reasoning: 'xhigh',
         messages: [
           expect.objectContaining({
             role: 'user',

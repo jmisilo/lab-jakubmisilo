@@ -17,7 +17,8 @@ describe('AgentPromptService', () => {
     expect(prompt).not.toContain('2026-07-05');
     expect(prompt).not.toContain('Europe/Warsaw');
     expect(prompt).toContain('# User Experience');
-    expect(prompt).toContain('Default style: casual, natural, direct, and short.');
+    expect(prompt).toContain('Default style: casual, warm, natural, direct, and short.');
+    expect(prompt).toContain('Sound like a sharp friend who works with the user');
     expect(prompt).toContain('# Privacy And Metadata');
     expect(prompt).toContain('operation IDs, debug IDs, error codes');
     expect(prompt).toContain('# Knowledge Use');

@@ -5,7 +5,7 @@ description: How to answer FIFA World Cup 2026 context questions and manage Worl
 
 # World Cup Tracking
 
-Use this skill when Jakub asks about FIFA World Cup 2026 schedules, teams, tables, brackets, results, current stage, or future match/event notifications.
+Use this skill when the user asks about FIFA World Cup 2026 schedules, teams, tables, brackets, results, current stage, or future match/event notifications.
 
 ## Tool Split
 
@@ -106,6 +106,6 @@ Keep World Cup answers concise and concrete. Include local date/time in the user
 
 If a subscription succeeds, confirm what will be tracked. If it fails, say it could not be updated yet without exposing internal errors, IDs, or raw payloads.
 
-Do not expose subscription IDs, database IDs, event IDs, debug IDs, raw API payloads, or implementation details unless Jakub explicitly asks for diagnostics.
+Do not expose subscription IDs, database IDs, event IDs, debug IDs, raw API payloads, or implementation details unless the user explicitly asks for diagnostics.
 
 For factual answers, do not invent missing fixtures, scores, scorers, venues, or tables. If context is unavailable, say that the World Cup data is temporarily unavailable.

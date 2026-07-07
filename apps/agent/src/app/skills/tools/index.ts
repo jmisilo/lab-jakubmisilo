@@ -8,11 +8,6 @@ import { SkillService } from '@/app/skills';
 import { LoadSkillToolInputSchema, LoadSkillToolOutputSchema } from '@/app/skills/schemas';
 import { logger } from '@/infrastructure/logger';
 
-export type LoadSkillTool = Tool<
-  z.infer<typeof LoadSkillToolInputSchema>,
-  z.infer<typeof LoadSkillToolOutputSchema>
->;
-
 export const loadSkillTool: LoadSkillTool = tool({
   description: dedent`
     Load full procedural guidance from an available project skill file.
@@ -58,3 +53,8 @@ export const loadSkillTool: LoadSkillTool = tool({
     return result;
   },
 });
+
+export type LoadSkillTool = Tool<
+  z.infer<typeof LoadSkillToolInputSchema>,
+  z.infer<typeof LoadSkillToolOutputSchema>
+>;

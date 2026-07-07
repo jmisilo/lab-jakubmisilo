@@ -45,13 +45,15 @@ bot.onDirectMessage(
   ),
 );
 bot.onNewMention(
-  withWhitelist('new_mention', (thread, message, event) =>
-    BotHandler.respondToMessage({
+  withWhitelist('new_mention', async (thread, message, event) => {
+    await thread.subscribe();
+
+    await BotHandler.respondToMessage({
       event,
       thread,
       message,
-    }),
-  ),
+    });
+  }),
 );
 bot.onSubscribedMessage(
   withWhitelist('subscribed_message', (thread, message, event) =>
