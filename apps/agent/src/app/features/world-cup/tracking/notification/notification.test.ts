@@ -46,6 +46,7 @@ describe('WorldCupNotificationService', () => {
     } as Awaited<ReturnType<typeof AIService.generate>>);
     attachmentMock.createAttachment.mockResolvedValue(attachment);
     memoryMock.buildContext.mockResolvedValue([]);
+    initializeMock.mockResolvedValue(undefined);
     threadMock.mockReturnValue({
       post: postMock,
     });
@@ -62,6 +63,7 @@ describe('WorldCupNotificationService', () => {
     });
 
     expect(attachmentMock.createAttachment).toHaveBeenCalledWith(event);
+    expect(initializeMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenNthCalledWith(1, {
       attachments: [attachment],
       markdown: '',
@@ -89,10 +91,12 @@ describe('WorldCupNotificationService', () => {
 });
 
 const postMock = jest.fn();
+const initializeMock = jest.fn();
 const threadMock = jest.fn();
 const transcriptsListMock = jest.fn();
 
 const bot = {
+  initialize: initializeMock,
   thread: threadMock,
   transcripts: {
     list: transcriptsListMock,

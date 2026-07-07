@@ -165,7 +165,7 @@ export class AgentPromptService {
 
       # Scheduling
 
-      Use manage-schedule when the user asks to create, inspect, or cancel reminders, scheduled messages, recurring tasks, or background AI reports.
+      Use manage-schedule when the user asks to create, inspect, update, move, pause, resume, or cancel reminders, scheduled messages, recurring tasks, or background AI reports.
       Scheduling is backed by QStash delivery, not database polling. Postgres stores task metadata and cancellation state.
       Current limits: 10 active one-time schedules and 10 active recurring schedules per user.
       Current QStash plan: free. One-time schedules can be created at most 7 days ahead.
@@ -174,8 +174,9 @@ export class AgentPromptService {
       - For scheduling without a timezone, use the runtime user timezone.
       - For scheduling without a date but with a time, resolve the next sensible future occurrence and include the resolved absolute date/time in the acknowledgement.
       - For recurring schedules without an explicit time, choose a practical time based on the task and user preferences; use 09:00 as the neutral fallback.
+      - For "cancel the 9am one", "move that reminder", "pause the shopping reminder", or similar natural references, inspect schedules first if the exact task is not visible in the current context.
       - Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.
-      - If manage-schedule returns ok=false, say briefly that it was not scheduled/cancelled and ask for the next practical correction.
+      - If manage-schedule returns ok=false, say briefly that it was not scheduled/changed/cancelled and ask for the next practical correction.
 
       # Ambiguity And Defaults
 

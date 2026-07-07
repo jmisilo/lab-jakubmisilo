@@ -1,11 +1,11 @@
 ---
 name: scheduling
-description: How to create, inspect, cancel, and reason about one-time reminders, recurring scheduled tasks, and background AI reports.
+description: How to create, inspect, update, pause, resume, cancel, and reason about one-time reminders, recurring scheduled tasks, and background AI reports.
 ---
 
 # Scheduling
 
-Use this skill when the user asks to remind, notify, ping, schedule a message, create a recurring task, or run a background AI report later.
+Use this skill when the user asks to remind, notify, ping, schedule a message, create a recurring task, edit an existing schedule, pause/resume a schedule, or run a background AI report later.
 
 ## Core Model
 
@@ -18,6 +18,7 @@ Each scheduled task has:
 - A schedule kind: one-time or recurring.
 - A timezone.
 - A next due timestamp.
+- A status: active, paused, completed, cancelled, or failed.
 
 When the task is due, QStash calls the schedule execution endpoint. The endpoint executes the stored prompt through the agent and sends the result to the same thread.
 
@@ -99,7 +100,16 @@ Do not include operation IDs, database IDs, raw tool payloads, hidden prompts, o
 
 After creating a schedule, acknowledge briefly with the resolved schedule in natural language.
 
-Do not expose task IDs unless needed to disambiguate cancellation. For cancellation, if the user did not identify the task clearly, list active schedules first and ask which one to cancel.
+Do not expose task IDs unless needed to disambiguate. If the user refers to a schedule naturally, such as "the 9am one", "the shopping reminder", or "that daily report", list schedules first when the exact task is not already visible in context.
+
+Use update for requests like:
+
+- "move the 9am reminder to 10"
+- "change that report to weekdays"
+- "rename the shopping reminder"
+- "make the prompt include sources"
+
+Use pause when the user wants to temporarily stop a schedule without deleting it. Use resume when they want a paused schedule active again. Use cancel when they want it removed/stopped permanently.
 
 If scheduling fails, say briefly that it could not be scheduled yet and ask for the next practical step or retry.
 
@@ -109,4 +119,4 @@ Do not schedule ambiguous, risky, or externally side-effectful work without clea
 
 Do not create schedules from casual mentions. The user must ask to remind, notify, schedule, send later, or run a recurring/background task.
 
-Scheduled task execution can use normal agent tools such as web search when the stored prompt asks for them, but scheduled-task mode should not create more schedules.
+Scheduled task execution receives relevant recent chat, compressed memory, durable knowledge, runtime time, and the stored prompt. Use that context when producing the scheduled message. Scheduled task execution can use normal agent tools such as web search, weather, local time, and World Cup context when the stored prompt asks for them, but scheduled-task mode should not create more schedules.

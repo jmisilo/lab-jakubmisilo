@@ -21,7 +21,7 @@ export class QStashService {
   static async scheduleOneTimeTask({ taskId, runAt }: ScheduleOneTimeTaskInput) {
     const response = await this.#client.publishJSON<ScheduleTaskPayload>({
       url: this.#executionUrl,
-      body: { taskId },
+      body: { taskId, scheduleKind: 'one_time', scheduledFor: runAt.toISOString() },
       notBefore: Math.floor(runAt.getTime() / 1000),
       retries: QSTASH_EXECUTION_RETRIES,
       timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
@@ -51,7 +51,7 @@ export class QStashService {
       headers: {
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ taskId } satisfies ScheduleTaskPayload),
+      body: JSON.stringify({ taskId, scheduleKind: 'recurring' } satisfies ScheduleTaskPayload),
       cron: this.#toCronExpression({ recurrence, timeZone }),
       retries: QSTASH_EXECUTION_RETRIES,
       timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
@@ -165,6 +165,8 @@ export class QStashService {
 
 type ScheduleTaskPayload = {
   taskId: string;
+  scheduleKind: 'one_time' | 'recurring';
+  scheduledFor?: string;
 };
 
 type QStashScheduleDayOfWeek =

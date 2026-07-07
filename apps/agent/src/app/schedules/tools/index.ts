@@ -1,3 +1,4 @@
+import type { AgentScheduledTask } from '@/types';
 import type { Tool } from 'ai';
 import type { z } from 'zod';
 
@@ -17,7 +18,7 @@ const PROMPT_PREVIEW_CHARACTER_LIMIT = 500;
 
 export const manageScheduleTool: ManageScheduleTool = tool({
   description: dedent`
-    Create, list, or cancel scheduled AI tasks for the current user and chat thread.
+    Create, list, update, pause, resume, or cancel scheduled AI tasks for the current user and chat thread.
 
     # Core Behavior
     - A scheduled task stores a durable prompt.
@@ -26,12 +27,14 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - Current limits: 10 active one-time schedules and 10 active recurring schedules per user.
     - Current QStash plan: free. One-time schedules can be created at most 7 days ahead.
     - Recurring schedules must not run more often than once per hour. The current recurrence schema supports daily, weekdays, and weekly schedules.
-    - A create/cancel/list action is confirmed only when this tool returns ok=true. If ok=false, tell the user it was not completed and do not imply it was scheduled or cancelled.
+    - A create/list/update/pause/resume/cancel action is confirmed only when this tool returns ok=true. If ok=false, tell the user it was not completed and do not imply it was scheduled, changed, paused, resumed, or cancelled.
 
     # When To Use
     - The user asks to remind, notify, ping, send a future message, run a background task, or create a recurring report.
     - The user asks to do something at a future time or on a repeating cadence.
-    - The user asks what tasks/reminders are scheduled or asks to cancel one.
+    - The user asks what tasks/reminders are scheduled.
+    - The user asks to cancel, edit, move, reschedule, pause, or resume one.
+    - If the user identifies a task naturally ("the 9am one", "the shopping reminder"), call list first when the task id is not already visible in context.
 
     # When Not To Use
     - The user is asking about an existing World Cup notification subscription; use the World Cup subscription tool for those.
@@ -138,6 +141,80 @@ export const manageScheduleTool: ManageScheduleTool = tool({
         };
       }
 
+      if (input.action === 'update') {
+        const task = await AgentScheduleService.updateTask({
+          identityId: context.identityId,
+          threadId: context.threadId,
+          taskId: input.taskId,
+          title: input.title,
+          prompt: input.prompt,
+          schedule: input.schedule,
+          userFacingSchedule: input.userFacingSchedule,
+        });
+
+        logger.info(
+          {
+            identityId: context.identityId,
+            threadId: context.threadId,
+            taskId: task.id,
+          },
+          '[AGENT_SCHEDULE]: task updated',
+        );
+
+        return {
+          ok: true,
+          message: `Update confirmed: "${task.title}" is set for ${AgentScheduleService.formatTaskSchedule(task)}`,
+          task: toToolTask(task),
+        };
+      }
+
+      if (input.action === 'pause') {
+        const task = await AgentScheduleService.pauseTask({
+          identityId: context.identityId,
+          threadId: context.threadId,
+          taskId: input.taskId,
+          reason: input.reason,
+        });
+
+        logger.info(
+          {
+            identityId: context.identityId,
+            threadId: context.threadId,
+            taskId: task.id,
+          },
+          '[AGENT_SCHEDULE]: task paused',
+        );
+
+        return {
+          ok: true,
+          message: `Pause confirmed: "${task.title}" is paused.`,
+          task: toToolTask(task),
+        };
+      }
+
+      if (input.action === 'resume') {
+        const task = await AgentScheduleService.resumeTask({
+          identityId: context.identityId,
+          threadId: context.threadId,
+          taskId: input.taskId,
+        });
+
+        logger.info(
+          {
+            identityId: context.identityId,
+            threadId: context.threadId,
+            taskId: task.id,
+          },
+          '[AGENT_SCHEDULE]: task resumed',
+        );
+
+        return {
+          ok: true,
+          message: `Resume confirmed: "${task.title}" is active again for ${AgentScheduleService.formatTaskSchedule(task)}`,
+          task: toToolTask(task),
+        };
+      }
+
       const task = await AgentScheduleService.cancelTask({
         identityId: context.identityId,
         threadId: context.threadId,
@@ -184,11 +261,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
   },
 });
 
-function toToolTask(task: Awaited<ReturnType<typeof AgentScheduleService.createTask>>) {
-  if (!task) {
-    throw new Error('Expected scheduled task.');
-  }
-
+function toToolTask(task: AgentScheduledTask) {
   return {
     id: task.id,
     title: task.title,

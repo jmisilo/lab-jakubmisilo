@@ -156,7 +156,7 @@ export const agentScheduledTasks = pgTable(
     title: text('title').notNull(),
     prompt: text('prompt').notNull(),
     scheduleKind: text('schedule_kind', { enum: ['one_time', 'recurring'] }).notNull(),
-    status: text('status', { enum: ['active', 'completed', 'cancelled', 'failed'] })
+    status: text('status', { enum: ['active', 'paused', 'completed', 'cancelled', 'failed'] })
       .notNull()
       .default('active'),
     timeZone: text('time_zone').notNull(),

@@ -37,14 +37,44 @@ export type CancelScheduleTaskInput = {
   reason?: string;
 };
 
+export type UpdateScheduleTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  title?: string;
+  prompt?: string;
+  schedule?: Extract<
+    z.infer<typeof ManageScheduleToolInputSchema>,
+    { action: 'update' }
+  >['schedule'];
+  userFacingSchedule?: string;
+};
+
+export type PauseScheduleTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  reason?: string;
+};
+
+export type ResumeScheduleTaskInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+};
+
 export type ExecuteScheduleTaskInput = {
   bot: Chat;
   taskId: string;
+  scheduleKind?: AgentScheduledTask['scheduleKind'];
+  scheduledFor?: Date;
   now?: Date;
 };
 
 export type HandleScheduleTaskExecutionExhaustedInput = {
   taskId: string;
+  scheduleKind?: AgentScheduledTask['scheduleKind'];
+  scheduledFor?: Date;
   now?: Date;
   failure?: {
     status?: number;
