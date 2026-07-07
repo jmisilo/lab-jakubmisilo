@@ -20,17 +20,16 @@ const AgentRuntimeContextSchema = z.object({
   timeZone: z.string().min(1).optional(),
 });
 
-type AgentRuntimeContext = z.infer<typeof AgentRuntimeContextSchema>;
-
 const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
 const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
 const PROMPT_CACHE_RETENTION = '24h';
 
 export class AgentService {
-  static #model = 'gpt-5.5';
+  static #model: Parameters<typeof openai>[0] = 'gpt-5.4-mini';
 
   static readonly agent = new ToolLoopAgent({
-    model: openai('gpt-5.5'),
+    model: openai(this.#model),
+    reasoning: 'xhigh',
     instructions: AgentPromptService.buildSystemPrompt({
       skills: SkillService.listSkills(),
     }),
@@ -133,6 +132,59 @@ export class AgentService {
       logger.info({ result: event.text }, '[AI_AGENT]: agent process ended');
     },
   });
+
+  static async generate({
+    identityId,
+    threadId,
+    sourceMessageId,
+    mode = 'chat',
+    timeZone,
+    messages,
+  }: {
+    messages: ModelMessage[];
+    identityId: string;
+    threadId?: string;
+    sourceMessageId?: string;
+    mode?: AgentRuntimeContext['mode'];
+    timeZone?: string;
+  }) {
+    try {
+      logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
+
+      const runtimeClock = this.#getRuntimeClock({
+        timeZone: timeZone ?? DEFAULT_USER_TIME_ZONE,
+      });
+      const result = await this.agent.generate({
+        messages: AgentPromptService.buildMessagesWithRuntimeContext({ messages, runtimeClock }),
+        options: {
+          identityId,
+          threadId,
+          sourceMessageId,
+          mode,
+          timeZone: runtimeClock.timeZone,
+        },
+      });
+
+      logger.info(
+        {
+          model: this.#model,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          promptCacheReadTokens: result.usage.inputTokenDetails.cacheReadTokens,
+          promptCacheWriteTokens: result.usage.inputTokenDetails.cacheWriteTokens,
+          promptNoCacheTokens: result.usage.inputTokenDetails.noCacheTokens,
+        },
+        '[AI_AGENT]: response generated',
+      );
+
+      return { text: result.text };
+    } catch (error) {
+      logger.error({ error }, '[AI_AGENT]: response generation failed');
+
+      throw error;
+    }
+  }
 
   static #getActiveTools(options?: AgentRuntimeContext): (keyof AgentTools & string)[] {
     const activeTools: (keyof AgentTools)[] = [
@@ -253,57 +305,6 @@ export class AgentService {
 
     return 'UTC';
   }
-
-  static async generate({
-    identityId,
-    threadId,
-    sourceMessageId,
-    mode = 'chat',
-    timeZone,
-    messages,
-  }: {
-    messages: ModelMessage[];
-    identityId: string;
-    threadId?: string;
-    sourceMessageId?: string;
-    mode?: AgentRuntimeContext['mode'];
-    timeZone?: string;
-  }) {
-    try {
-      logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
-
-      const runtimeClock = this.#getRuntimeClock({
-        timeZone: timeZone ?? DEFAULT_USER_TIME_ZONE,
-      });
-      const result = await this.agent.generate({
-        messages: AgentPromptService.buildMessagesWithRuntimeContext({ messages, runtimeClock }),
-        options: {
-          identityId,
-          threadId,
-          sourceMessageId,
-          mode,
-          timeZone: runtimeClock.timeZone,
-        },
-      });
-
-      logger.info(
-        {
-          model: this.#model,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          promptCacheReadTokens: result.usage.inputTokenDetails.cacheReadTokens,
-          promptCacheWriteTokens: result.usage.inputTokenDetails.cacheWriteTokens,
-          promptNoCacheTokens: result.usage.inputTokenDetails.noCacheTokens,
-        },
-        '[AI_AGENT]: response generated',
-      );
-
-      return { text: result.text };
-    } catch (error) {
-      logger.error({ error }, '[AI_AGENT]: response generation failed');
-
-      throw error;
-    }
-  }
 }
+
+type AgentRuntimeContext = z.infer<typeof AgentRuntimeContextSchema>;

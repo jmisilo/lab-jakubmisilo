@@ -49,7 +49,7 @@ describe('AgentScheduleService', () => {
       identityId: 'identity-1',
       threadId: 'telegram:1',
       title: ' Tennis reminder ',
-      prompt: ' Send Jakub a short reminder about his tennis game. ',
+      prompt: ' Send the user a short reminder about their tennis game. ',
       schedule: {
         type: 'one_time',
         runAt: '2026-07-06T17:00:00+02:00',
@@ -65,7 +65,7 @@ describe('AgentScheduleService', () => {
         identityId: 'identity-1',
         threadId: 'telegram:1',
         title: 'Tennis reminder',
-        prompt: 'Send Jakub a short reminder about his tennis game.',
+        prompt: 'Send the user a short reminder about their tennis game.',
         scheduleKind: 'one_time',
         timeZone: 'Europe/Warsaw',
         recurrence: {},
@@ -92,7 +92,7 @@ describe('AgentScheduleService', () => {
       identityId: 'identity-1',
       threadId: 'telegram:1',
       title: 'Todo prep',
-      prompt: 'Ask Jakub to prepare his todo list.',
+      prompt: 'Ask the user to prepare their todo list.',
       schedule: {
         type: 'recurring',
         timeZone: 'Europe/Warsaw',
@@ -127,7 +127,7 @@ describe('AgentScheduleService', () => {
         identityId: 'identity-1',
         threadId: 'telegram:1',
         title: 'Far reminder',
-        prompt: 'Remind Jakub later.',
+        prompt: 'Remind the user later.',
         schedule: {
           type: 'one_time',
           runAt: '2026-07-14T08:00:01.000Z',
@@ -153,7 +153,7 @@ describe('AgentScheduleService', () => {
         identityId: 'identity-1',
         threadId: 'telegram:1',
         title: 'Limit reminder',
-        prompt: 'Remind Jakub.',
+        prompt: 'Remind the user.',
         schedule: {
           type: 'one_time',
           runAt: '2026-07-06T17:00:00+02:00',
@@ -167,6 +167,28 @@ describe('AgentScheduleService', () => {
     });
 
     expect(mockQStashService.scheduleOneTimeTask).not.toHaveBeenCalled();
+  });
+
+  it('interprets offset-less one-time schedules in the provided timezone', async () => {
+    mockAgentScheduleDbService.createTask.mockImplementation((input) => input);
+
+    const task = await AgentScheduleService.createTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      title: 'Offsetless reminder',
+      prompt: 'Remind the user.',
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T17:00:00',
+        timeZone: 'Europe/Warsaw',
+      },
+    });
+
+    expect(task?.nextRunAt.toISOString()).toBe('2026-07-06T15:00:00.000Z');
+    expect(mockQStashService.scheduleOneTimeTask).toHaveBeenCalledWith({
+      taskId: task?.id,
+      runAt: new Date('2026-07-06T15:00:00.000Z'),
+    });
   });
 
   it('uses the next matching day when today recurring time already passed', () => {
@@ -241,7 +263,7 @@ function createTask({
     identityId: 'identity-1',
     threadId: 'telegram:1',
     title: 'Shopping',
-    prompt: 'Remind Jakub about shopping.',
+    prompt: 'Remind the user about shopping.',
     scheduleKind: 'recurring',
     status: 'active',
     timeZone: 'Europe/Warsaw',

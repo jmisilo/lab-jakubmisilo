@@ -17,9 +17,6 @@ import {
   vector,
 } from 'drizzle-orm/pg-core';
 
-type WorldCup2026EventType = 'kickoff' | 'goal' | 'game-end';
-type AgentKnowledgeSource = 'explicit' | 'implicit' | 'system';
-
 /**
  * Chat SDK owns chat_state_* tables. Drizzle excludes those tables from db:push,
  * but their bigserial backing sequences are still visible in public, so keep the
@@ -299,3 +296,6 @@ export const worldCup2026EventDeliveries = pgTable(
     index('world_cup_2026_event_deliveries_thread_idx').on(table.threadId),
   ],
 );
+
+type WorldCup2026EventType = 'kickoff' | 'goal' | 'game-end';
+type AgentKnowledgeSource = 'explicit' | 'implicit' | 'system';

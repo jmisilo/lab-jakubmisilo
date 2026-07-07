@@ -1,10 +1,12 @@
 import type { AgentScheduledTask, NewAgentScheduledTask } from '@/types';
 
-import { and, asc, count, eq, sql } from 'drizzle-orm';
+import { and, asc, count, eq, lt, or, sql } from 'drizzle-orm';
 
 import { agentScheduledTaskRuns, agentScheduledTasks } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
+
+const SCHEDULE_TASK_RUNNING_LEASE_MS = 1000 * 60 * 5;
 
 export class AgentScheduleDbService extends DbService {
   static async createTask(input: CreateScheduledTaskInput) {
@@ -105,6 +107,9 @@ export class AgentScheduleDbService extends DbService {
   }
 
   static async createTaskRun({ taskId, scheduledFor }: CreateScheduledTaskRunInput) {
+    const now = new Date();
+    const staleStartedBefore = new Date(now.getTime() - SCHEDULE_TASK_RUNNING_LEASE_MS);
+
     const [run] = await this.client
       .insert(agentScheduledTaskRuns)
       .values({
@@ -118,10 +123,16 @@ export class AgentScheduleDbService extends DbService {
           status: 'running',
           output: null,
           error: null,
-          startedAt: new Date(),
+          startedAt: now,
           finishedAt: null,
         },
-        where: eq(agentScheduledTaskRuns.status, 'failed'),
+        where: or(
+          eq(agentScheduledTaskRuns.status, 'failed'),
+          and(
+            eq(agentScheduledTaskRuns.status, 'running'),
+            lt(agentScheduledTaskRuns.startedAt, staleStartedBefore),
+          ),
+        ),
       })
       .returning();
 

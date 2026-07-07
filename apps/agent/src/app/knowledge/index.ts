@@ -283,6 +283,7 @@ export class AgentKnowledgeService {
         assistantMessage,
       });
       const extractionResult = await AIService.generate({
+        reasoning: 'xhigh',
         output: Output.object({
           schema: ImplicitKnowledgeExtractionModelOutputSchema,
           name: 'implicit_knowledge_extraction',
@@ -552,6 +553,7 @@ export class AgentKnowledgeService {
     }
 
     const decisionResult = await AIService.generate({
+      reasoning: 'xhigh',
       output: Output.object({
         schema: ImplicitKnowledgeIngestionDecisionModelOutputSchema,
         name: 'implicit_knowledge_ingestion_decision',

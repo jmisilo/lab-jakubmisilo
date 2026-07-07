@@ -1,6 +1,6 @@
 ---
 name: knowledge-management
-description: How to save, update, supersede, and use Jakub's durable knowledge tree without creating duplicate or noisy notes.
+description: How to save, update, supersede, and use the user's durable knowledge tree without creating duplicate or noisy notes.
 ---
 
 # Knowledge Management
@@ -41,13 +41,13 @@ Do not save:
 
 ## Inspect And Correct
 
-Use `list` when Jakub asks what is remembered/saved under a topic, or when you need to locate a note before editing it. Omit `parentPath` to list root notes.
+Use `list` when the user asks what is remembered/saved under a topic, or when you need to locate a note before editing it. Omit `parentPath` to list root notes.
 
-Use `read` when Jakub asks what a note contains, asks to show saved information, or when you need the complete current content before rewriting a note.
+Use `read` when the user asks what a note contains, asks to show saved information, or when you need the complete current content before rewriting a note.
 
 Use `deactivate` for forget/archive/no-longer-active requests when no replacement note is needed. Do not hard-delete knowledge through chat. Deactivated notes preserve history and stop being active context.
 
-Use `move` when Jakub asks to rename a note path, move a note under another parent, retitle a note, or reorganize a subtree. Moving a note should preserve its child notes.
+Use `move` when the user asks to rename a note path, move a note under another parent, retitle a note, or reorganize a subtree. Moving a note should preserve its child notes.
 
 When answering "what do you remember?", do not expose database IDs, operation IDs, retrieval scores, source message IDs, or raw tool payloads. Summarize the note content naturally.
 
@@ -57,9 +57,9 @@ Use `create` when no active note already covers the fact.
 
 Use `update` when the same active note should be edited in place. The updated content must be complete standalone markdown, not a diff.
 
-Use `supersede` when a new fact replaces an older useful fact and the old fact should remain as inactive history. Example: if Jakub says he now works at Company Y and Company X was known as current work, create Company Y and supersede the Company X current-work fact.
+Use `supersede` when a new fact replaces an older useful fact and the old fact should remain as inactive history. Example: if the user says they now work at Company Y and Company X was known as current work, create Company Y and supersede the Company X current-work fact.
 
-For explicit longer notes, preserve the user's wording and structure unless Jakub asks you to rewrite, summarize, or clean it up. Use headings and bullets only when they clarify the note.
+For explicit longer notes, preserve the user's wording and structure unless they ask you to rewrite, summarize, or clean it up. Use headings and bullets only when they clarify the note.
 
 For implicit/background memories, stay concise. Do not create long journal/project notes implicitly from ordinary conversation unless the user clearly asked to preserve that note.
 
@@ -77,7 +77,7 @@ Prefer specific paths over broad group nodes. Good paths:
 
 Avoid stuffing unrelated facts into one broad note just because it exists.
 
-For implicit memories, prefer existing relevant parent paths when available. Example: if `projects/lab-agent` exists and Jakub mentions a durable decision about scheduling, save it under `projects/lab-agent/scheduling` rather than creating a generic root `scheduling` note.
+For implicit memories, prefer existing relevant parent paths when available. Example: if `projects/lab-agent` exists and the user mentions a durable decision about scheduling, save it under `projects/lab-agent/scheduling` rather than creating a generic root `scheduling` note.
 
 ## User Experience
 
@@ -85,7 +85,7 @@ If a save succeeds, acknowledge it briefly and naturally.
 
 If a save fails, do not mention operation IDs, debug IDs, database IDs, tool names, or error codes. Say only that you could not save it yet and continue helping.
 
-Never expose retrieval scores, embeddings, metadata, or source message IDs to Jakub.
+Never expose retrieval scores, embeddings, metadata, or source message IDs to the user.
 
 ## Examples
 
@@ -96,7 +96,7 @@ Action: create or update `preferences/communication`.
 Content:
 
 ```md
-Jakub prefers casual, short, natural answers. Avoid overexplaining unless he asks for depth.
+The user prefers casual, short, natural answers. Avoid overexplaining unless they ask for depth.
 ```
 
 User: "actually I moved to Lisbon"

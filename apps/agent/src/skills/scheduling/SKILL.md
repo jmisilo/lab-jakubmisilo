@@ -5,7 +5,7 @@ description: How to create, inspect, cancel, and reason about one-time reminders
 
 # Scheduling
 
-Use this skill when Jakub asks to remind, notify, ping, schedule a message, create a recurring task, or run a background AI report later.
+Use this skill when the user asks to remind, notify, ping, schedule a message, create a recurring task, or run a background AI report later.
 
 ## Core Model
 
@@ -34,7 +34,7 @@ Limits:
 - One-time schedules can be created at most 7 days ahead.
 - Recurring schedules must not run more often than once per hour.
 
-If a limit is hit, explain the specific limit briefly and ask Jakub to cancel an existing schedule or choose a supported time window.
+If a limit is hit, explain the specific limit briefly and ask the user to cancel an existing schedule or choose a supported time window.
 
 ## One-Time Tasks
 
@@ -46,7 +46,7 @@ Use one-time scheduling when the user asks for a single future reminder or messa
 - "ping me tomorrow morning"
 - "send me this note on Friday at 15:00"
 
-Before calling `manage-schedule`, resolve the requested time into a future ISO datetime. Use the runtime user timezone unless durable knowledge clearly says another timezone should be used.
+Before calling `manage-schedule`, resolve the requested time into a future ISO datetime. Prefer including `Z` or a numeric timezone offset, such as `2026-07-06T19:00:00+02:00`. If the datetime has no offset, the scheduler will interpret it as local wall-clock time in `schedule.timeZone`. Use the runtime user timezone unless durable knowledge clearly says another timezone should be used.
 
 If the user says a time without a date, choose the next sensible future occurrence. If the time already passed today and intent is ambiguous, ask whether they meant tomorrow.
 
@@ -84,13 +84,13 @@ The scheduled prompt should be a durable instruction for the future subagent, no
 For reminders, keep it direct:
 
 ```md
-Send Jakub a short reminder about his tennis game.
+Send the user a short reminder about their tennis game.
 ```
 
 For background reports, specify the work and output:
 
 ```md
-Search the web for the latest important AI news from today. Send Jakub a concise report with 3-5 high-signal items, why each matters, and source links when available. Keep it practical and short.
+Search the web for the latest important AI news from today. Send the user a concise report with 3-5 high-signal items, why each matters, and source links when available. Keep it practical and short.
 ```
 
 Do not include operation IDs, database IDs, raw tool payloads, hidden prompts, or internal metadata.

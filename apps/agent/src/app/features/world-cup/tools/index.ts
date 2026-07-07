@@ -22,24 +22,6 @@ import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
-export type ManageWorldCupSubscriptionTool = Tool<
-  z.infer<typeof ManageWorldCupSubscriptionToolInputSchema>,
-  z.infer<typeof ManageWorldCupSubscriptionToolOutputSchema>,
-  z.infer<typeof ManageWorldCupSubscriptionToolContextSchema>
->;
-
-export type GetWorldCupTrackingTool = Tool<
-  z.infer<typeof GetWorldCupTrackingToolInputSchema>,
-  z.infer<typeof GetWorldCupTrackingToolOutputSchema>,
-  z.infer<typeof GetWorldCupTrackingToolContextSchema>
->;
-
-export type GetWorldCupContextTool = Tool<
-  z.infer<typeof GetWorldCupContextToolInputSchema>,
-  z.infer<typeof GetWorldCupContextToolOutputSchema>,
-  z.infer<typeof GetWorldCupContextToolContextSchema>
->;
-
 export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = tool({
   description: dedent`
     Create, update, or remove FIFA World Cup 2026 event notification subscriptions for this chat.
@@ -203,6 +185,24 @@ export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
     }
   },
 });
+
+export type ManageWorldCupSubscriptionTool = Tool<
+  z.infer<typeof ManageWorldCupSubscriptionToolInputSchema>,
+  z.infer<typeof ManageWorldCupSubscriptionToolOutputSchema>,
+  z.infer<typeof ManageWorldCupSubscriptionToolContextSchema>
+>;
+
+export type GetWorldCupTrackingTool = Tool<
+  z.infer<typeof GetWorldCupTrackingToolInputSchema>,
+  z.infer<typeof GetWorldCupTrackingToolOutputSchema>,
+  z.infer<typeof GetWorldCupTrackingToolContextSchema>
+>;
+
+export type GetWorldCupContextTool = Tool<
+  z.infer<typeof GetWorldCupContextToolInputSchema>,
+  z.infer<typeof GetWorldCupContextToolOutputSchema>,
+  z.infer<typeof GetWorldCupContextToolContextSchema>
+>;
 
 export const getWorldCupContextTool: GetWorldCupContextTool = tool({
   description: dedent`

@@ -1,44 +1,11 @@
 import { Client } from '@upstash/qstash';
 
+import { UrlComposer } from '@labjm/utilities/url-composer';
+
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
 const QSTASH_EXECUTION_RETRIES = 3;
 const QSTASH_EXECUTION_TIMEOUT_SECONDS = 60;
-
-type ScheduleTaskPayload = {
-  taskId: string;
-};
-
-type QStashScheduleDayOfWeek =
-  | 'monday'
-  | 'tuesday'
-  | 'wednesday'
-  | 'thursday'
-  | 'friday'
-  | 'saturday'
-  | 'sunday';
-
-type QStashScheduleRecurrence = {
-  frequency: 'daily' | 'weekdays' | 'weekly';
-  daysOfWeek: QStashScheduleDayOfWeek[];
-  timeOfDay: string;
-};
-
-type ScheduleOneTimeTaskInput = {
-  taskId: string;
-  runAt: Date;
-};
-
-type ScheduleRecurringTaskInput = {
-  taskId: string;
-  recurrence: QStashScheduleRecurrence;
-  timeZone: string;
-};
-
-type CancelScheduledTaskInput = {
-  qstashMessageId?: string | null;
-  qstashScheduleId?: string | null;
-};
 
 const DAY_OF_WEEK_CRON_VALUE: Record<QStashScheduleDayOfWeek, number> = {
   sunday: 0,
@@ -137,6 +104,10 @@ export class QStashService {
   }
 
   static #url(path: string) {
+    return this.#urlComposer.compose({ pathSegments: [path] });
+  }
+
+  static get #urlComposer() {
     const baseUrl =
       process.env.AGENT_PUBLIC_URL ??
       process.env.VERCEL_PROJECT_PRODUCTION_URL ??
@@ -145,15 +116,16 @@ export class QStashService {
     if (!baseUrl) {
       throw new AppError({
         code: AppErrorCode.SCHEDULE_PROVIDER_UNAVAILABLE,
-        message: 'Agent public URL is not configured.',
+        message: 'Agent public URL could not be resolved for QStash schedules.',
         retryable: false,
         userMessage: 'Scheduling is not configured yet.',
       });
     }
 
-    const normalizedBaseUrl = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+    const parsedBaseUrl = new URL(/^https?:\/\//.test(baseUrl) ? baseUrl : `https://${baseUrl}`);
+    const protocol = parsedBaseUrl.protocol === 'http:' ? 'http' : 'https';
 
-    return new URL(path, normalizedBaseUrl).toString();
+    return new UrlComposer(parsedBaseUrl.host, protocol);
   }
 
   static #toCronExpression({
@@ -190,3 +162,38 @@ export class QStashService {
     return `CRON_TZ=${timeZone} ${Number(minute)} ${Number(hour)} * * ${daysOfWeek}`;
   }
 }
+
+type ScheduleTaskPayload = {
+  taskId: string;
+};
+
+type QStashScheduleDayOfWeek =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday';
+
+type QStashScheduleRecurrence = {
+  frequency: 'daily' | 'weekdays' | 'weekly';
+  daysOfWeek: QStashScheduleDayOfWeek[];
+  timeOfDay: string;
+};
+
+type ScheduleOneTimeTaskInput = {
+  taskId: string;
+  runAt: Date;
+};
+
+type ScheduleRecurringTaskInput = {
+  taskId: string;
+  recurrence: QStashScheduleRecurrence;
+  timeZone: string;
+};
+
+type CancelScheduledTaskInput = {
+  qstashMessageId?: string | null;
+  qstashScheduleId?: string | null;
+};

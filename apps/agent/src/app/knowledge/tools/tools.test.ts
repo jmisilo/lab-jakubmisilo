@@ -142,7 +142,7 @@ describe('manageKnowledgeTool', () => {
         id: 'node-1',
         path: 'preferences/communication',
         title: 'Communication preference',
-        content: 'Jakub prefers casual, concise answers.',
+        content: 'The user prefers casual, concise answers.',
         active: true,
       }),
     );
@@ -166,7 +166,7 @@ describe('manageKnowledgeTool', () => {
         path: 'preferences/communication',
         parentPath: 'preferences',
         title: 'Communication preference',
-        content: 'Jakub prefers casual, concise answers.',
+        content: 'The user prefers casual, concise answers.',
         active: true,
       },
     });

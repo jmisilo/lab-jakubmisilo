@@ -39,7 +39,7 @@ describe('manageScheduleTool', () => {
       createTask({
         id: 'task-1',
         title: 'Tennis reminder',
-        prompt: 'Send Jakub a short reminder about his tennis game.',
+        prompt: 'Send the user a short reminder about their tennis game.',
         scheduleKind: 'one_time',
         nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
       }),
@@ -48,7 +48,7 @@ describe('manageScheduleTool', () => {
     const result = await executeManageScheduleTool({
       action: 'create',
       title: 'Tennis reminder',
-      prompt: 'Send Jakub a short reminder about his tennis game.',
+      prompt: 'Send the user a short reminder about their tennis game.',
       schedule: {
         type: 'one_time',
         runAt: '2026-07-06T19:00:00+02:00',
@@ -61,7 +61,7 @@ describe('manageScheduleTool', () => {
       identityId: 'identity-1',
       threadId: 'telegram:1',
       title: 'Tennis reminder',
-      prompt: 'Send Jakub a short reminder about his tennis game.',
+      prompt: 'Send the user a short reminder about their tennis game.',
       schedule: {
         type: 'one_time',
         runAt: '2026-07-06T19:00:00+02:00',
@@ -81,7 +81,7 @@ describe('manageScheduleTool', () => {
         timeZone: 'Europe/Warsaw',
         nextRunAt: '2026-07-06T17:00:00.000Z',
         scheduleSummary: 'today at 19:00 Europe/Warsaw',
-        promptPreview: 'Send Jakub a short reminder about his tennis game.',
+        promptPreview: 'Send the user a short reminder about their tennis game.',
       },
     });
   });
@@ -91,7 +91,7 @@ describe('manageScheduleTool', () => {
       createTask({
         id: 'task-1',
         title: 'Daily todo prep',
-        prompt: 'Ask Jakub to prepare his todo list.',
+        prompt: 'Ask the user to prepare their todo list.',
         scheduleKind: 'recurring',
         nextRunAt: new Date('2026-07-07T07:00:00.000Z'),
       }),
@@ -124,7 +124,7 @@ describe('manageScheduleTool', () => {
           timeZone: 'Europe/Warsaw',
           nextRunAt: '2026-07-07T07:00:00.000Z',
           scheduleSummary: 'each weekday at 09:00 Europe/Warsaw',
-          promptPreview: 'Ask Jakub to prepare his todo list.',
+          promptPreview: 'Ask the user to prepare their todo list.',
         },
       ],
     });
@@ -135,7 +135,7 @@ describe('manageScheduleTool', () => {
       createTask({
         id: 'task-1',
         title: 'Daily todo prep',
-        prompt: 'Ask Jakub to prepare his todo list.',
+        prompt: 'Ask the user to prepare their todo list.',
         scheduleKind: 'recurring',
         status: 'cancelled',
         nextRunAt: new Date('2026-07-07T07:00:00.000Z'),
@@ -165,7 +165,7 @@ describe('manageScheduleTool', () => {
         timeZone: 'Europe/Warsaw',
         nextRunAt: null,
         scheduleSummary: 'today at 19:00 Europe/Warsaw',
-        promptPreview: 'Ask Jakub to prepare his todo list.',
+        promptPreview: 'Ask the user to prepare their todo list.',
       },
     });
   });
