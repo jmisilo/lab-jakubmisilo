@@ -213,6 +213,87 @@ export const agentScheduledTaskRuns = pgTable(
   ],
 );
 
+export const agentGoogleCalendarOauthStates = pgTable(
+  'agent_google_calendar_oauth_states',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    requestId: text('request_id').notNull(),
+    stateHash: text('state_hash').notNull(),
+    identityId: text('identity_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    sourceMessageId: text('source_message_id'),
+    scopes: text('scopes').array().notNull().default([]),
+    redirectPath: text('redirect_path'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_google_calendar_oauth_states_request_idx').on(table.requestId),
+    uniqueIndex('agent_google_calendar_oauth_states_hash_idx').on(table.stateHash),
+    index('agent_google_calendar_oauth_states_identity_thread_expires_idx').on(
+      table.identityId,
+      table.threadId,
+      table.expiresAt,
+    ),
+  ],
+);
+
+export const agentGoogleCalendarConnections = pgTable(
+  'agent_google_calendar_connections',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    identityId: text('identity_id').notNull(),
+    status: text('status', { enum: ['active', 'revoked', 'invalid'] })
+      .notNull()
+      .default('active'),
+    googleAccountEmail: text('google_account_email'),
+    encryptedRefreshToken: text('encrypted_refresh_token').notNull(),
+    refreshTokenIv: text('refresh_token_iv').notNull(),
+    refreshTokenAuthTag: text('refresh_token_auth_tag').notNull(),
+    grantedScopes: text('granted_scopes').array().notNull().default([]),
+    defaultCalendarId: text('default_calendar_id'),
+    metadata: jsonb('metadata').notNull().default({}),
+    connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_google_calendar_connections_active_identity_idx')
+      .on(table.identityId)
+      .where(sql`${table.status} = 'active'`),
+    index('agent_google_calendar_connections_identity_status_idx').on(
+      table.identityId,
+      table.status,
+    ),
+  ],
+);
+
+export const agentGoogleCalendarActionAudit = pgTable(
+  'agent_google_calendar_action_audit',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    identityId: text('identity_id').notNull(),
+    threadId: text('thread_id'),
+    sourceMessageId: text('source_message_id'),
+    action: text('action').notNull(),
+    calendarId: text('calendar_id'),
+    eventId: text('event_id'),
+    status: text('status', { enum: ['succeeded', 'failed'] }).notNull(),
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_google_calendar_action_audit_identity_created_idx').on(
+      table.identityId,
+      table.createdAt,
+    ),
+    index('agent_google_calendar_action_audit_event_idx').on(table.calendarId, table.eventId),
+  ],
+);
+
 export const worldCup2026Subscriptions = pgTable(
   'world_cup_2026_subscriptions',
   {

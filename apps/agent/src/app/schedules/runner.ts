@@ -418,7 +418,7 @@ export class AgentScheduleRunner {
 
             # Tool Use
 
-            Use available tools when the stored prompt requires current information, such as web search, weather, local time, or World Cup context.
+            Use available tools when the stored prompt requires current information or safe external action, such as web search, weather, local time, World Cup context, or Google Calendar read/create.
             Do not claim that background work, searches, or external checks were completed unless you actually used the available tool or the needed information is already in context.
 
             # Output Rules
