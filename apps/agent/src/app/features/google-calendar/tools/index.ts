@@ -253,6 +253,8 @@ export const manageCalendarTool: ManageCalendarTool = tool({
 
     # When To Use
     - The user explicitly asks to add/create/schedule a calendar event.
+    - The user clearly implies a calendar event by stating a concrete busy block with a title and time, even without saying "add this to Calendar".
+    - The user says things like "today I have padel from 19-21", "tomorrow I have gym 6:15-9", "I'm busy with dentist 14:00-15:00", "block 9-11 for deep work", or "call it X" after an event statement.
     - The user explicitly asks to update, move, rename, add attendees to, or add Meet to an existing calendar event.
     - The user explicitly asks to delete/cancel/remove a calendar event.
 
@@ -260,10 +262,13 @@ export const manageCalendarTool: ManageCalendarTool = tool({
     - Generic reminders or background assistant tasks; use manage-schedule.
     - Reading calendar state only; use read-calendar.
     - Connecting or disconnecting Calendar; use manage-google-calendar-connection.
+    - Free-time statements such as "other than that I am free" or "I'm free after 21:00", unless the user explicitly asks to block that free time.
+    - Hypothetical or tentative plans such as "maybe padel tomorrow" unless the user confirms they want it on the calendar.
 
     # Safety
     - Never claim an event was created, updated, or deleted until this tool returns ok=true.
     - For update/delete, use read-calendar first unless the exact calendarId and eventId are visible in context.
+    - For create, use read-calendar first when duplicate risk is high or the target window has not been checked recently. If recent context already shows the window is empty, creating directly is acceptable.
     - For delete_event, set confirmed=true only when the user clearly confirmed deleting this exact event.
     - Scheduled-task mode may only create events. It must not update or delete events.
     - Ask a brief clarification when date/time, timezone, calendar, event identity, attendees, or Meet intent is ambiguous.
