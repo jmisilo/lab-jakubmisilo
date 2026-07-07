@@ -515,6 +515,93 @@ export class AgentKnowledgeDbService extends DbService {
       .limit(limit);
   }
 
+  static async exploreNodes({
+    identityId,
+    startNodeIds,
+    direction = 'auto',
+    maxDepth = 2,
+    includeInactive = false,
+    limit = 80,
+  }: ExploreKnowledgeNodesInput): Promise<AgentKnowledgeExploreNode[]> {
+    if (startNodeIds.length === 0 || limit === 0) {
+      return [];
+    }
+
+    const nodes = new Map<string, AgentKnowledgeExploreNode>();
+    const startNodes = await this.#getExploreStartNodes({
+      identityId,
+      startNodeIds,
+      includeInactive,
+    });
+
+    for (const node of startNodes) {
+      this.#setExploreNode(nodes, {
+        ...node,
+        relationship: 'start',
+        depthFromStart: 0,
+        childCount: 0,
+      });
+    }
+
+    if (direction === 'ancestors' || direction === 'auto' || direction === 'neighborhood') {
+      const ancestors = await this.#getExploreAncestorNodes({
+        identityId,
+        startNodeIds,
+        includeInactive,
+      });
+
+      for (const ancestor of ancestors) {
+        this.#setExploreNode(nodes, ancestor);
+      }
+    }
+
+    if (direction === 'children' || direction === 'descendants' || direction === 'auto') {
+      const descendants = await this.#getExploreDescendantNodes({
+        identityId,
+        startNodeIds,
+        maxDepth: direction === 'children' ? 1 : maxDepth,
+        includeInactive,
+      });
+
+      for (const descendant of descendants) {
+        this.#setExploreNode(nodes, descendant);
+      }
+    }
+
+    if (direction === 'neighborhood') {
+      const children = await this.#getExploreDescendantNodes({
+        identityId,
+        startNodeIds,
+        maxDepth: 1,
+        includeInactive,
+      });
+
+      for (const child of children) {
+        this.#setExploreNode(nodes, child);
+      }
+    }
+
+    if (direction === 'siblings' || direction === 'neighborhood') {
+      const siblings = await this.#getExploreSiblingNodes({
+        identityId,
+        startNodes,
+        includeInactive,
+      });
+
+      for (const sibling of siblings) {
+        this.#setExploreNode(nodes, sibling);
+      }
+    }
+
+    const exploredNodes = await this.#withChildCounts({
+      identityId,
+      nodes: [...nodes.values()],
+      includeInactive,
+    });
+
+    return exploredNodes.sort(this.#compareExploreNodes).slice(0, limit);
+  }
+
   static async #getParentNode({
     identityId,
     parentId,
@@ -795,6 +882,255 @@ export class AgentKnowledgeDbService extends DbService {
   static #uniqueStrings(values: string[]) {
     return [...new Set(values)];
   }
+
+  static async #getExploreStartNodes({
+    identityId,
+    startNodeIds,
+    includeInactive,
+  }: {
+    identityId: string;
+    startNodeIds: string[];
+    includeInactive: boolean;
+  }) {
+    return this.client
+      .select()
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          inArray(agentKnowledgeNodes.id, startNodeIds),
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .orderBy(asc(agentKnowledgeNodes.path));
+  }
+
+  static async #getExploreAncestorNodes({
+    identityId,
+    startNodeIds,
+    includeInactive,
+  }: {
+    identityId: string;
+    startNodeIds: string[];
+    includeInactive: boolean;
+  }): Promise<AgentKnowledgeExploreNode[]> {
+    const rows = await this.client
+      .select({
+        ...getTableColumns(agentKnowledgeNodes),
+        depthFromStart: agentKnowledgeNodeClosure.depth,
+      })
+      .from(agentKnowledgeNodeClosure)
+      .innerJoin(
+        agentKnowledgeNodes,
+        eq(agentKnowledgeNodeClosure.ancestorId, agentKnowledgeNodes.id),
+      )
+      .where(
+        and(
+          eq(agentKnowledgeNodeClosure.identityId, identityId),
+          inArray(agentKnowledgeNodeClosure.descendantId, startNodeIds),
+          gt(agentKnowledgeNodeClosure.depth, 0),
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .orderBy(asc(agentKnowledgeNodeClosure.depth), asc(agentKnowledgeNodes.path));
+
+    return rows.map((row) => ({
+      ...row,
+      relationship: 'ancestor',
+      childCount: 0,
+    }));
+  }
+
+  static async #getExploreDescendantNodes({
+    identityId,
+    startNodeIds,
+    maxDepth,
+    includeInactive,
+  }: {
+    identityId: string;
+    startNodeIds: string[];
+    maxDepth: number;
+    includeInactive: boolean;
+  }): Promise<AgentKnowledgeExploreNode[]> {
+    if (maxDepth <= 0) {
+      return [];
+    }
+
+    const rows = await this.client
+      .select({
+        ...getTableColumns(agentKnowledgeNodes),
+        depthFromStart: agentKnowledgeNodeClosure.depth,
+      })
+      .from(agentKnowledgeNodeClosure)
+      .innerJoin(
+        agentKnowledgeNodes,
+        eq(agentKnowledgeNodeClosure.descendantId, agentKnowledgeNodes.id),
+      )
+      .where(
+        and(
+          eq(agentKnowledgeNodeClosure.identityId, identityId),
+          inArray(agentKnowledgeNodeClosure.ancestorId, startNodeIds),
+          gt(agentKnowledgeNodeClosure.depth, 0),
+          sql`${agentKnowledgeNodeClosure.depth} <= ${maxDepth}`,
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .orderBy(asc(agentKnowledgeNodeClosure.depth), asc(agentKnowledgeNodes.path));
+
+    return rows.map((row) => ({
+      ...row,
+      relationship: row.depthFromStart === 1 ? 'child' : 'descendant',
+      childCount: 0,
+    }));
+  }
+
+  static async #getExploreSiblingNodes({
+    identityId,
+    startNodes,
+    includeInactive,
+  }: {
+    identityId: string;
+    startNodes: AgentKnowledgeNode[];
+    includeInactive: boolean;
+  }): Promise<AgentKnowledgeExploreNode[]> {
+    if (startNodes.length === 0) {
+      return [];
+    }
+
+    const startNodeIds = startNodes.map((node) => node.id);
+    const parentIds = this.#uniqueStrings(
+      startNodes.flatMap((node) => (node.parentId ? [node.parentId] : [])),
+    );
+    const siblings: AgentKnowledgeNode[] = [];
+
+    if (parentIds.length > 0) {
+      siblings.push(
+        ...(await this.client
+          .select()
+          .from(agentKnowledgeNodes)
+          .where(
+            and(
+              eq(agentKnowledgeNodes.identityId, identityId),
+              inArray(agentKnowledgeNodes.parentId, parentIds),
+              notInArray(agentKnowledgeNodes.id, startNodeIds),
+              includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+            ),
+          )
+          .orderBy(asc(agentKnowledgeNodes.path))),
+      );
+    }
+
+    if (startNodes.some((node) => node.parentId === null)) {
+      siblings.push(
+        ...(await this.client
+          .select()
+          .from(agentKnowledgeNodes)
+          .where(
+            and(
+              eq(agentKnowledgeNodes.identityId, identityId),
+              isNull(agentKnowledgeNodes.parentId),
+              notInArray(agentKnowledgeNodes.id, startNodeIds),
+              includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+            ),
+          )
+          .orderBy(asc(agentKnowledgeNodes.path))),
+      );
+    }
+
+    return siblings.map((sibling) => ({
+      ...sibling,
+      relationship: 'sibling',
+      depthFromStart: 1,
+      childCount: 0,
+    }));
+  }
+
+  static async #withChildCounts({
+    identityId,
+    nodes,
+    includeInactive,
+  }: {
+    identityId: string;
+    nodes: AgentKnowledgeExploreNode[];
+    includeInactive: boolean;
+  }) {
+    if (nodes.length === 0) {
+      return nodes;
+    }
+
+    const childCounts = await this.client
+      .select({
+        parentId: agentKnowledgeNodes.parentId,
+        childCount: sql<number>`cast(count(*) as int)`,
+      })
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          inArray(
+            agentKnowledgeNodes.parentId,
+            nodes.map((node) => node.id),
+          ),
+          includeInactive ? undefined : eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .groupBy(agentKnowledgeNodes.parentId);
+    const childCountByParentId = new Map(
+      childCounts.map((row) => [row.parentId, row.childCount] as const),
+    );
+
+    return nodes.map((node) => ({
+      ...node,
+      childCount: childCountByParentId.get(node.id) ?? 0,
+    }));
+  }
+
+  static #setExploreNode(
+    nodes: Map<string, AgentKnowledgeExploreNode>,
+    node: AgentKnowledgeExploreNode,
+  ) {
+    const existingNode = nodes.get(node.id);
+
+    if (
+      !existingNode ||
+      this.#exploreRelationshipPriority(node) > this.#exploreRelationshipPriority(existingNode)
+    ) {
+      nodes.set(node.id, node);
+    }
+  }
+
+  static #exploreRelationshipPriority(node: AgentKnowledgeExploreNode) {
+    const priority: Record<AgentKnowledgeExploreRelationship, number> = {
+      start: 5,
+      child: 4,
+      descendant: 3,
+      ancestor: 2,
+      sibling: 1,
+    };
+
+    return priority[node.relationship];
+  }
+
+  static #compareExploreNodes(a: AgentKnowledgeExploreNode, b: AgentKnowledgeExploreNode) {
+    const priorityDifference =
+      this.#exploreRelationshipPriority(b) - this.#exploreRelationshipPriority(a);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    const depthDifference = a.depthFromStart - b.depthFromStart;
+
+    if (depthDifference !== 0) {
+      return depthDifference;
+    }
+
+    if (a.path === b.path) {
+      return 0;
+    }
+
+    return a.path < b.path ? -1 : 1;
+  }
 }
 
 export type AgentKnowledgeContextRelationship = 'match' | 'ancestor' | 'child' | 'sibling';
@@ -802,6 +1138,19 @@ export type AgentKnowledgeContextRelationship = 'match' | 'ancestor' | 'child' |
 export type AgentKnowledgeContextNode = AgentKnowledgeNode & {
   relationship: AgentKnowledgeContextRelationship;
   similarity?: number;
+};
+
+export type AgentKnowledgeExploreRelationship =
+  | 'start'
+  | 'ancestor'
+  | 'child'
+  | 'descendant'
+  | 'sibling';
+
+export type AgentKnowledgeExploreNode = AgentKnowledgeNode & {
+  relationship: AgentKnowledgeExploreRelationship;
+  depthFromStart: number;
+  childCount: number;
 };
 
 type CreateKnowledgeNodeInput = {
@@ -873,6 +1222,23 @@ type FindRelevantMatchesInput = {
   limit?: number;
   minSimilarity?: number;
 };
+
+type ExploreKnowledgeNodesInput = {
+  identityId: string;
+  startNodeIds: string[];
+  direction?: KnowledgeExploreDirection;
+  maxDepth?: number;
+  includeInactive?: boolean;
+  limit?: number;
+};
+
+type KnowledgeExploreDirection =
+  | 'auto'
+  | 'children'
+  | 'descendants'
+  | 'ancestors'
+  | 'siblings'
+  | 'neighborhood';
 
 export type AgentKnowledgeSimilarNode = AgentKnowledgeNode & {
   similarity: number;

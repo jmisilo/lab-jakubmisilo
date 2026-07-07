@@ -5,6 +5,7 @@ import {
   ImplicitKnowledgeIngestionDecisionSchema,
   KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS,
   ManageKnowledgeToolInputSchema,
+  ReadKnowledgeToolInputSchema,
 } from '@/app/knowledge/schemas';
 
 describe('knowledge schemas', () => {
@@ -54,6 +55,47 @@ describe('knowledge schemas', () => {
           title: 'Too long note',
           content: 'a'.repeat(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS + 1),
         },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts bounded explore input for subtree traversal', () => {
+    const parsed = ReadKnowledgeToolInputSchema.parse({
+      action: 'explore',
+      startPath: 'projects/lab-agent',
+      query: 'knowledge retrieval',
+      direction: 'descendants',
+      maxDepth: 3,
+      limit: 12,
+      includeContentPreview: true,
+    });
+
+    expect(parsed).toEqual({
+      action: 'explore',
+      startPath: 'projects/lab-agent',
+      query: 'knowledge retrieval',
+      direction: 'descendants',
+      maxDepth: 3,
+      limit: 12,
+      includeContentPreview: true,
+    });
+  });
+
+  it('keeps read-only and mutation knowledge actions separated by tool schema', () => {
+    expect(
+      ReadKnowledgeToolInputSchema.safeParse({
+        action: 'create',
+        node: {
+          title: 'User preference',
+          content: 'The user prefers concise answers.',
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'explore',
+        query: 'work',
       }).success,
     ).toBe(false);
   });

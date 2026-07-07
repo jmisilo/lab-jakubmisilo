@@ -4,7 +4,7 @@ import type {
   GetWorldCupTrackingTool,
   ManageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
-import type { ManageKnowledgeTool } from '@/app/knowledge/tools';
+import type { ManageKnowledgeTool, ReadKnowledgeTool } from '@/app/knowledge/tools';
 import type { ManageScheduleTool } from '@/app/schedules/tools';
 import type { LoadSkillTool } from '@/app/skills/tools';
 
@@ -16,7 +16,7 @@ import {
   getWorldCupTrackingTool,
   manageWorldCupSubscriptionTool,
 } from '@/app/features/world-cup/tools';
-import { manageKnowledgeTool } from '@/app/knowledge/tools';
+import { manageKnowledgeTool, readKnowledgeTool } from '@/app/knowledge/tools';
 import { manageScheduleTool } from '@/app/schedules/tools';
 import { loadSkillTool } from '@/app/skills/tools';
 
@@ -27,6 +27,7 @@ export const agentTools: AgentTools = {
     searchContextSize: 'medium',
   }),
 
+  'read-knowledge': readKnowledgeTool,
   'manage-knowledge': manageKnowledgeTool,
   'manage-schedule': manageScheduleTool,
   'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
@@ -39,6 +40,7 @@ export const agentTools: AgentTools = {
 export type AgentTools = {
   'load-skill': LoadSkillTool;
   webSearch: ReturnType<typeof openai.tools.webSearch>;
+  'read-knowledge': ReadKnowledgeTool;
   'manage-knowledge': ManageKnowledgeTool;
   'manage-schedule': ManageScheduleTool;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;

@@ -1,4 +1,7 @@
-import type { AgentKnowledgeContextNode } from '@/infrastructure/db/services/agent-knowledge';
+import type {
+  AgentKnowledgeContextNode,
+  AgentKnowledgeExploreNode,
+} from '@/infrastructure/db/services/agent-knowledge';
 
 import { loggerMock as mockLogger } from '@/infrastructure/__mocks__/logger';
 import { AppErrorCode } from '@/infrastructure/errors';
@@ -17,6 +20,7 @@ const mockAgentKnowledgeDbService = {
   findActiveNodeByPath: jest.fn(),
   getRelevantContextNodes: jest.fn(),
   findRelevantMatches: jest.fn(),
+  exploreNodes: jest.fn(),
 };
 
 const mockAIService = {
@@ -319,6 +323,125 @@ describe('AgentKnowledgeService', () => {
       path: 'profile/location',
       includeInactive: true,
     });
+  });
+
+  it('explores a normalized knowledge path with bounded traversal options', async () => {
+    mockAgentKnowledgeDbService.getNodeByPath.mockResolvedValue(
+      createKnowledgeContextNode({
+        id: 'lab-agent-node',
+        path: 'projects/lab-agent',
+        title: 'Lab Agent',
+        content: 'Personal agent project.',
+      }),
+    );
+    mockAgentKnowledgeDbService.exploreNodes.mockResolvedValue([
+      createKnowledgeExploreNode({
+        id: 'lab-agent-node',
+        path: 'projects/lab-agent',
+        title: 'Lab Agent',
+        content: 'Personal agent project.',
+        relationship: 'start',
+        depthFromStart: 0,
+        childCount: 2,
+      }),
+      createKnowledgeExploreNode({
+        id: 'knowledge-node',
+        path: 'projects/lab-agent/knowledge-system',
+        title: 'Knowledge System',
+        content: 'Durable knowledge tree decisions.',
+        relationship: 'child',
+        depthFromStart: 1,
+        childCount: 0,
+      }),
+    ]);
+
+    const result = await AgentKnowledgeService.exploreNodes({
+      identityId: 'identity-1',
+      startPath: '/projects/lab-agent/',
+      direction: 'descendants',
+      maxDepth: 99,
+      limit: 99,
+    });
+
+    expect(mockAIService.embed).not.toHaveBeenCalled();
+    expect(mockAgentKnowledgeDbService.getNodeByPath).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      path: 'projects/lab-agent',
+      includeInactive: undefined,
+    });
+    expect(mockAgentKnowledgeDbService.exploreNodes).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      startNodeIds: ['lab-agent-node'],
+      direction: 'descendants',
+      maxDepth: AgentKnowledgeService.exploreMaxDepth,
+      includeInactive: undefined,
+      limit: AgentKnowledgeService.exploreCandidateFetchLimit,
+    });
+    expect(result).toEqual({
+      nodes: [
+        expect.objectContaining({
+          path: 'projects/lab-agent',
+          relationship: 'start',
+        }),
+        expect.objectContaining({
+          path: 'projects/lab-agent/knowledge-system',
+          relationship: 'child',
+        }),
+      ],
+      truncated: false,
+      startPaths: ['projects/lab-agent'],
+      suggestedNextPaths: ['projects/lab-agent'],
+    });
+  });
+
+  it('explores from query-selected start nodes when no path is known', async () => {
+    mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
+    mockAgentKnowledgeDbService.findRelevantMatches.mockResolvedValue([
+      createKnowledgeContextNode({
+        id: 'retrieval-node',
+        path: 'projects/lab-agent/retrieval',
+        title: 'Retrieval',
+        content: 'Knowledge retrieval decisions.',
+        similarity: 0.91,
+      }),
+    ]);
+    mockAgentKnowledgeDbService.exploreNodes.mockResolvedValue([
+      createKnowledgeExploreNode({
+        id: 'retrieval-node',
+        path: 'projects/lab-agent/retrieval',
+        title: 'Retrieval',
+        content: 'Knowledge retrieval decisions.',
+        relationship: 'start',
+        depthFromStart: 0,
+        childCount: 0,
+      }),
+    ]);
+
+    const result = await AgentKnowledgeService.exploreNodes({
+      identityId: 'identity-1',
+      query: 'knowledge retrieval',
+      limit: 1,
+    });
+
+    expect(mockAIService.embed).toHaveBeenCalledWith('knowledge retrieval');
+    expect(mockAgentKnowledgeDbService.findRelevantMatches).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      embedding: [0.1, 0.2, 0.3],
+      limit: AgentKnowledgeService.exploreQuerySeedLimit,
+      minSimilarity: AgentKnowledgeService.exploreQueryMinSimilarity,
+    });
+    expect(mockAgentKnowledgeDbService.exploreNodes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startNodeIds: ['retrieval-node'],
+        direction: undefined,
+      }),
+    );
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        path: 'projects/lab-agent/retrieval',
+        relationship: 'start',
+      }),
+    ]);
   });
 
   it('deactivates an active knowledge node by path without deleting it', async () => {
@@ -857,5 +980,48 @@ function createKnowledgeContextNode({
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     relationship,
     similarity,
+  };
+}
+
+function createKnowledgeExploreNode({
+  id = 'knowledge-node-1',
+  path = 'profile/location',
+  title,
+  content,
+  relationship,
+  depthFromStart,
+  childCount,
+}: {
+  id?: string;
+  path?: string;
+  title: string;
+  content: string;
+  relationship: AgentKnowledgeExploreNode['relationship'];
+  depthFromStart: number;
+  childCount: number;
+}): AgentKnowledgeExploreNode {
+  return {
+    id,
+    identityId: 'identity-1',
+    parentId: null,
+    slug: path.split('/').at(-1) ?? path,
+    path,
+    depth: path.split('/').length - 1,
+    title,
+    content,
+    active: true,
+    supersededById: null,
+    supersededAt: null,
+    source: 'explicit',
+    sourceMessageId: null,
+    metadata: {},
+    embedding: [0.1, 0.2, 0.3],
+    embeddingModel: 'text-embedding-3-small',
+    embeddingContentHash: 'hash',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    relationship,
+    depthFromStart,
+    childCount,
   };
 }
