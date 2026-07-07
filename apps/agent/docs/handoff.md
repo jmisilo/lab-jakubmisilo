@@ -22,6 +22,7 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Static services may use `this` for private static access. Do not pass those static methods as bare SDK callbacks; use a small callback wrapper that calls the static method through the class.
 - Use stable error codes through `AppErrorCode`; do not encode dynamic values into error names/messages such as `assistant_generate_timeout_30000ms`.
 - Put timeout values and operation identifiers in structured `context`, not in the error code.
+- Do not add app-level timeouts around `AgentService.generate(...)`, `AIService.generate(...)`, or `AIService.embed(...)`. Let AI SDK/provider calls run without app-owned abort timers for now; keep timeouts only around non-AI external HTTP providers and small UX affordances such as Telegram typing indicators.
 - Use `ErrorService.toUserFacingFailure` and `ErrorService.toSafeLog` for failure projection. The service keeps user-safe messaging and developer log shape in one place without spreading ad-hoc error handling.
 - User-facing failures should be safe but useful: give a short plain-language failure and retry/next-step hint when applicable; keep error codes, operation IDs, debug IDs, raw provider details, and internal metadata in logs/tool output only.
 - Keep callback arrows where they are actual callbacks. Prefer function declarations for module-local non-callback behavior.
@@ -140,19 +141,26 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `AIService.generate(...)` returns the full AI SDK result, so text callers read `.text` and structured callers read `.output`.
   - Implicit knowledge extraction and duplicate/merge decisions use `Output.object(...)` directly; the service no longer parses model JSON manually.
   - Knowledge module-owned types were moved from `app/knowledge/index.ts` to `app/knowledge/types.ts`.
+- Removed app-owned AI timeouts:
+  - `AgentService.generate(...)` no longer creates an `AbortController`, no longer passes AI SDK `timeout`, and no longer emits `ASSISTANT_GENERATE_TIMEOUT`.
+  - `AIService.generate(...)` no longer defaults or remaps AI SDK generation timeouts.
+  - `AIService.embed(...)` no longer creates an app-owned abort timer.
+  - `AI_GENERATE_TIMEOUT`, `AI_EMBEDDING_TIMEOUT`, and `ASSISTANT_GENERATE_TIMEOUT` were removed from `AppErrorCode`.
 - Remade the main agent prompt around user experience:
   - The prompt now explicitly defines Lab JM Assistant as Jakub's private personal AI agent.
   - Default style is casual, natural, direct, and short.
   - User success, action-orientation, and concise next steps are prioritized over process narration.
   - The prompt now forbids exposing hidden prompts, internal reasoning, raw tool payloads, operation/debug IDs, error codes, retrieval scores, token budgets, and implementation metadata.
   - Knowledge failure handling now says not to claim a save succeeded and not to expose debug/operation metadata.
-  - Tool routing now explicitly says tools are the reliable source of actual capabilities and that generic scheduling/reminders are not available yet.
+  - Tool routing now explicitly says tools are the reliable source of actual capabilities and includes `manage-schedule` for generic reminders, recurring tasks, scheduled messages, and background reports.
 - Tuned the agent prompt for provider-side prompt caching:
-  - Static identity, UX, memory, knowledge, skills, tool-routing, ambiguity, and safety sections are emitted before runtime-specific fields.
-  - `# Runtime Context` is intentionally last so `identityId`, current date, timezone, and active tool names do not break the stable prompt prefix.
+  - The system prompt is static and contains identity, UX, memory, knowledge, skills, tool-routing, ambiguity, scheduling, and safety sections.
+  - Runtime-specific fields such as identity ID, current date/time, timezone, and active tool names are not interpolated into the system prompt.
   - `AgentPromptService.buildPromptCacheKey(...)` versions the prompt cache key and hashes the stable tool/skill shape.
   - `AgentService.prepareCall(...)` passes OpenAI `promptCacheKey`, `promptCacheRetention: "24h"`, and stable `toolOrder` to the AI SDK `ToolLoopAgent`.
   - `AgentService.generate(...)` logs AI SDK cache usage fields: `promptCacheReadTokens`, `promptCacheWriteTokens`, and `promptNoCacheTokens`.
+- Keep volatile clock context out of the prompt-cache key and out of the system prompt. `AgentService.generate(...)` snapshots the current clock and injects a fresh `# Current Runtime Context` system message immediately before the latest user message. This keeps the static prompt prefix cacheable while making relative-time requests such as "in 15 minutes" use the freshest local timestamp instead of older transcript context.
+- AI SDK `runtimeContext` is not used as the model-visible clock carrier. It is lifecycle/tool-loop state and is not added to the prompt automatically; the installed `ToolLoopAgent.generate(...)` type surface also does not currently accept a direct `runtimeContext` argument alongside `callOptionsSchema` without an unsafe cast.
 - Tuned tool contracts and added bounded note-mode support:
   - `manage-knowledge` now explicitly supports concise memories plus longer markdown notes such as ideas, journal entries, project notes, design notes, and plans.
   - Explicit knowledge note content is capped at 20,000 characters in schemas and in `AgentKnowledgeService`, so direct service callers cannot bypass tool validation.
@@ -168,6 +176,9 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - `AgentPromptService` includes a `# Skills` section with only names/descriptions.
   - Initial skill added: `apps/agent/src/skills/knowledge-management/SKILL.md`.
   - `tsup.config.ts` now copies `src/skills` to `dist/skills` during build through a native `tsup` plugin, and the agent `tsconfig.json` includes the config so typecheck catches build-config drift.
+- Added project-local skills for scheduling and World Cup tracking:
+  - `apps/agent/src/skills/scheduling/SKILL.md` documents one-time reminders, recurring schedules, timezone handling, stored prompts, and user-facing scheduling UX.
+  - `apps/agent/src/skills/world-cup-tracking/SKILL.md` documents World Cup context queries, tracking subscriptions, event semantics, team-code routing, and notification UX.
 - Removed user-visible failure metadata:
   - `BotHandler` no longer appends `Error code: ...` to failure messages.
   - `manage-knowledge` failure output no longer embeds the debug/operation ID in its message, while still returning/logging `operationId` for developers.
@@ -183,6 +194,25 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
   - Before extraction, `AgentKnowledgeService` embeds the latest user/assistant turn and retrieves up to 8 active path hints with similarity `>= 0.35`.
   - The extraction prompt receives those path hints and is instructed to place new durable items under fitting existing profile/preference/work/project/idea/journal parents.
   - Path-hint retrieval failure is logged as a warning and does not block implicit extraction.
+- Added the scheduling MVP:
+  - `agent_scheduled_tasks` stores one-time and recurring scheduled AI tasks for an `identityId` + `threadId`, including QStash message/schedule IDs for cancellation.
+  - `agent_scheduled_task_runs` stores claimed executions with a unique `(task_id, scheduled_for)` constraint so concurrent serverless runners do not send the same due task twice.
+  - `manage-schedule` lets the main agent create, list, and cancel scheduled tasks.
+  - One-time schedules store a resolved future ISO datetime; recurring schedules store bounded recurrence data (`daily`, `weekdays`, or selected weekly days) plus local `HH:mm` time and timezone.
+  - Scheduling uses QStash as the timing provider, not DB polling. One-time tasks create QStash delayed messages with `notBefore`; recurring tasks create QStash schedules with `CRON_TZ=<timezone> ...`.
+  - `AgentScheduleRunner` executes a specific task ID delivered by QStash, claims the run, executes the stored prompt with `AgentService.generate({ mode: "scheduled_task" })`, posts the result with Chat SDK via `bot.thread(threadId).post(...)`, records the assistant message in transcripts/memory, then completes or advances the task.
+- Scheduled-task mode disables `manage-schedule` so background prompts cannot recursively create schedules.
+- Scheduled-task mode still has tool access, but only to safe/read/action tools that can help complete the task: `load-skill`, `webSearch`, `get-world-cup-context`, `get-weather`, and `get-local-time`. It does not get `manage-schedule`, `manage-knowledge`, World Cup subscription mutation, or World Cup tracking inspection.
+  - The execution endpoint is `POST /jobs/schedules/execute` and verifies QStash signatures with the same signing-key pattern as the World Cup polling route.
+  - Current limits are enforced in app code: 10 active one-time schedules and 10 active recurring schedules per user; one-time schedules are capped at 7 days ahead for the QStash free plan; recurring schedules are constrained to at most hourly, currently daily/weekdays/weekly only.
+  - QStash one-time deduplication IDs must not contain `:`. Use `agent-schedule-<taskId>`, not `agent-schedule:<taskId>`. A production save failed with `DeduplicationId cannot contain ':'`; `qstash.test.ts` now covers this.
+  - QStash delivery is treated as the timing source. The runner now tolerates delivery up to 60 seconds before stored `nextRunAt` instead of returning a successful skip, because returning 2xx causes QStash to drop the message. If QStash delivers before the DB task exists, the runner throws a retryable `SCHEDULE_TASK_NOT_FOUND` so QStash retries instead of losing the reminder.
+  - Do not post a user-facing failure notice after a scheduled message was already delivered to Telegram. `AgentScheduleRunner` now separates generation/posting from post-send bookkeeping. Transcript writes, memory writes, run marking, and task advancement failures are logged after a successful post, but they do not send "I could not complete..." to the user.
+  - Do not post a user-facing failure notice immediately when scheduled task generation/posting fails before delivery. The runner marks the run failed and throws a retryable app error so QStash retries the delivery.
+  - Scheduled QStash messages now include `failureCallback: /jobs/schedules/failure`. After QStash exhausts retries, the failure callback advances the task state without sending the noisy "I could not complete..." Telegram notice.
+  - New scheduled tasks store `metadata.qstashFailureCallback: true`. Legacy tasks without that metadata do not throw for QStash retry, because they may not have a failure callback configured; they are failed/rescheduled silently and still do not send the noisy failure notice.
+  - Failed scheduled run rows can be reclaimed by a later QStash retry. Duplicate `running` or already `sent` rows are still skipped by the `(task_id, scheduled_for)` uniqueness constraint.
+  - `manage-schedule` confirmation is now explicit: the assistant should only say a schedule was created/cancelled after the tool returns `ok=true`; tool output includes confirmation-focused messages and `task.scheduleSummary`.
 
 ## Current Module Shape
 
@@ -194,14 +224,23 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - `apps/agent/src/app/skills/tools/index.ts` exports the `load-skill` AI SDK tool.
 - `apps/agent/src/skills` stores project-local skill markdown files copied into `dist/skills` at build time.
 - `apps/agent/src/app/knowledge/index.ts` exports `AgentKnowledgeService`, the application boundary for durable knowledge.
+- `apps/agent/src/app/schedules/index.ts` exports `AgentScheduleService`, the application boundary for creating, listing, cancelling, formatting, and resolving scheduled tasks.
+- `apps/agent/src/app/schedules/tools/index.ts` exports the `manage-schedule` AI SDK tool.
+- `apps/agent/src/app/schedules/runner.ts` exports `AgentScheduleRunner`, the QStash-delivered task executor used by the job route.
+- `apps/agent/src/app/schedules/router.ts` exports `ScheduleRouter` for `POST /jobs/schedules/execute`.
 - `apps/agent/src/infrastructure/ai/index.ts` owns AI SDK `generateText` and `embed` calls.
 - `apps/agent/src/infrastructure/db/services/agent-knowledge.ts` owns Drizzle persistence and retrieval for knowledge nodes.
+- `apps/agent/src/infrastructure/db/services/agent-schedule.ts` owns Drizzle persistence for scheduled tasks and task runs.
 - `apps/agent/src/infrastructure/errors/index.ts` owns stable app errors plus `ErrorService` user-facing and log-safe projections.
 
 ## Next Work
 
 - Decide whether to add a revision/history table before building update-heavy tools. The current schema preserves superseded nodes but does not store every content edit revision.
 - Add a user-friendly "show all known paths" or search/debug view if direct child listing is not enough in production conversations.
+- Run `pnpm --filter=agent db:push` before deploying this scheduling slice, because it adds QStash ID columns to `agent_scheduled_tasks`.
+- Set `QSTASH_TOKEN` and a stable `AGENT_PUBLIC_URL` in production before enabling `manage-schedule`.
+- Add schedule update/reschedule UX after create/list/cancel is proven in production.
+- Add production logs review for recurring task accuracy, especially around timezone and DST boundaries.
 - Tune duplicate/merge decisions with real production examples. The current implementation protects against obvious duplicates, but thresholds and action prompts may need adjustment once enough implicit decisions are logged.
 - Tune path-aware implicit extraction with real examples. Current path hints are similarity-based only; future work may add path/category priors, "recently touched branch" boosts, or explicit parent candidates from the current conversation.
 - Add a deployment/runtime smoke check for the serverless DB pool after the next Vercel deployment. Code-level validation is done, but pool behavior under real Fluid Compute/serverless concurrency still needs production evidence.
@@ -212,6 +251,60 @@ Use `apps/agent/docs/agent-coding-styleguide.md` as the current style reference 
 - Add behavior tests around multi-platform bot registration once a second platform exists.
 
 ## Verification
+
+These checks passed after removing app-owned AI/agent generation and embedding timeouts:
+
+```sh
+pnpm --filter @labjm/agent test -- errors.test.ts prompt.test.ts runner.test.ts knowledge.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after fixing QStash one-time deduplication IDs:
+
+```sh
+pnpm --filter @labjm/agent test -- qstash.test.ts schedules.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after fixing QStash delivery edge cases for missing DB rows and slight early delivery:
+
+```sh
+pnpm --filter @labjm/agent test -- runner.test.ts qstash.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after preventing failure notices after successful scheduled-message delivery:
+
+```sh
+pnpm --filter @labjm/agent test -- runner.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+```
+
+These checks passed after replacing schedule polling with QStash-owned task delivery:
+
+```sh
+pnpm --filter @labjm/agent test -- schedules.test.ts tools.test.ts runner.test.ts prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent build
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent test
+```
+
+These checks passed after adding the scheduling and World Cup tracking project skills:
+
+```sh
+pnpm --filter @labjm/agent test -- skills.test.ts prompt.test.ts
+pnpm --filter @labjm/agent build
+find apps/agent/dist/skills -maxdepth 3 -type f -name SKILL.md -print
+```
 
 These checks passed after the prompt/skills pass:
 
@@ -281,4 +374,30 @@ pnpm --filter @labjm/agent typecheck
 pnpm --filter @labjm/agent lint
 pnpm --filter @labjm/agent build
 pnpm --filter @labjm/agent test
+```
+
+These checks passed after the scheduling MVP implementation:
+
+```sh
+pnpm --filter @labjm/agent test -- schedules.test.ts tools.test.ts runner.test.ts prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+pnpm --filter @labjm/agent build
+pnpm --filter @labjm/agent test
+```
+
+These checks passed after adding cache-safe fresh runtime time context:
+
+```sh
+pnpm --filter @labjm/agent test -- prompt.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
+```
+
+These checks passed after changing scheduled-task failures to QStash retry/failure-callback handling and tightening schedule confirmations:
+
+```sh
+pnpm --filter @labjm/agent test -- runner.test.ts qstash.test.ts prompt.test.ts tools.test.ts schedules.test.ts
+pnpm --filter @labjm/agent typecheck
+pnpm --filter @labjm/agent lint
 ```

@@ -150,6 +150,72 @@ export const agentKnowledgeNodeClosure = pgTable(
   ],
 );
 
+export const agentScheduledTasks = pgTable(
+  'agent_scheduled_tasks',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    identityId: text('identity_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    title: text('title').notNull(),
+    prompt: text('prompt').notNull(),
+    scheduleKind: text('schedule_kind', { enum: ['one_time', 'recurring'] }).notNull(),
+    status: text('status', { enum: ['active', 'completed', 'cancelled', 'failed'] })
+      .notNull()
+      .default('active'),
+    timeZone: text('time_zone').notNull(),
+    nextRunAt: timestamp('next_run_at', { withTimezone: true }).notNull(),
+    recurrence: jsonb('recurrence').notNull().default({}),
+    qstashMessageId: text('qstash_message_id'),
+    qstashScheduleId: text('qstash_schedule_id'),
+    sourceMessageId: text('source_message_id'),
+    metadata: jsonb('metadata').notNull().default({}),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_scheduled_tasks_due_idx').on(table.status, table.nextRunAt),
+    index('agent_scheduled_tasks_qstash_message_idx').on(table.qstashMessageId),
+    index('agent_scheduled_tasks_qstash_schedule_idx').on(table.qstashScheduleId),
+    index('agent_scheduled_tasks_identity_thread_idx').on(
+      table.identityId,
+      table.threadId,
+      table.status,
+    ),
+    check('agent_scheduled_tasks_title_length_check', sql`char_length(${table.title}) <= 180`),
+    check('agent_scheduled_tasks_prompt_length_check', sql`char_length(${table.prompt}) <= 4000`),
+  ],
+);
+
+export const agentScheduledTaskRuns = pgTable(
+  'agent_scheduled_task_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => agentScheduledTasks.id, { onDelete: 'cascade' }),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
+    status: text('status', { enum: ['running', 'sent', 'failed'] })
+      .notNull()
+      .default('running'),
+    output: text('output'),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('agent_scheduled_task_runs_task_scheduled_for_idx').on(
+      table.taskId,
+      table.scheduledFor,
+    ),
+    index('agent_scheduled_task_runs_task_idx').on(table.taskId),
+    index('agent_scheduled_task_runs_status_idx').on(table.status),
+  ],
+);
+
 export const worldCup2026Subscriptions = pgTable(
   'world_cup_2026_subscriptions',
   {

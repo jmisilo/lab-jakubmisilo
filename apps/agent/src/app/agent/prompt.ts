@@ -1,4 +1,5 @@
 import type { AgentSkillSummary } from '@/app/skills/types';
+import type { ModelMessage } from 'ai';
 
 import { createHash } from 'node:crypto';
 
@@ -7,35 +8,32 @@ import dedent from 'dedent';
 const PROMPT_CACHE_VERSION = 'agent-prompt:v1';
 
 export type AgentPromptContext = {
+  skills: readonly AgentSkillSummary[];
+};
+
+export type AgentPromptCacheKeyContext = {
   identityId: string;
-  currentDate: string;
-  timeZone: string;
   tools: readonly string[];
   skills: readonly AgentSkillSummary[];
 };
 
-export type AgentPromptCacheKeyContext = Pick<
-  AgentPromptContext,
-  'identityId' | 'tools' | 'skills'
->;
+export type AgentRuntimeClockContext = {
+  currentDate: string;
+  currentDateTime: string;
+  currentUtcDateTime: string;
+  currentWeekday: string;
+  timeZone: string;
+  timeZoneOffset: string;
+};
+
+export type AgentMessagesWithRuntimeContextInput = {
+  messages: ModelMessage[];
+  runtimeClock: AgentRuntimeClockContext;
+};
 
 export class AgentPromptService {
-  static buildSystemPrompt({
-    identityId,
-    currentDate,
-    timeZone,
-    tools,
-    skills,
-  }: AgentPromptContext) {
-    return [
-      this.#buildStaticPrompt({ skills }),
-      this.#buildRuntimePrompt({
-        identityId,
-        currentDate,
-        timeZone,
-        tools,
-      }),
-    ].join('\n\n');
+  static buildSystemPrompt({ skills }: AgentPromptContext) {
+    return this.#buildStaticPrompt({ skills });
   }
 
   static buildPromptCacheKey({ identityId, tools, skills }: AgentPromptCacheKeyContext) {
@@ -53,6 +51,36 @@ export class AgentPromptService {
       .slice(0, 16);
 
     return `${PROMPT_CACHE_VERSION}:${identityId}:${stableShapeHash}`;
+  }
+
+  static buildRuntimeContextMessage(context: AgentRuntimeClockContext): ModelMessage {
+    return {
+      role: 'system',
+      content: dedent`
+        # Current Runtime Context
+
+        - Current local date/time: ${this.#formatLocalDateTime(context)}
+        - Current UTC date/time: ${context.currentUtcDateTime}
+
+        Use this runtime context for the latest user request.
+        Resolve relative dates and times such as "in 15 minutes", "today", "tomorrow", "tonight", and "later" from this timestamp.
+        If older conversation history conflicts with this message, prefer this message and the latest user message.
+      `,
+    };
+  }
+
+  static buildMessagesWithRuntimeContext({
+    messages,
+    runtimeClock,
+  }: AgentMessagesWithRuntimeContextInput) {
+    const runtimeMessage = this.buildRuntimeContextMessage(runtimeClock);
+    const latestMessage = messages.at(-1);
+
+    if (!latestMessage) {
+      return [runtimeMessage];
+    }
+
+    return [...messages.slice(0, -1), runtimeMessage, latestMessage];
   }
 
   static #buildStaticPrompt({ skills }: { skills: readonly AgentSkillSummary[] }) {
@@ -156,7 +184,21 @@ export class AgentPromptService {
       - Use manage-world-cup-subscription only for explicit future notification subscription changes.
       - Use get-world-cup-tracking only to inspect existing World Cup notification tracking.
       - Use load-skill only for skills listed in # Skills.
-      - There is no generic scheduling/reminder tool yet. Do not claim that generic reminders or background jobs were scheduled.
+      - Use manage-schedule for generic reminders, recurring tasks, scheduled messages, and background AI reports.
+
+      # Scheduling
+
+      Use manage-schedule when the user asks to create, inspect, or cancel reminders, scheduled messages, recurring tasks, or background AI reports.
+      Scheduling is backed by QStash delivery, not database polling. Postgres stores task metadata and cancellation state.
+      Current limits: 10 active one-time schedules and 10 active recurring schedules per user.
+      Current QStash plan: free. One-time schedules can be created at most 7 days ahead.
+      Recurring schedules must not run more often than once per hour. The current tool supports daily, weekdays, and selected weekly days.
+
+      - For scheduling without a timezone, use the runtime user timezone.
+      - For scheduling without a date but with a time, resolve the next sensible future occurrence and include the resolved absolute date/time in the acknowledgement.
+      - For recurring schedules without an explicit time, choose a practical time based on the task and user preferences; use 09:00 as the neutral fallback.
+      - Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.
+      - If manage-schedule returns ok=false, say briefly that it was not scheduled/cancelled and ask for the next practical correction.
 
       # Ambiguity And Defaults
 
@@ -173,36 +215,20 @@ export class AgentPromptService {
     `;
   }
 
-  static #buildRuntimePrompt({
-    identityId,
-    currentDate,
-    timeZone,
-    tools,
-  }: {
-    identityId: string;
-    currentDate: string;
-    timeZone: string;
-    tools: readonly string[];
-  }) {
-    return dedent`
-      # Runtime Context
-
-      - Identity ID: ${identityId}
-      - Current date: ${currentDate}
-      - User timezone: ${timeZone}
-      - Available tools: ${this.#formatTools(tools)}
-    `;
-  }
-
-  static #formatTools(tools: readonly string[]) {
-    return tools.length > 0 ? tools.join(', ') : 'none';
-  }
-
   static #formatSkills(skills: readonly AgentSkillSummary[]) {
     if (skills.length === 0) {
       return '- none';
     }
 
     return skills.map((skill) => `- ${skill.name}: ${skill.description}`).join('\n');
+  }
+
+  static #formatLocalDateTime({
+    currentDateTime,
+    currentWeekday,
+    timeZone,
+    timeZoneOffset,
+  }: AgentRuntimeClockContext) {
+    return `${currentWeekday}, ${currentDateTime} ${timeZone} (${timeZoneOffset})`;
   }
 }

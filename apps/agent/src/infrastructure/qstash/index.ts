@@ -1,0 +1,192 @@
+import { Client } from '@upstash/qstash';
+
+import { AppError, AppErrorCode } from '@/infrastructure/errors';
+
+const QSTASH_EXECUTION_RETRIES = 3;
+const QSTASH_EXECUTION_TIMEOUT_SECONDS = 60;
+
+type ScheduleTaskPayload = {
+  taskId: string;
+};
+
+type QStashScheduleDayOfWeek =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday';
+
+type QStashScheduleRecurrence = {
+  frequency: 'daily' | 'weekdays' | 'weekly';
+  daysOfWeek: QStashScheduleDayOfWeek[];
+  timeOfDay: string;
+};
+
+type ScheduleOneTimeTaskInput = {
+  taskId: string;
+  runAt: Date;
+};
+
+type ScheduleRecurringTaskInput = {
+  taskId: string;
+  recurrence: QStashScheduleRecurrence;
+  timeZone: string;
+};
+
+type CancelScheduledTaskInput = {
+  qstashMessageId?: string | null;
+  qstashScheduleId?: string | null;
+};
+
+const DAY_OF_WEEK_CRON_VALUE: Record<QStashScheduleDayOfWeek, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+export class QStashService {
+  static async scheduleOneTimeTask({ taskId, runAt }: ScheduleOneTimeTaskInput) {
+    const response = await this.#client.publishJSON<ScheduleTaskPayload>({
+      url: this.#executionUrl,
+      body: { taskId },
+      notBefore: Math.floor(runAt.getTime() / 1000),
+      retries: QSTASH_EXECUTION_RETRIES,
+      timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
+      failureCallback: this.#failureUrl,
+      deduplicationId: `agent-schedule-${taskId}`,
+      label: ['agent-schedule', 'agent-schedule-one-time', `task-${taskId}`],
+    });
+
+    if (Array.isArray(response) || !('messageId' in response)) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_PROVIDER_ERROR,
+        message: 'QStash one-time schedule response did not include a message id.',
+        context: { taskId },
+        retryable: true,
+        userMessage: 'I could not schedule that right now.',
+      });
+    }
+
+    return response.messageId;
+  }
+
+  static async scheduleRecurringTask({ taskId, recurrence, timeZone }: ScheduleRecurringTaskInput) {
+    const scheduleId = this.getRecurringScheduleId(taskId);
+    const response = await this.#client.schedules.create({
+      destination: this.#executionUrl,
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ taskId } satisfies ScheduleTaskPayload),
+      cron: this.#toCronExpression({ recurrence, timeZone }),
+      retries: QSTASH_EXECUTION_RETRIES,
+      timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
+      failureCallback: this.#failureUrl,
+      scheduleId,
+      label: 'agent-schedule-recurring',
+    });
+
+    return response.scheduleId;
+  }
+
+  static async cancelScheduledTask({
+    qstashMessageId,
+    qstashScheduleId,
+  }: CancelScheduledTaskInput) {
+    if (qstashMessageId) {
+      await this.#client.messages.cancel(qstashMessageId);
+    }
+
+    if (qstashScheduleId) {
+      await this.#client.schedules.delete(qstashScheduleId);
+    }
+  }
+
+  static getRecurringScheduleId(taskId: string) {
+    return `agent-task-${taskId}`;
+  }
+
+  static get #client() {
+    const token = process.env.QSTASH_TOKEN;
+
+    if (!token) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_PROVIDER_UNAVAILABLE,
+        message: 'QStash token is not configured.',
+        retryable: false,
+        userMessage: 'Scheduling is not configured yet.',
+      });
+    }
+
+    return new Client({ token });
+  }
+
+  static get #executionUrl() {
+    return this.#url('/jobs/schedules/execute');
+  }
+
+  static get #failureUrl() {
+    return this.#url('/jobs/schedules/failure');
+  }
+
+  static #url(path: string) {
+    const baseUrl =
+      process.env.AGENT_PUBLIC_URL ??
+      process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+      process.env.VERCEL_URL;
+
+    if (!baseUrl) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_PROVIDER_UNAVAILABLE,
+        message: 'Agent public URL is not configured.',
+        retryable: false,
+        userMessage: 'Scheduling is not configured yet.',
+      });
+    }
+
+    const normalizedBaseUrl = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+
+    return new URL(path, normalizedBaseUrl).toString();
+  }
+
+  static #toCronExpression({
+    recurrence,
+    timeZone,
+  }: {
+    recurrence: QStashScheduleRecurrence;
+    timeZone: string;
+  }) {
+    const [hour, minute] = recurrence.timeOfDay.split(':');
+
+    if (!hour || !minute) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_INVALID,
+        message: 'Recurring schedule has invalid time of day.',
+        context: { recurrence },
+        retryable: false,
+      });
+    }
+
+    if (recurrence.frequency === 'daily') {
+      return `CRON_TZ=${timeZone} ${Number(minute)} ${Number(hour)} * * *`;
+    }
+
+    if (recurrence.frequency === 'weekdays') {
+      return `CRON_TZ=${timeZone} ${Number(minute)} ${Number(hour)} * * 1-5`;
+    }
+
+    const daysOfWeek = recurrence.daysOfWeek
+      .map((day) => DAY_OF_WEEK_CRON_VALUE[day])
+      .sort((left, right) => left - right)
+      .join(',');
+
+    return `CRON_TZ=${timeZone} ${Number(minute)} ${Number(hour)} * * ${daysOfWeek}`;
+  }
+}

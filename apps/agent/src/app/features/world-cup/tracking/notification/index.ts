@@ -140,7 +140,6 @@ export class WorldCupNotificationService {
             `,
           },
         ],
-        timeout: 20_000,
       });
 
       return result.text;
