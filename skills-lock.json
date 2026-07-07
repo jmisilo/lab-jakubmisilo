@@ -49,6 +49,12 @@
       "skillPath": "skills/turborepo/SKILL.md",
       "computedHash": "b7c3165ae67a2892d6195a5b2cba15c8d96341f5c64ddd0d3ce4225c94a2ae83"
     },
+    "upstash-qstash-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-qstash-js/SKILL.md",
+      "computedHash": "07d6bb206ffdb247b8efb1bf50de9bf836ae4e5859e7b6c9d25fba7575dd207a"
+    },
     "vercel-cli": {
       "source": "vercel/vercel",
       "sourceType": "github",

@@ -125,8 +125,10 @@ Required:
 - `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated allowlist while the agent is private
 - `TELEGRAM_BOT_USERNAME` — optional, defaults to `labjm_assistant_bot`
 - `OPENWEATHER_API_KEY` — required for weather and local-time tools
-- `QSTASH_CURRENT_SIGNING_KEY` — required for World Cup polling
-- `QSTASH_NEXT_SIGNING_KEY` — required for World Cup polling
+- `QSTASH_CURRENT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
+- `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
+- `QSTASH_TOKEN` — required for creating QStash one-time messages and recurring schedules
+- `AGENT_PUBLIC_URL` — stable public base URL used as the QStash scheduled-task destination, for example `https://agent.example.com`
 
 Add the optional env vars the same way when those integrations are enabled.
 
@@ -169,6 +171,14 @@ CRON_TZ=Europe/Warsaw 45-59 17 * * *
 CRON_TZ=Europe/Warsaw * 18-23 * * *
 CRON_TZ=Europe/Warsaw * 0-9 * * *
 ```
+
+Generic user scheduling does not need a periodic polling cron. The `manage-schedule` tool creates QStash delayed messages for one-time tasks and QStash schedules for recurring tasks. QStash calls:
+
+```txt
+POST https://<agent-domain>/jobs/schedules/execute
+```
+
+The route verifies QStash signatures with `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY`.
 
 ## Database
 
