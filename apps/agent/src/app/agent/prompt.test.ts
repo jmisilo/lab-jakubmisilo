@@ -5,6 +5,10 @@ describe('AgentPromptService', () => {
     const prompt = AgentPromptService.buildSystemPrompt({
       skills: [
         {
+          name: 'calendar-management',
+          description: 'How to manage calendar events.',
+        },
+        {
           name: 'knowledge-management',
           description: 'How to manage durable knowledge.',
         },
@@ -38,6 +42,7 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('work/history/company-x');
     expect(prompt).toContain('create or identify Company Y, then supersede Company X');
     expect(prompt).toContain('# Skills');
+    expect(prompt).toContain('- calendar-management: How to manage calendar events.');
     expect(prompt).toContain('- knowledge-management: How to manage durable knowledge.');
     expect(prompt).toContain('Use load-skill to load full content');
     expect(prompt).toContain('# Tool Knowledge And Routing');
@@ -45,6 +50,10 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('Use manage-google-calendar-connection');
     expect(prompt).toContain('Use read-calendar when the user asks what is on their calendar');
     expect(prompt).toContain('Google Calendar is an external user calendar');
+    expect(prompt).toContain('clearly implies a calendar event by stating a concrete busy block');
+    expect(prompt).toContain('today I have padel from 19-21');
+    expect(prompt).toContain('Do not merely acknowledge concrete busy blocks');
+    expect(prompt).toContain('Do not create Calendar events for free-time statements');
     expect(prompt).toContain('If a Calendar tool returns ok=false with connectionUrl');
     expect(prompt).toContain('It is allowed to send the complete Calendar connectionUrl');
     expect(prompt).toContain(
