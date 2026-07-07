@@ -22,7 +22,7 @@ Target user flow:
 - Support attendees in v1.
 - Support Google Meet link creation in v1.
 - Scheduled tasks may use Calendar tools. Start by allowing read and create in scheduled mode; keep update/delete chat-only unless a later confirmation model is designed.
-- Use `https://www.googleapis.com/auth/calendar.events` plus `https://www.googleapis.com/auth/calendar.calendarlist.readonly`.
+- Use `https://www.googleapis.com/auth/calendar.events`, `https://www.googleapis.com/auth/calendar.calendarlist.readonly`, and `https://www.googleapis.com/auth/calendar.freebusy`.
 - Google app verification/consent-screen requirements are known and will be handled separately.
 
 ## Existing Architecture Context
@@ -172,12 +172,14 @@ Use:
 ```txt
 https://www.googleapis.com/auth/calendar.events
 https://www.googleapis.com/auth/calendar.calendarlist.readonly
+https://www.googleapis.com/auth/calendar.freebusy
 ```
 
 Rationale:
 
 - `calendar.events` is sufficient for event CRUD without broad calendar ACL/share management.
 - `calendar.calendarlist.readonly` lets the agent discover calendars and identify writable calendars.
+- `calendar.freebusy` is required for free/busy availability checks without requesting broad calendar read access.
 - Avoid broad `https://www.googleapis.com/auth/calendar` unless a later requirement needs full calendar management.
 
 Optional if the connected Google account email should be shown in status:
@@ -255,7 +257,7 @@ Use Node `crypto` AES-256-GCM for refresh token encryption.
 
 Recommended key format:
 
-- `GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY` is a base64-encoded 32-byte key.
+- `GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY` is a base64-encoded 32-byte key. Generate it with `openssl rand -base64 32`.
 - Reject startup/use if key is absent or wrong length.
 
 Store:

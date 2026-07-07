@@ -181,6 +181,16 @@ Required:
 - `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
 - `QSTASH_TOKEN` — required for creating QStash one-time messages and recurring schedules
 - `AGENT_PUBLIC_URL` — stable public base URL used as the QStash scheduled-task destination, for example `https://agent.example.com`
+- `GOOGLE_OAUTH_CLIENT_ID` — Google OAuth web application client id for Calendar integration
+- `GOOGLE_OAUTH_CLIENT_SECRET` — Google OAuth web application client secret
+- `GOOGLE_OAUTH_REDIRECT_URI` — exact Google OAuth redirect URI, for example `https://agent.lab.jakubmisilo.com/links/google-calendar/callback`
+- `GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY` — base64-encoded 32-byte key used to encrypt stored Google refresh tokens
+
+Generate the Calendar token encryption key with:
+
+```sh
+openssl rand -base64 32
+```
 
 Add the optional env vars the same way when those integrations are enabled.
 
