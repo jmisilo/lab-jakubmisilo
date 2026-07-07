@@ -137,6 +137,24 @@ describe('SkillService', () => {
     }
   });
 
+  it('discovers the built-in calendar management skill', () => {
+    expect(SkillService.listSkills()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'calendar-management',
+          description: expect.stringContaining('implicit event creation'),
+        }),
+      ]),
+    );
+
+    expect(SkillService.loadSkill({ name: 'calendar-management' })).toMatchObject({
+      ok: true,
+      skill: {
+        content: expect.stringContaining('The user does not need to say "add this to Calendar"'),
+      },
+    });
+  });
+
   function createSkillDirectory() {
     const directory = mkdtempSync(join(tmpdir(), 'agent-skills-'));
 
