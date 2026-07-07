@@ -45,6 +45,15 @@ export class AgentService {
       'manage-knowledge': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
+      'manage-google-calendar-connection': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
+      'read-calendar': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
+      'manage-calendar': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
       'manage-schedule': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
         threadId: UNAVAILABLE_TOOL_CONTEXT,
@@ -94,6 +103,24 @@ export class AgentService {
           'manage-knowledge': {
             identityId,
             sourceMessageId: options?.sourceMessageId,
+          },
+          'manage-google-calendar-connection': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            mode: options?.mode,
+          },
+          'read-calendar': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            mode: options?.mode,
+          },
+          'manage-calendar': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            mode: options?.mode,
           },
           'manage-schedule': {
             identityId,
@@ -204,13 +231,20 @@ export class AgentService {
 
     if (options?.identityId) {
       activeTools.push('read-knowledge');
+      activeTools.push('read-calendar');
     }
 
     if (options?.mode === 'scheduled_task') {
+      if (options.identityId) {
+        activeTools.push('manage-calendar');
+      }
+
       return activeTools;
     }
 
     if (options?.identityId && options.threadId) {
+      activeTools.push('manage-google-calendar-connection');
+      activeTools.push('manage-calendar');
       activeTools.push('manage-schedule');
       activeTools.push('manage-knowledge');
       activeTools.push('manage-world-cup-subscription');
