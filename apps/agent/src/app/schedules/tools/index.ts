@@ -1,3 +1,4 @@
+import type { ScheduledTaskSideEffect } from '@/app/schedules/types';
 import type { AgentScheduledTask } from '@/types';
 import type { Tool } from 'ai';
 import type { z } from 'zod';
@@ -32,11 +33,14 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     # When To Use
     - The user asks to remind, notify, ping, send a future message, run a background task, or create a recurring report.
     - The user asks to do something at a future time or on a repeating cadence.
+    - Reminder-only wording such as "remind me about tennis at 19:00" or "ping me to leave for the dentist"; do not create a Calendar event unless the user also asks to block time or save an event.
+    - Requests that combine an event and reminder, such as "I have tennis at 19:00, remind me 30 minutes before"; use this tool for the reminder and Calendar tools for the event when event details are clear.
     - The user asks what tasks/reminders are scheduled.
     - The user asks to cancel, edit, move, reschedule, pause, or resume one.
     - If the user identifies a task naturally ("the 9am one", "the shopping reminder"), call list first when the task id is not already visible in context.
 
     # When Not To Use
+    - The user wants a time block or event represented on Google Calendar; use Calendar tools.
     - The user is asking about an existing World Cup notification subscription; use the World Cup subscription tool for those.
     - The user wants an immediate answer or immediate web search.
     - The requested time is ambiguous enough that the wrong schedule would be harmful; ask a brief clarification.
@@ -55,6 +59,8 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - The prompt must be the exact durable instruction for the future subagent, not just the user's raw words.
     - For reminders, write a prompt that asks the subagent to send a short natural reminder.
     - For reports, include what to research, what tools to use when useful, desired format, and concise output expectations.
+    - Scheduled executions can read Calendar context by default, but Calendar writes require explicit allowedSideEffects.
+    - Set allowedSideEffects to ["calendar.create"] only when the user clearly asks the future scheduled task to create Calendar events. Do not set it for reminders, reports, or normal calendar reads.
     - Do not include hidden metadata, operation IDs, database IDs, or raw tool payloads in the prompt.
 
     # Examples
@@ -87,6 +93,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
           schedule: input.schedule,
           sourceMessageId: context.sourceMessageId,
           userFacingSchedule: input.userFacingSchedule,
+          allowedSideEffects: input.allowedSideEffects,
         });
 
         if (!task) {
@@ -150,6 +157,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
           prompt: input.prompt,
           schedule: input.schedule,
           userFacingSchedule: input.userFacingSchedule,
+          allowedSideEffects: input.allowedSideEffects,
         });
 
         logger.info(
@@ -271,7 +279,24 @@ function toToolTask(task: AgentScheduledTask) {
     nextRunAt: task.status === 'active' ? task.nextRunAt.toISOString() : null,
     scheduleSummary: AgentScheduleService.formatTaskSchedule(task),
     promptPreview: truncateText(task.prompt, PROMPT_PREVIEW_CHARACTER_LIMIT),
+    allowedSideEffects: getAllowedSideEffects(task),
   };
+}
+
+function getAllowedSideEffects(task: AgentScheduledTask): ScheduledTaskSideEffect[] | undefined {
+  if (!task.metadata || typeof task.metadata !== 'object' || Array.isArray(task.metadata)) {
+    return undefined;
+  }
+
+  const allowedSideEffects = (task.metadata as Record<string, unknown>).allowedSideEffects;
+
+  if (!Array.isArray(allowedSideEffects)) {
+    return undefined;
+  }
+
+  return allowedSideEffects.filter(
+    (sideEffect): sideEffect is ScheduledTaskSideEffect => sideEffect === 'calendar.create',
+  );
 }
 
 function truncateText(value: string, characterLimit: number) {

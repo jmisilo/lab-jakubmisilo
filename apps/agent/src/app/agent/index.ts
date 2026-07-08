@@ -18,6 +18,7 @@ const AgentRuntimeContextSchema = z.object({
   sourceMessageId: z.string().optional(),
   mode: z.enum(['chat', 'scheduled_task']).optional(),
   timeZone: z.string().min(1).optional(),
+  scheduledTaskSideEffects: z.array(z.enum(['calendar.create'])).optional(),
 });
 
 const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
@@ -121,6 +122,7 @@ export class AgentService {
             threadId: options?.threadId,
             sourceMessageId: options?.sourceMessageId,
             mode: options?.mode,
+            allowedSideEffects: options?.scheduledTaskSideEffects,
           },
           'manage-schedule': {
             identityId,
@@ -173,6 +175,7 @@ export class AgentService {
     sourceMessageId,
     mode = 'chat',
     timeZone,
+    scheduledTaskSideEffects,
     messages,
   }: {
     messages: ModelMessage[];
@@ -181,6 +184,7 @@ export class AgentService {
     sourceMessageId?: string;
     mode?: AgentRuntimeContext['mode'];
     timeZone?: string;
+    scheduledTaskSideEffects?: AgentRuntimeContext['scheduledTaskSideEffects'];
   }) {
     try {
       logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
@@ -196,6 +200,7 @@ export class AgentService {
           sourceMessageId,
           mode,
           timeZone: runtimeClock.timeZone,
+          scheduledTaskSideEffects,
         },
       });
 
@@ -235,7 +240,7 @@ export class AgentService {
     }
 
     if (options?.mode === 'scheduled_task') {
-      if (options.identityId) {
+      if (options.identityId && options.scheduledTaskSideEffects?.includes('calendar.create')) {
         activeTools.push('manage-calendar');
       }
 

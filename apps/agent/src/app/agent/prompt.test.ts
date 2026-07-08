@@ -51,15 +51,36 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('Use read-calendar when the user asks what is on their calendar');
     expect(prompt).toContain('Google Calendar is an external user calendar');
     expect(prompt).toContain('clearly implies a calendar event by stating a concrete busy block');
+    expect(prompt).toContain(
+      'Calendar events represent busy time or time blocks; schedules represent future assistant notifications or future assistant work.',
+    );
     expect(prompt).toContain('today I have padel from 19-21');
+    expect(prompt).toContain('Do not create a Calendar event just because the reminder subject');
+    expect(prompt).toContain(
+      'create the Calendar event if details are clear and also create the reminder',
+    );
     expect(prompt).toContain('Do not merely acknowledge concrete busy blocks');
     expect(prompt).toContain('Do not create Calendar events for free-time statements');
+    expect(prompt).toContain('In scheduled-task mode, Calendar reads are allowed when useful.');
+    expect(prompt).toContain(
+      'Calendar event creation is allowed only when the scheduled task explicitly allows "calendar.create".',
+    );
+    expect(prompt).toContain(
+      'Calendar updates and deletes are never allowed from scheduled-task mode.',
+    );
     expect(prompt).toContain('If a Calendar tool returns ok=false with connectionUrl');
     expect(prompt).toContain('It is allowed to send the complete Calendar connectionUrl');
     expect(prompt).toContain(
       'Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.',
     );
     expect(prompt).toContain('inspect, update, move, pause, resume, or cancel reminders');
+    expect(prompt).toContain(
+      'When creating or updating scheduled tasks, set allowedSideEffects only for explicit future external side effects.',
+    );
+    expect(prompt).toContain('Reminder wording means future assistant notification or action.');
+    expect(prompt).toContain(
+      'Use ["calendar.create"] only if the user clearly asks the future scheduled task to create Calendar events.',
+    );
   });
 
   it('builds a stable provider prompt cache key from identity and prompt shape', () => {

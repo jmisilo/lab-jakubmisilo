@@ -189,14 +189,18 @@ export class AgentPromptService {
       Use read-calendar when the user asks what is on their calendar, whether they are free/busy, or when you need exact event ids before changing an event.
       Use manage-calendar when the user explicitly asks to create, update, move, rename, add attendees to, add Google Meet to, delete, cancel, or remove a calendar event.
       Also use manage-calendar when the user clearly implies a calendar event by stating a concrete busy block, even if they do not say "add this to Calendar".
+      Classify intent from the conversation: Calendar events represent busy time or time blocks; schedules represent future assistant notifications or future assistant work. Use both only when the user wants both a calendar block and a reminder/report/action.
 
       - For "put it on my calendar", "add this to Google Calendar", or "schedule a calendar event", use manage-calendar.
       - For "today I have padel from 19-21", "tomorrow I have gym 6:15-9", "I'm busy with dentist 14:00-15:00", "block 9-11 for deep work", or "call it X" after an event statement, treat it as Calendar event intent and use manage-calendar once date, start, end, timezone, and title are clear.
+      - For "remind me about tennis at 19:00", "ping me to leave for the dentist", or "send me a report tomorrow", use manage-schedule only. Do not create a Calendar event just because the reminder subject sounds event-like.
+      - For "I have tennis at 19:00, remind me 30 minutes before", create the Calendar event if details are clear and also create the reminder.
       - Do not merely acknowledge concrete busy blocks during calendar/availability conversations. Create or update the Calendar event, unless required details are missing.
       - Do not create Calendar events for free-time statements such as "other than that I am free" or "I'm free after 21:00" unless the user explicitly asks to block free time.
       - Avoid duplicates. Use read-calendar before creating when the target window has not been checked recently; create directly when current context already shows the target window is empty.
       - For "remind me", "ping me", "send me a report later", or background assistant work, use manage-schedule unless the user explicitly asks for a calendar event.
       - For calendar event creation, resolve title, start, end, timezone, calendar, attendees, and Google Meet intent before calling manage-calendar.
+      - In scheduled-task mode, Calendar reads are allowed when useful. Calendar event creation is allowed only when the scheduled task explicitly allows "calendar.create". Calendar updates and deletes are never allowed from scheduled-task mode.
       - For all-day events, use all-day date values and remember that Google Calendar end dates are exclusive.
       - For attendees, include email addresses only when the user provided them or they are visible in context. Do not guess attendee emails.
       - For Google Meet, create a Meet link only when the user asks for it or meeting context clearly implies it.
@@ -218,6 +222,8 @@ export class AgentPromptService {
       - For scheduling without a date but with a time, resolve the next sensible future occurrence and include the resolved absolute date/time in the acknowledgement.
       - For recurring schedules without an explicit time, choose a practical time based on the task and user preferences; use 09:00 as the neutral fallback.
       - For "cancel the 9am one", "move that reminder", "pause the shopping reminder", or similar natural references, inspect schedules first if the exact task is not visible in the current context.
+      - Reminder wording means future assistant notification or action. It does not imply Calendar event creation unless the user also asks to block time or save an event.
+      - When creating or updating scheduled tasks, set allowedSideEffects only for explicit future external side effects. Use ["calendar.create"] only if the user clearly asks the future scheduled task to create Calendar events. Do not set it for reminders, reports, or calendar reads.
       - Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.
       - If manage-schedule returns ok=false, say briefly that it was not scheduled/changed/cancelled and ask for the next practical correction.
 
