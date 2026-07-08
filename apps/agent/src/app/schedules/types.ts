@@ -1,6 +1,7 @@
 import type {
   ManageScheduleToolInputSchema,
   ScheduleDayOfWeekSchema,
+  ScheduledTaskSideEffectSchema,
   ScheduleRecurrenceSchema,
 } from '@/app/schedules/schemas';
 import type { AgentScheduledTask } from '@/types';
@@ -9,6 +10,7 @@ import type { z } from 'zod';
 
 export type ScheduleDayOfWeek = z.infer<typeof ScheduleDayOfWeekSchema>;
 export type ScheduleRecurrence = z.infer<typeof ScheduleRecurrenceSchema>;
+export type ScheduledTaskSideEffect = z.infer<typeof ScheduledTaskSideEffectSchema>;
 
 export type CreateScheduleTaskInput = {
   identityId: string;
@@ -21,6 +23,7 @@ export type CreateScheduleTaskInput = {
   >['schedule'];
   sourceMessageId?: string;
   userFacingSchedule?: string;
+  allowedSideEffects?: ScheduledTaskSideEffect[];
 };
 
 export type ListScheduleTasksInput = {
@@ -48,6 +51,7 @@ export type UpdateScheduleTaskInput = {
     { action: 'update' }
   >['schedule'];
   userFacingSchedule?: string;
+  allowedSideEffects?: ScheduledTaskSideEffect[];
 };
 
 export type PauseScheduleTaskInput = {

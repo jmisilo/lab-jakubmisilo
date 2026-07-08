@@ -2,6 +2,7 @@ import type {
   ExecuteScheduleTaskInput,
   ExecuteScheduleTaskResult,
   HandleScheduleTaskExecutionExhaustedInput,
+  ScheduledTaskSideEffect,
 } from '@/app/schedules/types';
 import type { AgentScheduledTask, AgentScheduledTaskRun } from '@/types';
 
@@ -381,6 +382,7 @@ export class AgentScheduleRunner {
     bot,
     task,
   }: Pick<ExecuteScheduleTaskInput, 'bot'> & { task: AgentScheduledTask }) {
+    const allowedSideEffects = this.#getAllowedSideEffects(task);
     const shortTermMemory = await bot.transcripts
       .list({
         userKey: task.identityId,
@@ -417,6 +419,7 @@ export class AgentScheduleRunner {
       threadId: task.threadId,
       timeZone: task.timeZone,
       mode: 'scheduled_task',
+      scheduledTaskSideEffects: allowedSideEffects,
       messages: [
         ...contextMessages,
         {
@@ -445,6 +448,8 @@ export class AgentScheduleRunner {
             # Tool Use
 
             Use available tools when the stored prompt requires current information or safe external action, such as web search, weather, local time, World Cup context, or Google Calendar read/create.
+            Scheduled task allowed side effects: ${this.#formatAllowedSideEffects(allowedSideEffects)}.
+            Google Calendar reads may be used when useful. Google Calendar event creation is allowed only when "calendar.create" is listed above. Google Calendar updates and deletes are never allowed from scheduled task mode.
             Do not claim that background work, searches, or external checks were completed unless you actually used the available tool or the needed information is already in context.
 
             # Output Rules
@@ -628,6 +633,26 @@ export class AgentScheduleRunner {
         '[AGENT_SCHEDULE]: task run failure recording failed',
       );
     }
+  }
+
+  static #getAllowedSideEffects(task: AgentScheduledTask): ScheduledTaskSideEffect[] {
+    const metadata =
+      task.metadata && typeof task.metadata === 'object' && !Array.isArray(task.metadata)
+        ? (task.metadata as Record<string, unknown>)
+        : {};
+    const allowedSideEffects = metadata.allowedSideEffects;
+
+    if (!Array.isArray(allowedSideEffects)) {
+      return [];
+    }
+
+    return allowedSideEffects.filter(
+      (sideEffect): sideEffect is ScheduledTaskSideEffect => sideEffect === 'calendar.create',
+    );
+  }
+
+  static #formatAllowedSideEffects(sideEffects: ScheduledTaskSideEffect[]) {
+    return sideEffects.length > 0 ? sideEffects.join(', ') : 'none';
   }
 
   static #isSameInstant(left: Date, right: Date) {

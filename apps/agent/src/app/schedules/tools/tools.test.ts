@@ -72,6 +72,7 @@ describe('manageScheduleTool', () => {
       },
       sourceMessageId: 'message-1',
       userFacingSchedule: 'today at 19:00 Europe/Warsaw',
+      allowedSideEffects: undefined,
     });
     expect(result).toEqual({
       ok: true,
@@ -85,8 +86,50 @@ describe('manageScheduleTool', () => {
         nextRunAt: '2026-07-06T17:00:00.000Z',
         scheduleSummary: 'today at 19:00 Europe/Warsaw',
         promptPreview: 'Send the user a short reminder about their tennis game.',
+        allowedSideEffects: undefined,
       },
     });
+  });
+
+  it('creates scheduled tasks with explicit allowed side effects', async () => {
+    mockAgentScheduleService.createTask.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        title: 'Calendar blocker',
+        prompt: 'Create a planning block on the user calendar.',
+        scheduleKind: 'one_time',
+        nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+        metadata: {
+          allowedSideEffects: ['calendar.create'],
+        },
+      }),
+    );
+
+    const result = await executeManageScheduleTool({
+      action: 'create',
+      title: 'Calendar blocker',
+      prompt: 'Create a planning block on the user calendar.',
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T19:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      allowedSideEffects: ['calendar.create'],
+    });
+
+    expect(mockAgentScheduleService.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedSideEffects: ['calendar.create'],
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        task: expect.objectContaining({
+          allowedSideEffects: ['calendar.create'],
+        }),
+      }),
+    );
   });
 
   it('lists scheduled tasks for the current thread', async () => {
@@ -128,6 +171,7 @@ describe('manageScheduleTool', () => {
           nextRunAt: '2026-07-07T07:00:00.000Z',
           scheduleSummary: 'each weekday at 09:00 Europe/Warsaw',
           promptPreview: 'Ask the user to prepare their todo list.',
+          allowedSideEffects: undefined,
         },
       ],
     });
@@ -169,6 +213,7 @@ describe('manageScheduleTool', () => {
         nextRunAt: null,
         scheduleSummary: 'today at 19:00 Europe/Warsaw',
         promptPreview: 'Ask the user to prepare their todo list.',
+        allowedSideEffects: undefined,
       },
     });
   });
@@ -194,6 +239,7 @@ describe('manageScheduleTool', () => {
         timeZone: 'Europe/Warsaw',
       },
       userFacingSchedule: 'today at 20:00 Europe/Warsaw',
+      allowedSideEffects: undefined,
     });
 
     expect(mockAgentScheduleService.updateTask).toHaveBeenCalledWith({
@@ -208,6 +254,7 @@ describe('manageScheduleTool', () => {
         timeZone: 'Europe/Warsaw',
       },
       userFacingSchedule: 'today at 20:00 Europe/Warsaw',
+      allowedSideEffects: undefined,
     });
     expect(result).toEqual(
       expect.objectContaining({
@@ -305,6 +352,7 @@ function createTask({
   scheduleKind,
   status = 'active',
   nextRunAt,
+  metadata = {},
 }: {
   id: string;
   title: string;
@@ -312,6 +360,7 @@ function createTask({
   scheduleKind: 'one_time' | 'recurring';
   status?: 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
   nextRunAt: Date;
+  metadata?: Record<string, unknown>;
 }) {
   return {
     id,
@@ -325,7 +374,7 @@ function createTask({
     nextRunAt,
     recurrence: {},
     sourceMessageId: 'message-1',
-    metadata: {},
+    metadata,
     lastRunAt: null,
     completedAt: null,
     cancelledAt: status === 'cancelled' ? new Date('2026-07-06T10:00:00.000Z') : null,

@@ -91,6 +91,29 @@ describe('AgentScheduleService', () => {
     });
   });
 
+  it('stores explicit side-effect permissions on scheduled tasks', async () => {
+    mockAgentScheduleDbService.createTask.mockImplementation((input) => input);
+
+    const task = await AgentScheduleService.createTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      title: 'Calendar blocker',
+      prompt: 'Create a calendar planning block when this task runs.',
+      schedule: {
+        type: 'one_time',
+        runAt: '2026-07-06T17:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      allowedSideEffects: ['calendar.create', 'calendar.create'],
+    });
+
+    expect(task?.metadata).toEqual(
+      expect.objectContaining({
+        allowedSideEffects: ['calendar.create'],
+      }),
+    );
+  });
+
   it('resolves the next weekday recurrence in the task timezone', async () => {
     mockAgentScheduleDbService.createTask.mockImplementation((input) => input);
 
@@ -311,6 +334,44 @@ describe('AgentScheduleService', () => {
       qstashMessageId: 'msg-old',
       qstashScheduleId: null,
     });
+  });
+
+  it('updates scheduled task side-effect permissions without rescheduling', async () => {
+    const existingTask = createTask({
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
+      recurrence: {},
+      qstashMessageId: 'msg-existing',
+    });
+    const updatedTask = {
+      ...existingTask,
+      metadata: {
+        allowedSideEffects: ['calendar.create'],
+      },
+    };
+
+    mockAgentScheduleDbService.getTaskForUser.mockResolvedValue(existingTask);
+    mockAgentScheduleDbService.updateTask.mockResolvedValue(updatedTask);
+
+    const task = await AgentScheduleService.updateTask({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      allowedSideEffects: ['calendar.create', 'calendar.create'],
+    });
+
+    expect(task).toBe(updatedTask);
+    expect(mockQStashService.scheduleOneTimeTask).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.updateTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        threadId: 'telegram:1',
+        taskId: 'task-1',
+        metadata: {
+          allowedSideEffects: ['calendar.create'],
+        },
+      }),
+    );
   });
 
   it('pauses an active task and cancels the external trigger', async () => {
