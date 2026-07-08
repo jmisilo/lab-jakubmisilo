@@ -88,6 +88,7 @@ describe('AgentScheduleService', () => {
       taskId: task?.id,
       runAt: new Date('2026-07-06T15:00:00.000Z'),
       triggerVersion: expect.any(String),
+      previewSlug: 'tennis-reminder',
     });
   });
 
@@ -148,6 +149,7 @@ describe('AgentScheduleService', () => {
       },
       timeZone: 'Europe/Warsaw',
       triggerVersion: expect.any(String),
+      previewSlug: 'todo-prep',
     });
   });
 
@@ -219,6 +221,7 @@ describe('AgentScheduleService', () => {
       taskId: task?.id,
       runAt: new Date('2026-07-06T15:00:00.000Z'),
       triggerVersion: expect.any(String),
+      previewSlug: 'offsetless-reminder',
     });
   });
 
@@ -313,6 +316,7 @@ describe('AgentScheduleService', () => {
       taskId: 'task-1',
       runAt: new Date('2026-07-06T15:00:00.000Z'),
       triggerVersion: expect.any(String),
+      previewSlug: 'updated-shopping',
     });
     expect(mockAgentScheduleDbService.updateTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -444,6 +448,7 @@ describe('AgentScheduleService', () => {
       },
       timeZone: 'Europe/Warsaw',
       triggerVersion: expect.any(String),
+      previewSlug: 'shopping',
     });
     expect(mockAgentScheduleDbService.resumeTask).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -30,6 +30,7 @@ const MAX_ACTIVE_ONE_TIME_TASKS_PER_USER = 10;
 const MAX_ACTIVE_RECURRING_TASKS_PER_USER = 10;
 const QSTASH_FREE_PLAN_MAX_ONE_TIME_DELAY_MS = 1000 * 60 * 60 * 24 * 7;
 const ISO_DATE_TIME_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/;
+const QSTASH_PREVIEW_SLUG_MAX_CHARACTERS = 64;
 const ISO_LOCAL_DATE_TIME_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 
@@ -87,6 +88,7 @@ export class AgentScheduleService {
       taskId,
       resolvedSchedule,
       triggerVersion,
+      previewSlug: this.#createQStashPreviewSlug(title),
     });
 
     try {
@@ -130,6 +132,7 @@ export class AgentScheduleService {
     taskId,
     resolvedSchedule,
     triggerVersion,
+    previewSlug,
   }: {
     taskId: string;
     resolvedSchedule: {
@@ -139,6 +142,7 @@ export class AgentScheduleService {
       recurrence: ScheduledTaskRecurrence | Record<string, never>;
     };
     triggerVersion: string;
+    previewSlug: string;
   }) {
     try {
       if (resolvedSchedule.scheduleKind === 'one_time') {
@@ -147,6 +151,7 @@ export class AgentScheduleService {
             taskId,
             runAt: resolvedSchedule.nextRunAt,
             triggerVersion,
+            previewSlug,
           }),
           qstashScheduleId: null,
           triggerVersion,
@@ -160,6 +165,7 @@ export class AgentScheduleService {
           recurrence: resolvedSchedule.recurrence as ScheduledTaskRecurrence,
           timeZone: resolvedSchedule.timeZone,
           triggerVersion,
+          previewSlug,
         }),
         triggerVersion,
       };
@@ -298,6 +304,7 @@ export class AgentScheduleService {
             taskId,
             resolvedSchedule,
             triggerVersion: this.#createTriggerVersion(),
+            previewSlug: this.#createQStashPreviewSlug(normalizedTitle ?? task.title),
           })
         : undefined;
 
@@ -393,6 +400,7 @@ export class AgentScheduleService {
       taskId,
       resolvedSchedule,
       triggerVersion: this.#createTriggerVersion(),
+      previewSlug: this.#createQStashPreviewSlug(task.title),
     });
 
     try {
@@ -595,6 +603,20 @@ export class AgentScheduleService {
     }
 
     return [...new Set(sideEffects)];
+  }
+
+  static #createQStashPreviewSlug(value: string) {
+    const slug = value
+      .trim()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, QSTASH_PREVIEW_SLUG_MAX_CHARACTERS)
+      .replace(/-+$/g, '');
+
+    return slug || 'task';
   }
 
   static #createTriggerVersion() {
