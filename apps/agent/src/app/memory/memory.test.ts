@@ -282,6 +282,96 @@ describe('AgentContextService', () => {
     );
   });
 
+  it('truncates the last compressed memory chunk that exceeds its context budget', async () => {
+    const restoreContextTokenLimit = overrideStaticProperty({
+      target: AgentContextService,
+      key: 'contextTokenLimit',
+      value: 90,
+    });
+    const restoreCompressedMemoryRatio = overrideStaticProperty({
+      target: AgentContextService,
+      key: 'contextCompressedMemoryRatio',
+      value: 0.6,
+    });
+
+    try {
+      mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([
+        createMemoryChunk({
+          id: 'chunk-1',
+          summary: `Keep this compressed summary start. ${'compressed detail '.repeat(80)}Do not include this compressed tail.`,
+        }),
+      ]);
+
+      const context = await AgentContextService.buildContext({
+        identityId: 'identity-1',
+        threadId: 'thread-1',
+        shortTermMemory: [],
+      });
+
+      const memoryContent = String(context[0]?.content);
+
+      expect(memoryContent).toContain('Compressed conversation memory:');
+      expect(memoryContent).toContain('Keep this compressed summary start.');
+      expect(memoryContent).toContain('[truncated to fit context budget]');
+      expect(memoryContent).not.toContain('Do not include this compressed tail.');
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedCompressedChunkCount: 1,
+        }),
+        '[AGENT_MEMORY]: context assembled',
+      );
+    } finally {
+      restoreContextTokenLimit();
+      restoreCompressedMemoryRatio();
+    }
+  });
+
+  it('truncates the last durable knowledge item that exceeds its context budget', async () => {
+    const restoreContextTokenLimit = overrideStaticProperty({
+      target: AgentContextService,
+      key: 'contextTokenLimit',
+      value: 90,
+    });
+    const restoreKnowledgeRatio = overrideStaticProperty({
+      target: AgentContextService,
+      key: 'contextKnowledgeRatio',
+      value: 0.6,
+    });
+
+    try {
+      mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
+      mockAgentKnowledgeService.getContextItems.mockResolvedValue([
+        `- [knowledge:match similarity=0.900] profile/long-note
+  Title: Long note
+  Content:
+  Keep this durable knowledge start. ${'durable detail '.repeat(80)}Do not include this knowledge tail.`,
+      ]);
+
+      const context = await AgentContextService.buildContext({
+        identityId: 'identity-1',
+        threadId: 'thread-1',
+        shortTermMemory: [{ role: 'user', text: 'What should you remember?' }],
+      });
+
+      const memoryContent = String(context[0]?.content);
+
+      expect(memoryContent).toContain('Durable knowledge:');
+      expect(memoryContent).toContain('profile/long-note');
+      expect(memoryContent).toContain('Keep this durable knowledge start.');
+      expect(memoryContent).toContain('[truncated to fit context budget]');
+      expect(memoryContent).not.toContain('Do not include this knowledge tail.');
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedKnowledgeItemCount: 1,
+        }),
+        '[AGENT_MEMORY]: context assembled',
+      );
+    } finally {
+      restoreContextTokenLimit();
+      restoreKnowledgeRatio();
+    }
+  });
+
   it('keeps selected short-term transcript messages chronological', async () => {
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
 

@@ -81,6 +81,28 @@ describe('knowledge schemas', () => {
     });
   });
 
+  it('accepts explicit read content mode for knowledge note reads', () => {
+    const parsed = ReadKnowledgeToolInputSchema.parse({
+      action: 'read',
+      path: 'projects/lab-agent/long-note',
+      contentMode: 'full',
+    });
+
+    expect(parsed).toEqual({
+      action: 'read',
+      path: 'projects/lab-agent/long-note',
+      contentMode: 'full',
+    });
+
+    expect(
+      ReadKnowledgeToolInputSchema.safeParse({
+        action: 'read',
+        path: 'projects/lab-agent/long-note',
+        contentMode: 'excerpt',
+      }).success,
+    ).toBe(false);
+  });
+
   it('keeps read-only and mutation knowledge actions separated by tool schema', () => {
     expect(
       ReadKnowledgeToolInputSchema.safeParse({

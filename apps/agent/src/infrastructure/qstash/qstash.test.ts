@@ -42,6 +42,7 @@ describe('QStashService', () => {
     const messageId = await QStashService.scheduleOneTimeTask({
       taskId,
       runAt,
+      triggerVersion: 'trigger-version-1',
     });
 
     expect(messageId).toBe('msg-1');
@@ -52,13 +53,30 @@ describe('QStashService', () => {
           taskId,
           scheduleKind: 'one_time',
           scheduledFor: '2026-07-06T17:00:00.000Z',
+          triggerVersion: 'trigger-version-1',
         },
         notBefore: 1783357200,
         failureCallback: 'https://agent.example.com/jobs/schedules/failure',
-        deduplicationId: `agent-schedule-${taskId}`,
+        deduplicationId: `agent-schedule-${taskId}-1783357200000-trigger-version-1`,
       }),
     );
     expect(mockPublishJSON.mock.calls[0][0].deduplicationId).not.toContain(':');
+  });
+
+  it('treats deduplicated one-time schedule publishes as provider failures', async () => {
+    mockPublishJSON.mockResolvedValue({ messageId: 'msg-1', deduplicated: true });
+    const { QStashService } = await import('.');
+
+    await expect(
+      QStashService.scheduleOneTimeTask({
+        taskId: 'task-1',
+        runAt: new Date('2026-07-06T17:00:00.000Z'),
+        triggerVersion: 'trigger-version-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_PROVIDER_ERROR',
+      message: 'QStash one-time schedule was deduplicated and not enqueued.',
+    });
   });
 
   it('falls back to VERCEL_URL when AGENT_PUBLIC_URL is missing', async () => {
@@ -71,6 +89,7 @@ describe('QStashService', () => {
     await QStashService.scheduleOneTimeTask({
       taskId: 'task-1',
       runAt: new Date('2026-07-06T17:00:00.000Z'),
+      triggerVersion: 'trigger-version-1',
     });
 
     expect(mockPublishJSON).toHaveBeenCalledWith(
@@ -93,11 +112,16 @@ describe('QStashService', () => {
         timeOfDay: '09:00',
       },
       timeZone: 'Europe/Warsaw',
+      triggerVersion: 'trigger-version-1',
     });
 
     expect(mockScheduleCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: JSON.stringify({ taskId: 'task-1', scheduleKind: 'recurring' }),
+        body: JSON.stringify({
+          taskId: 'task-1',
+          scheduleKind: 'recurring',
+          triggerVersion: 'trigger-version-1',
+        }),
       }),
     );
   });
@@ -113,6 +137,7 @@ describe('QStashService', () => {
       QStashService.scheduleOneTimeTask({
         taskId: 'task-1',
         runAt: new Date('2026-07-06T17:00:00.000Z'),
+        triggerVersion: 'trigger-version-1',
       }),
     ).rejects.toMatchObject({
       code: 'SCHEDULE_PROVIDER_UNAVAILABLE',

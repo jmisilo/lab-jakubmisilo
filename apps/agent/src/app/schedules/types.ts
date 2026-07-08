@@ -68,6 +68,7 @@ export type ExecuteScheduleTaskInput = {
   taskId: string;
   scheduleKind?: AgentScheduledTask['scheduleKind'];
   scheduledFor?: Date;
+  triggerVersion?: string;
   now?: Date;
 };
 
@@ -75,6 +76,7 @@ export type HandleScheduleTaskExecutionExhaustedInput = {
   taskId: string;
   scheduleKind?: AgentScheduledTask['scheduleKind'];
   scheduledFor?: Date;
+  triggerVersion?: string;
   now?: Date;
   failure?: {
     status?: number;

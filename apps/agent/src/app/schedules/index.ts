@@ -75,6 +75,7 @@ export class AgentScheduleService {
       now: new Date(),
     });
     const taskId = randomUUID();
+    const triggerVersion = this.#createTriggerVersion();
 
     await this.#assertActiveTaskLimit({
       identityId: input.identityId,
@@ -84,6 +85,7 @@ export class AgentScheduleService {
     const externalTrigger = await this.#scheduleExternalTrigger({
       taskId,
       resolvedSchedule,
+      triggerVersion,
     });
 
     try {
@@ -104,6 +106,7 @@ export class AgentScheduleService {
         metadata: {
           userFacingSchedule: input.userFacingSchedule,
           qstashFailureCallback: true,
+          qstashTriggerVersion: triggerVersion,
         },
       });
     } catch (error) {
@@ -124,6 +127,7 @@ export class AgentScheduleService {
   static async #scheduleExternalTrigger({
     taskId,
     resolvedSchedule,
+    triggerVersion,
   }: {
     taskId: string;
     resolvedSchedule: {
@@ -132,6 +136,7 @@ export class AgentScheduleService {
       nextRunAt: Date;
       recurrence: ScheduledTaskRecurrence | Record<string, never>;
     };
+    triggerVersion: string;
   }) {
     try {
       if (resolvedSchedule.scheduleKind === 'one_time') {
@@ -139,8 +144,10 @@ export class AgentScheduleService {
           qstashMessageId: await QStashService.scheduleOneTimeTask({
             taskId,
             runAt: resolvedSchedule.nextRunAt,
+            triggerVersion,
           }),
           qstashScheduleId: null,
+          triggerVersion,
         };
       }
 
@@ -150,7 +157,9 @@ export class AgentScheduleService {
           taskId,
           recurrence: resolvedSchedule.recurrence as ScheduledTaskRecurrence,
           timeZone: resolvedSchedule.timeZone,
+          triggerVersion,
         }),
+        triggerVersion,
       };
     } catch (error) {
       if (AppError.is(error)) {
@@ -285,6 +294,7 @@ export class AgentScheduleService {
         ? await this.#scheduleExternalTrigger({
             taskId,
             resolvedSchedule,
+            triggerVersion: this.#createTriggerVersion(),
           })
         : undefined;
 
@@ -309,7 +319,10 @@ export class AgentScheduleService {
           : resolvedSchedule && task.status === 'paused'
             ? null
             : undefined,
-        metadata: this.#buildScheduleMetadata({ userFacingSchedule }),
+        metadata: this.#buildScheduleMetadata({
+          userFacingSchedule,
+          triggerVersion: externalTrigger?.triggerVersion,
+        }),
       });
 
       if (externalTrigger) {
@@ -372,6 +385,7 @@ export class AgentScheduleService {
     const externalTrigger = await this.#scheduleExternalTrigger({
       taskId,
       resolvedSchedule,
+      triggerVersion: this.#createTriggerVersion(),
     });
 
     try {
@@ -384,6 +398,7 @@ export class AgentScheduleService {
         qstashScheduleId: externalTrigger.qstashScheduleId,
         metadata: {
           resumedAt: new Date().toISOString(),
+          qstashTriggerVersion: externalTrigger.triggerVersion,
         },
       });
     } catch (error) {
@@ -551,10 +566,21 @@ export class AgentScheduleService {
     });
   }
 
-  static #buildScheduleMetadata({ userFacingSchedule }: { userFacingSchedule?: string }) {
+  static #buildScheduleMetadata({
+    userFacingSchedule,
+    triggerVersion,
+  }: {
+    userFacingSchedule?: string;
+    triggerVersion?: string;
+  }) {
     return this.#definedMetadata({
       userFacingSchedule,
+      qstashTriggerVersion: triggerVersion,
     });
+  }
+
+  static #createTriggerVersion() {
+    return randomUUID();
   }
 
   static #definedMetadata(metadata: Record<string, unknown>) {

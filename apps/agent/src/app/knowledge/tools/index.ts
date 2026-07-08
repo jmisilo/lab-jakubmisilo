@@ -20,7 +20,9 @@ import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT = 1_000;
-const KNOWLEDGE_TOOL_READ_CONTENT_CHARACTER_LIMIT = 12_000;
+const KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_CHARACTER_LIMIT = 2_000;
+const KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_TRUNCATION_MARKER =
+  '[preview truncated: read with contentMode="full" to get the rest of the content]';
 const SHOULD_LOG_KNOWLEDGE_TOOL_CONTENT_PREVIEW =
   process.env.AGENT_LOG_KNOWLEDGE_TOOL_CONTENT === '1';
 
@@ -42,8 +44,9 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
     # Usage
     - Use list to inspect direct child notes. Omit parentPath to list root notes.
     - Use explore to search or traverse a known subtree before reading specific notes. Explore returns bounded previews.
-    - Use read for full note content after selecting the right path.
-    - For broad topic questions, prefer explore with a concise query, then read only the most relevant paths.
+    - Use read with contentMode "preview" first after selecting the right path. Preview is the default and returns up to 2,000 characters.
+    - Use read with contentMode "full" only when the complete note is needed, for example when the user asks to show the full note or when a preview says more content exists.
+    - For broad topic questions, prefer explore with a concise query, then read previews for only the most relevant paths.
     - For deep project/topic questions, explore descendants from the likely parent path.
   `,
   inputSchema: ReadKnowledgeToolInputSchema,
@@ -96,6 +99,7 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
       }
 
       if (input.action === 'read') {
+        const contentMode = input.contentMode ?? 'preview';
         const node = await AgentKnowledgeService.readNodeByPath({
           identityId: context.identityId,
           path: input.path,
@@ -116,9 +120,22 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
 
         return {
           ok: true,
-          message: `Loaded knowledge note ${node.path}.`,
+          message:
+            contentMode === 'full'
+              ? `Loaded full knowledge note ${node.path}.`
+              : `Loaded knowledge note preview ${node.path}.`,
           operationId,
-          node: toToolNode(node, { includeContent: true }),
+          node: toToolNode(
+            node,
+            contentMode === 'full'
+              ? { includeContent: true }
+              : {
+                  includeContentPreview: true,
+                  contentPreviewCharacterLimit: KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_CHARACTER_LIMIT,
+                  contentPreviewTruncationMarker:
+                    KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_TRUNCATION_MARKER,
+                },
+          ),
         };
       }
 
@@ -440,6 +457,7 @@ function createReadKnowledgeToolInputLog(input: z.infer<typeof ReadKnowledgeTool
     return {
       action: input.action,
       path: input.path,
+      contentMode: input.contentMode,
       includeInactive: input.includeInactive,
     };
   }
@@ -524,12 +542,12 @@ function createTextLog(value: string) {
   };
 }
 
-function truncateText(value: string, characterLimit: number) {
+function truncateText(value: string, characterLimit: number, marker = '[truncated]') {
   if (value.length <= characterLimit) {
     return value;
   }
 
-  return `${value.slice(0, characterLimit)}[truncated]`;
+  return `${value.slice(0, characterLimit)}${marker}`;
 }
 
 function toToolNode(
@@ -547,6 +565,8 @@ function toToolNode(
   options: {
     includeContent?: boolean;
     includeContentPreview?: boolean;
+    contentPreviewCharacterLimit?: number;
+    contentPreviewTruncationMarker?: string;
     includeExploreMetadata?: boolean;
   } = {},
 ) {
@@ -570,13 +590,14 @@ function toToolNode(
   };
 
   if (options.includeContent) {
-    toolNode.content = truncateText(node.content, KNOWLEDGE_TOOL_READ_CONTENT_CHARACTER_LIMIT);
+    toolNode.content = node.content;
   }
 
   if (options.includeContentPreview) {
     toolNode.contentPreview = truncateText(
       node.content,
-      KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT,
+      options.contentPreviewCharacterLimit ?? KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT,
+      options.contentPreviewTruncationMarker,
     );
   }
 
