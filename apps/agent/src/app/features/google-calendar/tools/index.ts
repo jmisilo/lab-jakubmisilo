@@ -255,11 +255,13 @@ export const manageCalendarTool: ManageCalendarTool = tool({
     - The user explicitly asks to add/create/schedule a calendar event.
     - The user clearly implies a calendar event by stating a concrete busy block with a title and time, even without saying "add this to Calendar".
     - The user says things like "today I have padel from 19-21", "tomorrow I have gym 6:15-9", "I'm busy with dentist 14:00-15:00", "block 9-11 for deep work", or "call it X" after an event statement.
+    - The user asks for both an event and a reminder, such as "I have tennis at 19:00, remind me 30 minutes before"; use this tool for the event and manage-schedule for the reminder.
     - The user explicitly asks to update, move, rename, add attendees to, or add Meet to an existing calendar event.
     - The user explicitly asks to delete/cancel/remove a calendar event.
 
     # When Not To Use
     - Generic reminders or background assistant tasks; use manage-schedule.
+    - Reminder-only wording such as "remind me about tennis at 19:00" or "ping me to leave for the dentist"; do not create a calendar event just because the reminder subject sounds event-like.
     - Reading calendar state only; use read-calendar.
     - Connecting or disconnecting Calendar; use manage-google-calendar-connection.
     - Free-time statements such as "other than that I am free" or "I'm free after 21:00", unless the user explicitly asks to block that free time.
@@ -270,7 +272,7 @@ export const manageCalendarTool: ManageCalendarTool = tool({
     - For update/delete, use read-calendar first unless the exact calendarId and eventId are visible in context.
     - For create, use read-calendar first when duplicate risk is high or the target window has not been checked recently. If recent context already shows the window is empty, creating directly is acceptable.
     - For delete_event, set confirmed=true only when the user clearly confirmed deleting this exact event.
-    - Scheduled-task mode may only create events. It must not update or delete events.
+    - Scheduled-task mode may create events only when allowedSideEffects includes "calendar.create". It must not update or delete events.
     - Ask a brief clarification when date/time, timezone, calendar, event identity, attendees, or Meet intent is ambiguous.
   `,
   inputSchema: ManageCalendarToolInputSchema,
@@ -278,11 +280,21 @@ export const manageCalendarTool: ManageCalendarTool = tool({
   contextSchema: CalendarToolContextSchema,
   execute: async (input, { context }) => {
     try {
-      if (context.mode === 'scheduled_task' && input.action !== 'create_event') {
-        return {
-          ok: false,
-          message: 'Scheduled tasks can create calendar events, but cannot update or delete them.',
-        };
+      if (context.mode === 'scheduled_task') {
+        if (input.action !== 'create_event') {
+          return {
+            ok: false,
+            message: 'Scheduled tasks cannot update or delete calendar events.',
+          };
+        }
+
+        if (!context.allowedSideEffects?.includes('calendar.create')) {
+          return {
+            ok: false,
+            message:
+              'Scheduled tasks cannot create calendar events unless the schedule explicitly allows calendar creation.',
+          };
+        }
       }
 
       if (input.action === 'create_event') {

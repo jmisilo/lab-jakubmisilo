@@ -6,6 +6,7 @@ import type {
   ResumeScheduleTaskInput,
   ScheduleDayOfWeek,
   ScheduledTaskRecurrence,
+  ScheduledTaskSideEffect,
   UpdateScheduleTaskInput,
 } from '@/app/schedules/types';
 import type { AgentScheduledTask } from '@/types';
@@ -103,11 +104,12 @@ export class AgentScheduleService {
         qstashMessageId: externalTrigger.qstashMessageId,
         qstashScheduleId: externalTrigger.qstashScheduleId,
         sourceMessageId: input.sourceMessageId,
-        metadata: {
+        metadata: this.#definedMetadata({
           userFacingSchedule: input.userFacingSchedule,
           qstashFailureCallback: true,
           qstashTriggerVersion: triggerVersion,
-        },
+          allowedSideEffects: this.#normalizeAllowedSideEffects(input.allowedSideEffects),
+        }),
       });
     } catch (error) {
       await QStashService.cancelScheduledTask(externalTrigger).catch((cancelError: unknown) => {
@@ -243,11 +245,12 @@ export class AgentScheduleService {
     prompt,
     schedule,
     userFacingSchedule,
+    allowedSideEffects,
   }: UpdateScheduleTaskInput) {
-    if (!title && !prompt && !schedule) {
+    if (!title && !prompt && !schedule && allowedSideEffects === undefined) {
       throw new AppError({
         code: AppErrorCode.SCHEDULE_TASK_INVALID,
-        message: 'Scheduled task update must include title, prompt, or schedule.',
+        message: 'Scheduled task update must include title, prompt, schedule, or side effects.',
         context: { identityId, threadId, taskId },
         retryable: false,
         userMessage: 'Tell me what to change on that schedule.',
@@ -322,6 +325,10 @@ export class AgentScheduleService {
         metadata: this.#buildScheduleMetadata({
           userFacingSchedule,
           triggerVersion: externalTrigger?.triggerVersion,
+          allowedSideEffects:
+            allowedSideEffects === undefined
+              ? undefined
+              : this.#normalizeAllowedSideEffects(allowedSideEffects),
         }),
       });
 
@@ -569,14 +576,25 @@ export class AgentScheduleService {
   static #buildScheduleMetadata({
     userFacingSchedule,
     triggerVersion,
+    allowedSideEffects,
   }: {
     userFacingSchedule?: string;
     triggerVersion?: string;
+    allowedSideEffects?: ScheduledTaskSideEffect[];
   }) {
     return this.#definedMetadata({
       userFacingSchedule,
       qstashTriggerVersion: triggerVersion,
+      allowedSideEffects,
     });
+  }
+
+  static #normalizeAllowedSideEffects(sideEffects?: ScheduledTaskSideEffect[]) {
+    if (!sideEffects) {
+      return undefined;
+    }
+
+    return [...new Set(sideEffects)];
   }
 
   static #createTriggerVersion() {

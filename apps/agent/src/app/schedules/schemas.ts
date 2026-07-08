@@ -39,6 +39,15 @@ export const ScheduleRecurrenceSchema = z.object({
   ),
 });
 
+export const ScheduledTaskSideEffectSchema = z
+  .enum(['calendar.create'])
+  .describe('External side effect explicitly allowed during scheduled task execution.');
+
+export const ScheduledTaskSideEffectsSchema = z
+  .array(ScheduledTaskSideEffectSchema)
+  .max(5)
+  .describe('External side effects explicitly allowed during scheduled task execution.');
+
 const OneTimeScheduleSchema = z.object({
   type: z.literal('one_time'),
   runAt: z
@@ -90,6 +99,9 @@ export const ManageScheduleToolInputSchema = z.discriminatedUnion('action', [
       .min(1)
       .optional()
       .describe('Short natural-language schedule summary for acknowledgement.'),
+    allowedSideEffects: ScheduledTaskSideEffectsSchema.optional().describe(
+      'Optional explicit side effects the future scheduled subagent may perform. Omit for normal reminders/reports. Use only when the user clearly asks the future task to perform that external side effect.',
+    ),
   }),
   z.object({
     action: z.literal('list').describe('List scheduled tasks for the current thread.'),
@@ -142,6 +154,9 @@ export const ManageScheduleToolInputSchema = z.discriminatedUnion('action', [
       .min(1)
       .optional()
       .describe('Updated short natural-language schedule summary for acknowledgement.'),
+    allowedSideEffects: ScheduledTaskSideEffectsSchema.optional().describe(
+      'Updated explicit side effects the future scheduled subagent may perform. Use [] to remove previously allowed side effects.',
+    ),
   }),
   z.object({
     action: z.literal('pause').describe('Pause an active scheduled task without deleting it.'),
@@ -173,6 +188,7 @@ export const ScheduleToolTaskSchema = z.object({
   nextRunAt: z.string().nullable(),
   scheduleSummary: z.string(),
   promptPreview: z.string(),
+  allowedSideEffects: ScheduledTaskSideEffectsSchema.optional(),
 });
 
 export const ManageScheduleToolOutputSchema = z.object({

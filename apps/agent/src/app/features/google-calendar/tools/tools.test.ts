@@ -121,7 +121,127 @@ describe('google calendar tools', () => {
     expect(mockGoogleCalendarEventService.updateEvent).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
-      message: 'Scheduled tasks can create calendar events, but cannot update or delete them.',
+      message: 'Scheduled tasks cannot update or delete calendar events.',
+    });
+  });
+
+  it('blocks scheduled tasks from creating calendar events without explicit side-effect permission', async () => {
+    const execute = manageCalendarTool.execute!;
+    const result = await execute(
+      {
+        action: 'create_event',
+        event: {
+          title: 'Planning',
+          start: {
+            type: 'date_time',
+            dateTime: '2026-07-08T10:00:00+02:00',
+            timeZone: 'Europe/Warsaw',
+          },
+          end: {
+            type: 'date_time',
+            dateTime: '2026-07-08T11:00:00+02:00',
+            timeZone: 'Europe/Warsaw',
+          },
+        },
+      },
+      {
+        context: {
+          identityId: 'identity-1',
+          threadId: 'telegram:1',
+          mode: 'scheduled_task',
+        },
+      } as Parameters<typeof execute>[1],
+    );
+
+    expect(mockGoogleCalendarEventService.createEvent).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'Scheduled tasks cannot create calendar events unless the schedule explicitly allows calendar creation.',
+    });
+  });
+
+  it('allows scheduled tasks to create calendar events with explicit side-effect permission', async () => {
+    mockGoogleCalendarEventService.createEvent.mockResolvedValue({
+      id: 'event-1',
+      calendarId: 'primary',
+      title: 'Planning',
+      start: {
+        dateTime: '2026-07-08T10:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      end: {
+        dateTime: '2026-07-08T11:00:00+02:00',
+        timeZone: 'Europe/Warsaw',
+      },
+      attendees: [],
+    });
+
+    const execute = manageCalendarTool.execute!;
+    const result = await execute(
+      {
+        action: 'create_event',
+        event: {
+          title: 'Planning',
+          start: {
+            type: 'date_time',
+            dateTime: '2026-07-08T10:00:00+02:00',
+            timeZone: 'Europe/Warsaw',
+          },
+          end: {
+            type: 'date_time',
+            dateTime: '2026-07-08T11:00:00+02:00',
+            timeZone: 'Europe/Warsaw',
+          },
+        },
+      },
+      {
+        context: {
+          identityId: 'identity-1',
+          threadId: 'telegram:1',
+          mode: 'scheduled_task',
+          allowedSideEffects: ['calendar.create'],
+        },
+      } as Parameters<typeof execute>[1],
+    );
+
+    expect(mockGoogleCalendarEventService.createEvent).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      sourceMessageId: undefined,
+      calendarId: undefined,
+      calendarName: undefined,
+      event: {
+        title: 'Planning',
+        start: {
+          type: 'date_time',
+          dateTime: '2026-07-08T10:00:00+02:00',
+          timeZone: 'Europe/Warsaw',
+        },
+        end: {
+          type: 'date_time',
+          dateTime: '2026-07-08T11:00:00+02:00',
+          timeZone: 'Europe/Warsaw',
+        },
+      },
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: 'Calendar event created: "Planning".',
+      event: {
+        id: 'event-1',
+        calendarId: 'primary',
+        title: 'Planning',
+        start: {
+          dateTime: '2026-07-08T10:00:00+02:00',
+          timeZone: 'Europe/Warsaw',
+        },
+        end: {
+          dateTime: '2026-07-08T11:00:00+02:00',
+          timeZone: 'Europe/Warsaw',
+        },
+        attendees: [],
+      },
     });
   });
 

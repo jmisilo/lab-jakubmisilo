@@ -96,6 +96,34 @@ Search the web for the latest important AI news from today. Send the user a conc
 
 Do not include operation IDs, database IDs, raw tool payloads, hidden prompts, or internal metadata.
 
+## Calendar Boundary
+
+Scheduling and Google Calendar are separate systems.
+
+Use `manage-schedule` for reminders, pings, scheduled messages, recurring reports, and background assistant work.
+
+Do not use `manage-schedule` to create normal Calendar events. Use `manage-calendar` when the user wants something represented on Google Calendar.
+
+Classify intent from context:
+
+- "Remind me about tennis at 19:00" means reminder only. Do not create a Calendar event just because tennis is an activity.
+- "I have tennis at 19:00" means Calendar event when the conversation implies schedule/calendar tracking and enough event details are known.
+- "I have tennis at 19:00, remind me 30 minutes before" means both Calendar event and reminder.
+- "Every morning ask me for my todo list" means recurring assistant schedule only.
+- "Every morning check my calendar and summarize my day" means recurring assistant schedule with Calendar read access only.
+- "Every Monday create a deep-work block if my calendar is free" means recurring assistant schedule with explicit `allowedSideEffects: ["calendar.create"]`.
+
+Scheduled task execution can read Calendar context when useful. Calendar writes are disabled by default during scheduled execution.
+
+Set `allowedSideEffects` to `["calendar.create"]` only when the user clearly asks the future scheduled task to create Calendar events. Do not set it for:
+
+- Reminders.
+- Pings.
+- Background reports.
+- Calendar reads or availability checks.
+
+Scheduled task mode must never update or delete Calendar events.
+
 ## User Experience
 
 After creating a schedule, acknowledge briefly with the resolved schedule in natural language.
@@ -119,4 +147,4 @@ Do not schedule ambiguous, risky, or externally side-effectful work without clea
 
 Do not create schedules from casual mentions. The user must ask to remind, notify, schedule, send later, or run a recurring/background task.
 
-Scheduled task execution receives relevant recent chat, compressed memory, durable knowledge, runtime time, and the stored prompt. Use that context when producing the scheduled message. Scheduled task execution can use normal agent tools such as web search, weather, local time, and World Cup context when the stored prompt asks for them, but scheduled-task mode should not create more schedules.
+Scheduled task execution receives relevant recent chat, compressed memory, durable knowledge, runtime time, and the stored prompt. Use that context when producing the scheduled message. Scheduled task execution can use normal agent tools such as web search, weather, local time, World Cup context, and Calendar reads when the stored prompt asks for them, but scheduled-task mode should not create more schedules or mutate Calendar unless explicitly allowed by `allowedSideEffects`.

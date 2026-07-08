@@ -145,15 +145,25 @@ describe('AgentMemoryService', () => {
         threadId: 'thread-1',
       });
 
-      expect(mockAIService.generate).toHaveBeenCalledWith({
-        reasoning: 'xhigh',
-        messages: [
-          expect.objectContaining({
-            role: 'user',
-            content: expect.stringContaining('Conversation:'),
-          }),
-        ],
-      });
+      const generateInput = mockAIService.generate.mock.calls[0]?.[0];
+      const prompt = String(generateInput?.messages?.[0]?.content);
+
+      expect(generateInput).toEqual(
+        expect.objectContaining({
+          reasoning: 'xhigh',
+          maxOutputTokens: AgentMemoryService.compressionSummaryMaxOutputTokens,
+        }),
+      );
+      expect(prompt).toContain('# Task');
+      expect(prompt).toContain('Create a high-fidelity rolling memory summary');
+      expect(prompt).toContain('## Stable User Facts And Preferences');
+      expect(prompt).toContain('## Decisions And Commitments');
+      expect(prompt).toContain('## Tool And External-State Facts');
+      expect(prompt).toContain('# Preserve');
+      expect(prompt).toContain('# Discard');
+      expect(prompt).toContain('Raw tool payloads');
+      expect(prompt).toContain('# Conversation Transcript');
+      expect(prompt).toContain('First durable decision: keep domain logic in services.');
       expect(mockAgentMemoryDbService.createMemoryChunk).toHaveBeenCalledWith(
         expect.objectContaining({
           identityId: 'identity-1',
