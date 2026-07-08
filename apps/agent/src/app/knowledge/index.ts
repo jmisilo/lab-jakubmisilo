@@ -47,7 +47,6 @@ export class AgentKnowledgeService {
   static readonly contextMinSimilarity = 0.35;
   static readonly contextChildLimit = 8;
   static readonly contextSiblingLimit = 8;
-  static readonly contextItemContentCharacterLimit = 2_000;
   static readonly nodeTitleCharacterLimit = KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS;
   static readonly nodeContentCharacterLimit = KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS;
   static readonly embeddingContentCharacterLimit = 4_000;
@@ -56,6 +55,7 @@ export class AgentKnowledgeService {
   static readonly implicitExtractionPathHintLimit = 8;
   static readonly implicitExtractionPathHintMinSimilarity = 0.35;
   static readonly implicitExtractionPathHintContentCharacterLimit = 500;
+  static readonly implicitIngestionCandidateContentCharacterLimit = 2_000;
   static readonly implicitMergeCandidateLimit = 5;
   static readonly implicitMergeMinSimilarity = 0.35;
   static readonly exploreDefaultLimit = 12;
@@ -227,15 +227,19 @@ export class AgentKnowledgeService {
           });
     let embedding: number[] | undefined;
     let embeddingContentHash: string | undefined;
+    let embeddingModel: string | undefined;
 
     if (normalizedTitle !== undefined) {
-      const embeddingText = this.#createEmbeddingText({
+      const embeddingFields = await this.#createEmbeddingFields({
+        identityId,
+        operation: 'knowledge.move',
         title: normalizedTitle,
         content: node.content,
       });
 
-      embedding = await AIService.embed(embeddingText);
-      embeddingContentHash = this.#hashText(embeddingText);
+      embedding = embeddingFields.embedding;
+      embeddingModel = embeddingFields.embeddingModel;
+      embeddingContentHash = embeddingFields.embeddingContentHash;
     }
 
     return AgentKnowledgeDbService.moveNode({
@@ -245,7 +249,7 @@ export class AgentKnowledgeService {
       slug: newSlug,
       title: normalizedTitle,
       embedding,
-      embeddingModel: normalizedTitle !== undefined ? AIService.embeddingModel : undefined,
+      embeddingModel,
       embeddingContentHash,
     });
   }
@@ -265,19 +269,18 @@ export class AgentKnowledgeService {
       embeddingTitle = currentNode.title;
     }
 
-    const embeddingText = this.#createEmbeddingText({
+    const embeddingFields = await this.#createEmbeddingFields({
+      identityId: input.identityId,
+      operation: 'knowledge.update',
       title: embeddingTitle,
       content,
     });
-    const embedding = await AIService.embed(embeddingText);
 
     return AgentKnowledgeDbService.updateNodeContent({
       ...input,
       title,
       content,
-      embedding,
-      embeddingModel: AIService.embeddingModel,
-      embeddingContentHash: this.#hashText(embeddingText),
+      ...embeddingFields,
     });
   }
 
@@ -599,11 +602,28 @@ export class AgentKnowledgeService {
     identityId: string;
     item: ImplicitKnowledgeItem;
   }) {
-    const embeddingText = this.#createEmbeddingText({
-      title: item.title,
-      content: item.content,
-    });
-    const embedding = await AIService.embed(embeddingText);
+    let embedding: number[];
+
+    try {
+      const embeddingText = this.#createEmbeddingText({
+        title: item.title,
+        content: item.content,
+      });
+
+      embedding = await AIService.embed(embeddingText);
+    } catch (error) {
+      logger.warn(
+        {
+          identityId,
+          itemTitle: item.title,
+          error,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[AGENT_KNOWLEDGE]: implicit candidate embedding failed',
+      );
+
+      return [];
+    }
 
     return AgentKnowledgeDbService.findRelevantMatches({
       identityId,
@@ -960,7 +980,9 @@ export class AgentKnowledgeService {
   }
 
   static #formatImplicitIngestionCandidate(candidate: AgentKnowledgeSimilarNode) {
-    const content = this.#truncateContent(candidate.content.trim() || '(empty)');
+    const content = this.#truncateImplicitIngestionCandidateContent(
+      candidate.content.trim() || '(empty)',
+    );
 
     return dedent`
       - Path: ${candidate.path}
@@ -1036,7 +1058,7 @@ export class AgentKnowledgeService {
       node.relationship === 'match' && typeof node.similarity === 'number'
         ? ` similarity=${node.similarity.toFixed(3)}`
         : '';
-    const content = this.#truncateContent(node.content.trim() || '(empty)');
+    const content = node.content.trim() || '(empty)';
 
     return dedent`
       - [knowledge:${node.relationship}${similarity}] ${node.path}
@@ -1135,8 +1157,12 @@ export class AgentKnowledgeService {
     sourceMessageId?: string;
     metadata?: Record<string, unknown>;
   }) {
-    const embeddingText = this.#createEmbeddingText({ title, content });
-    const embedding = await AIService.embed(embeddingText);
+    const embeddingFields = await this.#createEmbeddingFields({
+      identityId,
+      operation: 'knowledge.create',
+      title,
+      content,
+    });
 
     return AgentKnowledgeDbService.createNode({
       identityId,
@@ -1147,10 +1173,46 @@ export class AgentKnowledgeService {
       source,
       sourceMessageId,
       metadata,
-      embedding,
-      embeddingModel: AIService.embeddingModel,
-      embeddingContentHash: this.#hashText(embeddingText),
+      ...embeddingFields,
     });
+  }
+
+  static async #createEmbeddingFields({
+    identityId,
+    operation,
+    title,
+    content,
+  }: {
+    identityId: string;
+    operation: string;
+    title: string;
+    content: string;
+  }) {
+    const embeddingText = this.#createEmbeddingText({ title, content });
+
+    try {
+      return {
+        embedding: await AIService.embed(embeddingText),
+        embeddingModel: AIService.embeddingModel,
+        embeddingContentHash: this.#hashText(embeddingText),
+      };
+    } catch (error) {
+      logger.warn(
+        {
+          identityId,
+          operation,
+          error,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[AGENT_KNOWLEDGE]: embedding generation failed',
+      );
+
+      return {
+        embedding: undefined,
+        embeddingModel: undefined,
+        embeddingContentHash: undefined,
+      };
+    }
   }
 
   static async #resolveParentId(input: CreateKnowledgeNodeInput) {
@@ -1281,10 +1343,10 @@ export class AgentKnowledgeService {
       .join(' ');
   }
 
-  static #truncateContent(content: string) {
+  static #truncateImplicitIngestionCandidateContent(content: string) {
     return this.#truncateText({
       value: content,
-      characterLimit: this.contextItemContentCharacterLimit,
+      characterLimit: this.implicitIngestionCandidateContentCharacterLimit,
       marker: '[truncated]',
     });
   }

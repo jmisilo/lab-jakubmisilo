@@ -76,7 +76,7 @@ describe('readKnowledgeTool', () => {
     });
   });
 
-  it('reads a knowledge note with content for correction requests', async () => {
+  it('reads a knowledge note preview by default', async () => {
     mockAgentKnowledgeService.readNodeByPath.mockResolvedValue(
       createNode({
         id: 'node-1',
@@ -99,17 +99,94 @@ describe('readKnowledgeTool', () => {
     });
     expect(result).toEqual({
       ok: true,
-      message: 'Loaded knowledge note preferences/communication.',
+      message: 'Loaded knowledge note preview preferences/communication.',
       operationId: expect.any(String),
       node: {
         id: 'node-1',
         path: 'preferences/communication',
         parentPath: 'preferences',
         title: 'Communication preference',
-        content: 'The user prefers casual, concise answers.',
+        contentPreview: 'The user prefers casual, concise answers.',
         active: true,
       },
     });
+  });
+
+  it('reads a long knowledge note preview with a full-read hint by default', async () => {
+    const longContent = [
+      'Long note starts here.',
+      'a'.repeat(2_500),
+      'tail marker after the preview cap',
+    ].join('\n');
+
+    mockAgentKnowledgeService.readNodeByPath.mockResolvedValue(
+      createNode({
+        id: 'node-1',
+        path: 'projects/lab-agent/long-note',
+        title: 'Long note',
+        content: longContent,
+        active: true,
+      }),
+    );
+
+    const result = await executeReadKnowledgeTool({
+      action: 'read',
+      path: 'projects/lab-agent/long-note',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      message: 'Loaded knowledge note preview projects/lab-agent/long-note.',
+      operationId: expect.any(String),
+      node: expect.objectContaining({
+        contentPreview: expect.stringContaining('Long note starts here.'),
+      }),
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        node: expect.objectContaining({
+          contentPreview: expect.stringContaining(
+            '[preview truncated: read with contentMode="full" to get the rest of the content]',
+          ),
+        }),
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain('tail marker after the preview cap');
+  });
+
+  it('reads full knowledge note content when explicitly requested', async () => {
+    const longContent = [
+      'Long note starts here.',
+      'a'.repeat(12_500),
+      'tail marker after the old read cap',
+    ].join('\n');
+
+    mockAgentKnowledgeService.readNodeByPath.mockResolvedValue(
+      createNode({
+        id: 'node-1',
+        path: 'projects/lab-agent/long-note',
+        title: 'Long note',
+        content: longContent,
+        active: true,
+      }),
+    );
+
+    const result = await executeReadKnowledgeTool({
+      action: 'read',
+      path: 'projects/lab-agent/long-note',
+      contentMode: 'full',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      message: 'Loaded full knowledge note projects/lab-agent/long-note.',
+      operationId: expect.any(String),
+      node: expect.objectContaining({
+        content: longContent,
+      }),
+    });
+    expect(JSON.stringify(result)).toContain('tail marker after the old read cap');
+    expect(JSON.stringify(result)).not.toContain('[preview truncated');
   });
 
   it('explores related knowledge notes with bounded previews', async () => {

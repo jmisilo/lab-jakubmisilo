@@ -265,18 +265,14 @@ export class GoogleCalendarApiClient {
     });
 
     if (!response.ok) {
+      const providerMessage = await this.#readProviderErrorMessage(response);
+
       throw new AppError({
-        code:
-          response.status === 404
-            ? AppErrorCode.GOOGLE_CALENDAR_EVENT_NOT_FOUND
-            : AppErrorCode.GOOGLE_CALENDAR_API_ERROR,
+        code: this.#getFailureCode(response.status),
         message: 'Google Calendar API request failed.',
-        context: { status: response.status, path, method },
+        context: { status: response.status, path, method, providerMessage },
         retryable: response.status >= 500,
-        userMessage:
-          response.status === 404
-            ? 'I could not find that calendar event.'
-            : 'Google Calendar request failed. Please try again.',
+        userMessage: this.#getFailureUserMessage(response.status),
       });
     }
 
@@ -315,6 +311,47 @@ export class GoogleCalendarApiClient {
         ([, value]) => value !== undefined && value !== null && value !== '',
       ),
     );
+  }
+
+  static #getFailureCode(status: number): AppErrorCode {
+    if (status === 401 || status === 403) {
+      return AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID;
+    }
+
+    if (status === 404) {
+      return AppErrorCode.GOOGLE_CALENDAR_EVENT_NOT_FOUND;
+    }
+
+    return AppErrorCode.GOOGLE_CALENDAR_API_ERROR;
+  }
+
+  static #getFailureUserMessage(status: number) {
+    if (status === 401 || status === 403) {
+      return 'Google Calendar access expired or was revoked. Please reconnect Calendar.';
+    }
+
+    if (status === 404) {
+      return 'I could not find that calendar event.';
+    }
+
+    return 'Google Calendar request failed. Please try again.';
+  }
+
+  static async #readProviderErrorMessage(response: Response) {
+    const text = await response.text().catch(() => '');
+
+    if (!text) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: unknown }; message?: unknown };
+      const message = parsed.error?.message ?? parsed.message;
+
+      return typeof message === 'string' && message.trim() ? message : text.slice(0, 300);
+    } catch {
+      return text.slice(0, 300);
+    }
   }
 
   static #toEvent({

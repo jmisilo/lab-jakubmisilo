@@ -79,6 +79,7 @@ describe('AgentScheduleService', () => {
         metadata: {
           userFacingSchedule: 'today at 19:00 Europe/Warsaw',
           qstashFailureCallback: true,
+          qstashTriggerVersion: expect.any(String),
         },
       }),
     );
@@ -86,6 +87,7 @@ describe('AgentScheduleService', () => {
     expect(mockQStashService.scheduleOneTimeTask).toHaveBeenCalledWith({
       taskId: task?.id,
       runAt: new Date('2026-07-06T15:00:00.000Z'),
+      triggerVersion: expect.any(String),
     });
   });
 
@@ -122,6 +124,7 @@ describe('AgentScheduleService', () => {
         timeOfDay: '09:00',
       },
       timeZone: 'Europe/Warsaw',
+      triggerVersion: expect.any(String),
     });
   });
 
@@ -192,6 +195,7 @@ describe('AgentScheduleService', () => {
     expect(mockQStashService.scheduleOneTimeTask).toHaveBeenCalledWith({
       taskId: task?.id,
       runAt: new Date('2026-07-06T15:00:00.000Z'),
+      triggerVersion: expect.any(String),
     });
   });
 
@@ -285,6 +289,7 @@ describe('AgentScheduleService', () => {
     expect(mockQStashService.scheduleOneTimeTask).toHaveBeenCalledWith({
       taskId: 'task-1',
       runAt: new Date('2026-07-06T15:00:00.000Z'),
+      triggerVersion: expect.any(String),
     });
     expect(mockAgentScheduleDbService.updateTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -298,6 +303,7 @@ describe('AgentScheduleService', () => {
         qstashScheduleId: null,
         metadata: {
           userFacingSchedule: 'today at 17:00 Europe/Warsaw',
+          qstashTriggerVersion: expect.any(String),
         },
       }),
     );
@@ -376,6 +382,7 @@ describe('AgentScheduleService', () => {
         timeOfDay: '09:00',
       },
       timeZone: 'Europe/Warsaw',
+      triggerVersion: expect.any(String),
     });
     expect(mockAgentScheduleDbService.resumeTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -385,6 +392,9 @@ describe('AgentScheduleService', () => {
         nextRunAt: new Date('2026-07-06T07:00:00.000Z'),
         qstashMessageId: null,
         qstashScheduleId: 'agent-task-task-1',
+        metadata: expect.objectContaining({
+          qstashTriggerVersion: expect.any(String),
+        }),
       }),
     );
   });
