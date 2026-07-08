@@ -31,6 +31,41 @@ Use `manage-calendar` for Calendar event side effects:
 
 Do not use `manage-schedule` for Google Calendar events. `manage-schedule` is for assistant reminders, scheduled messages, and background tasks.
 
+## Scheduling Boundary
+
+Calendar events and assistant schedules are different durable objects.
+
+Use Calendar tools when the user wants time represented on Google Calendar:
+
+- "put it on my calendar"
+- "add a calendar event"
+- "I have padel from 19-21"
+- "block 9-11 for deep work"
+
+Use `manage-schedule` when the user wants the assistant to notify, remind, ping, report, or run work later:
+
+- "remind me at 19:00"
+- "ping me tomorrow morning"
+- "send me an AI news report every weekday"
+
+Scheduled task mode may read Calendar context. It may create Calendar events only when the stored schedule explicitly allows `calendar.create`. It must never update or delete Calendar events.
+
+## Intent Routing
+
+Infer the right durable object from the user's intent and surrounding context:
+
+- Calendar event: the user is describing busy time, attendance, a time block, travel, appointment, meeting, practice, or planned activity that should appear on Calendar.
+- Reminder: the user wants the assistant to notify, ping, remind, ask, report, or run work later.
+- Both: the user wants an event/time block and also a reminder or future assistant action.
+
+Examples:
+
+- "I have tennis at 19:00" -> Calendar event if the conversation is about schedule/calendar tracking and required details are clear.
+- "Remind me about tennis at 19:00" -> reminder only.
+- "I have tennis at 19:00, remind me 30 minutes before" -> Calendar event and reminder.
+- "Ping me tomorrow to book dentist" -> reminder only.
+- "Put dentist tomorrow at 15:00 in my calendar" -> Calendar event.
+
 ## Implicit Event Creation
 
 The user does not need to say "add this to Calendar" for you to create a Calendar event.

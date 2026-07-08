@@ -89,6 +89,7 @@ export const CalendarToolContextSchema = z.object({
   threadId: z.string().min(1).optional(),
   sourceMessageId: z.string().optional(),
   mode: z.enum(['chat', 'scheduled_task']).optional(),
+  allowedSideEffects: z.array(z.enum(['calendar.create'])).optional(),
 });
 
 export const ManageGoogleCalendarConnectionToolInputSchema = z.discriminatedUnion('action', [

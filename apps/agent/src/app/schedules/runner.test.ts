@@ -126,6 +126,7 @@ describe('AgentScheduleRunner', () => {
         threadId: 'telegram:1',
         timeZone: 'Europe/Warsaw',
         mode: 'scheduled_task',
+        scheduledTaskSideEffects: [],
       }),
     );
     const generateInput = mockAgentService.generate.mock.calls[0][0];
@@ -140,6 +141,9 @@ describe('AgentScheduleRunner', () => {
     );
     expect(generateInput.messages.at(-1)?.content).toContain('# Context Available');
     expect(generateInput.messages.at(-1)?.content).toContain('# Tool Use');
+    expect(generateInput.messages.at(-1)?.content).toContain(
+      'Scheduled task allowed side effects: none.',
+    );
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Tennis starts at 7pm.' });
     expect(bot.transcripts.append).toHaveBeenCalledWith(
       thread,
@@ -164,6 +168,45 @@ describe('AgentScheduleRunner', () => {
       taskId: 'task-1',
       status: 'sent',
     });
+  });
+
+  it('passes explicit scheduled task side effects into scheduled agent execution', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      metadata: {
+        qstashFailureCallback: true,
+        allowedSideEffects: ['calendar.create'],
+      },
+    });
+    const thread = createThread();
+    const bot = createBot({ thread });
+
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentService.generate.mockResolvedValue({
+      text: 'Calendar event created.',
+    });
+
+    await AgentScheduleRunner.executeTask({
+      bot: bot as never,
+      taskId: 'task-1',
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'scheduled_task',
+        scheduledTaskSideEffects: ['calendar.create'],
+      }),
+    );
+    expect(mockAgentService.generate.mock.calls[0][0].messages.at(-1)?.content).toContain(
+      'Scheduled task allowed side effects: calendar.create.',
+    );
   });
 
   it('recovers task advancement when another delivery already posted the scheduled run', async () => {
