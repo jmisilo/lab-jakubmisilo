@@ -186,6 +186,7 @@ export const ScheduleExecutionPayloadSchema = z.object({
   taskId: z.string().min(1),
   scheduleKind: z.enum(['one_time', 'recurring']).optional(),
   scheduledFor: z.string().min(1).optional(),
+  triggerVersion: z.string().min(1).optional(),
 });
 
 export const ScheduleFailureCallbackPayloadSchema = z
