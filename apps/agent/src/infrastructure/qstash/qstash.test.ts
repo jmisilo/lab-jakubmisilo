@@ -43,6 +43,7 @@ describe('QStashService', () => {
       taskId,
       runAt,
       triggerVersion: 'trigger-version-1',
+      previewSlug: 'tennis-reminder',
     });
 
     expect(messageId).toBe('msg-1');
@@ -54,10 +55,17 @@ describe('QStashService', () => {
           scheduleKind: 'one_time',
           scheduledFor: '2026-07-06T17:00:00.000Z',
           triggerVersion: 'trigger-version-1',
+          previewSlug: 'tennis-reminder',
         },
         notBefore: 1783357200,
         failureCallback: 'https://agent.example.com/jobs/schedules/failure',
         deduplicationId: `agent-schedule-${taskId}-1783357200000-trigger-version-1`,
+        label: [
+          'agent-schedule',
+          'agent-schedule-one-time',
+          'agent-schedule-one-time-tennis-reminder',
+          `task-${taskId}`,
+        ],
       }),
     );
     expect(mockPublishJSON.mock.calls[0][0].deduplicationId).not.toContain(':');
@@ -72,6 +80,7 @@ describe('QStashService', () => {
         taskId: 'task-1',
         runAt: new Date('2026-07-06T17:00:00.000Z'),
         triggerVersion: 'trigger-version-1',
+        previewSlug: 'reminder',
       }),
     ).rejects.toMatchObject({
       code: 'SCHEDULE_PROVIDER_ERROR',
@@ -90,6 +99,7 @@ describe('QStashService', () => {
       taskId: 'task-1',
       runAt: new Date('2026-07-06T17:00:00.000Z'),
       triggerVersion: 'trigger-version-1',
+      previewSlug: 'preview-task',
     });
 
     expect(mockPublishJSON).toHaveBeenCalledWith(
@@ -113,6 +123,7 @@ describe('QStashService', () => {
       },
       timeZone: 'Europe/Warsaw',
       triggerVersion: 'trigger-version-1',
+      previewSlug: 'todo-prep',
     });
 
     expect(mockScheduleCreate).toHaveBeenCalledWith(
@@ -121,7 +132,9 @@ describe('QStashService', () => {
           taskId: 'task-1',
           scheduleKind: 'recurring',
           triggerVersion: 'trigger-version-1',
+          previewSlug: 'todo-prep',
         }),
+        label: 'agent-schedule-recurring-todo-prep',
       }),
     );
   });
@@ -138,6 +151,7 @@ describe('QStashService', () => {
         taskId: 'task-1',
         runAt: new Date('2026-07-06T17:00:00.000Z'),
         triggerVersion: 'trigger-version-1',
+        previewSlug: 'preview-task',
       }),
     ).rejects.toMatchObject({
       code: 'SCHEDULE_PROVIDER_UNAVAILABLE',
