@@ -12,13 +12,14 @@ import { logger } from '@/infrastructure/logger';
 export class AgentContextService {
   static readonly contextSourceMessageLimit = 200;
   static readonly contextTokenLimit = 400_000;
-  static readonly contextCompressedMemoryRatio = 0.35;
-  static readonly contextShortMemoryRatio = 0.35;
-  static readonly contextKnowledgeRatio = 0.2;
-  static readonly contextBufferRatio = 0.1;
+  static readonly contextCompressedMemoryRatio = 0.37;
+  static readonly contextShortMemoryRatio = 0.37;
+  static readonly contextKnowledgeRatio = 0.22;
+  static readonly contextBufferRatio = 0.04;
   static readonly contextShortMemoryCompressionRatio = 0.5;
   static readonly contextCompressedChunkFetchLimit = 30;
   static readonly #tokenizer = new Tokenizer(o200kBase);
+  static readonly #textItemTruncationMarker = '\n[truncated to fit context budget]';
 
   static get #compressedMemoryTokenBudget() {
     return Math.floor(this.contextTokenLimit * this.contextCompressedMemoryRatio);
@@ -246,7 +247,17 @@ export class AgentContextService {
       const tokens = this.#tokenizer.count(item);
 
       if (usedTokens + tokens > tokenBudget) {
-        continue;
+        const truncatedItem = this.#truncateTextItemToTokenBudget({
+          item,
+          tokenBudget: tokenBudget - usedTokens,
+        });
+
+        if (truncatedItem) {
+          selected.push(truncatedItem);
+          usedTokens += this.#tokenizer.count(truncatedItem);
+        }
+
+        break;
       }
 
       selected.push(item);
@@ -281,6 +292,41 @@ export class AgentContextService {
     }
 
     return selected;
+  }
+
+  static #truncateTextItemToTokenBudget({
+    item,
+    tokenBudget,
+  }: {
+    item: string;
+    tokenBudget: number;
+  }) {
+    const marker = this.#textItemTruncationMarker;
+    const markerTokens = this.#tokenizer.count(marker);
+
+    if (tokenBudget <= markerTokens + 1) {
+      return null;
+    }
+
+    const itemTokens = this.#tokenizer.encode(item);
+    let low = 1;
+    let high = Math.min(itemTokens.length, tokenBudget - markerTokens);
+    let best: string | null = null;
+
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const prefix = this.#tokenizer.decode(itemTokens.slice(0, middle)).trimEnd();
+      const candidate = `${prefix}${marker}`;
+
+      if (prefix && this.#tokenizer.count(candidate) <= tokenBudget) {
+        best = candidate;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+
+    return best;
   }
 
   static #countModelMessageTokens(message: ModelMessage) {

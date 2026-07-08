@@ -23,6 +23,7 @@ export class AgentScheduleRunner {
     taskId,
     scheduleKind: payloadScheduleKind,
     scheduledFor: payloadScheduledFor,
+    triggerVersion: payloadTriggerVersion,
     now = new Date(),
   }: ExecuteScheduleTaskInput): Promise<ExecuteScheduleTaskResult> {
     logger.info(
@@ -61,6 +62,19 @@ export class AgentScheduleRunner {
           taskScheduleKind: task.scheduleKind,
         },
         '[AGENT_SCHEDULE]: stale task execution payload skipped by schedule kind',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
+    if (this.#isStaleTriggerVersion({ task, payloadTriggerVersion })) {
+      logger.info(
+        {
+          taskId,
+          payloadTriggerVersion,
+          taskTriggerVersion: this.#getTaskTriggerVersion(task),
+        },
+        '[AGENT_SCHEDULE]: stale task execution payload skipped by trigger version',
       );
 
       return { taskId, status: 'skipped', reason: 'stale_payload' };
@@ -179,8 +193,6 @@ export class AgentScheduleRunner {
         '[AGENT_SCHEDULE]: posted task bookkeeping failed after delivery',
       );
 
-      await this.#markRunFailedForRetry({ task, runId: run.id, error });
-
       if (!this.#usesQStashFailureCallback(task)) {
         return { taskId, status: 'failed', reason: 'legacy_failure_callback_unavailable' };
       }
@@ -209,6 +221,7 @@ export class AgentScheduleRunner {
     taskId,
     scheduleKind: payloadScheduleKind,
     scheduledFor: payloadScheduledFor,
+    triggerVersion: payloadTriggerVersion,
     now = new Date(),
     failure,
   }: HandleScheduleTaskExecutionExhaustedInput): Promise<ExecuteScheduleTaskResult> {
@@ -246,6 +259,19 @@ export class AgentScheduleRunner {
           taskScheduleKind: task.scheduleKind,
         },
         '[AGENT_SCHEDULE]: stale exhausted execution payload skipped by schedule kind',
+      );
+
+      return { taskId, status: 'skipped', reason: 'stale_payload' };
+    }
+
+    if (this.#isStaleTriggerVersion({ task, payloadTriggerVersion })) {
+      logger.info(
+        {
+          taskId,
+          payloadTriggerVersion,
+          taskTriggerVersion: this.#getTaskTriggerVersion(task),
+        },
+        '[AGENT_SCHEDULE]: stale exhausted execution payload skipped by trigger version',
       );
 
       return { taskId, status: 'skipped', reason: 'stale_payload' };
@@ -551,6 +577,28 @@ export class AgentScheduleRunner {
       'qstashFailureCallback' in task.metadata &&
       task.metadata.qstashFailureCallback === true
     );
+  }
+
+  static #isStaleTriggerVersion({
+    task,
+    payloadTriggerVersion,
+  }: {
+    task: AgentScheduledTask;
+    payloadTriggerVersion?: string;
+  }) {
+    const taskTriggerVersion = this.#getTaskTriggerVersion(task);
+
+    return Boolean(taskTriggerVersion && payloadTriggerVersion !== taskTriggerVersion);
+  }
+
+  static #getTaskTriggerVersion(task: AgentScheduledTask) {
+    const metadata =
+      task.metadata && typeof task.metadata === 'object' && !Array.isArray(task.metadata)
+        ? (task.metadata as Record<string, unknown>)
+        : {};
+    const triggerVersion = metadata.qstashTriggerVersion;
+
+    return typeof triggerVersion === 'string' && triggerVersion.trim() ? triggerVersion : undefined;
   }
 
   static async #markRunFailedForRetry({

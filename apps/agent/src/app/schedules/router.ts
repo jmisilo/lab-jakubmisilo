@@ -41,6 +41,7 @@ export const ScheduleRouter = new Hono()
         taskId: parsedPayload.data.taskId,
         scheduleKind: parsedPayload.data.scheduleKind,
         scheduledFor: parseOptionalDate(parsedPayload.data.scheduledFor),
+        triggerVersion: parsedPayload.data.triggerVersion,
       });
 
       return c.json({ ok: true, result });
@@ -78,6 +79,7 @@ export const ScheduleRouter = new Hono()
         taskId: parsedFailure.taskId,
         scheduleKind: parsedFailure.scheduleKind,
         scheduledFor: parsedFailure.scheduledFor,
+        triggerVersion: parsedFailure.triggerVersion,
         failure: parsedFailure.failure,
       });
 
@@ -171,6 +173,7 @@ function parseFailureCallbackBody(body: string):
       taskId: string;
       scheduleKind?: 'one_time' | 'recurring';
       scheduledFor?: Date;
+      triggerVersion?: string;
       failure: {
         status?: number;
         retried?: number;
@@ -199,6 +202,7 @@ function parseFailureCallbackBody(body: string):
     taskId: parsedSourceBody.data.taskId,
     scheduleKind: parsedSourceBody.data.scheduleKind,
     scheduledFor: parseOptionalDate(parsedSourceBody.data.scheduledFor),
+    triggerVersion: parsedSourceBody.data.triggerVersion,
     failure: {
       status: parsedCallback.data.status,
       retried: parsedCallback.data.retried,

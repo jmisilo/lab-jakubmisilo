@@ -287,6 +287,34 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
+  it('skips stale deliveries from an old QStash trigger version', async () => {
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(
+      createTask({
+        id: 'task-1',
+        scheduleKind: 'recurring',
+        nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+        metadata: {
+          qstashTriggerVersion: 'current-trigger-version',
+        },
+      }),
+    );
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot() as never,
+      taskId: 'task-1',
+      scheduleKind: 'recurring',
+      triggerVersion: 'stale-trigger-version',
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      taskId: 'task-1',
+      status: 'skipped',
+      reason: 'stale_payload',
+    });
+  });
+
   it('fails retryably when QStash delivers before the task exists in DB', async () => {
     mockAgentScheduleDbService.getTaskById.mockResolvedValue(null);
 
@@ -334,7 +362,7 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
-  it('marks the run failed and retries when post-send bookkeeping fails after delivery', async () => {
+  it('retries without marking the run failed when post-send bookkeeping fails after delivery', async () => {
     const task = createTask({
       id: 'task-1',
       scheduleKind: 'one_time',
@@ -374,10 +402,11 @@ describe('AgentScheduleRunner', () => {
 
     expect(thread.post).toHaveBeenCalledTimes(1);
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time to walk the dog.' });
-    expect(mockAgentScheduleDbService.markTaskRunFailed).toHaveBeenCalledWith({
+    expect(mockAgentScheduleDbService.markTaskRunSent).toHaveBeenCalledWith({
       runId: 'run-1',
-      error,
+      output: 'Time to walk the dog.',
     });
+    expect(mockAgentScheduleDbService.markTaskRunFailed).not.toHaveBeenCalled();
     expect(mockAgentScheduleDbService.failTask).not.toHaveBeenCalled();
   });
 
