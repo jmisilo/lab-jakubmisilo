@@ -7,6 +7,8 @@ export const KNOWLEDGE_TOOL_LIST_MAX_ITEMS = 50;
 export const KNOWLEDGE_TOOL_EXPLORE_MAX_ITEMS = 30;
 export const KNOWLEDGE_TOOL_EXPLORE_MAX_DEPTH = 5;
 
+const KnowledgeReadContentModeSchema = z.enum(['preview', 'full']);
+
 export const ManageKnowledgeToolContextSchema = z.object({
   identityId: z.string().min(1),
   sourceMessageId: z.string().optional(),
@@ -73,6 +75,9 @@ export const ReadKnowledgeToolInputSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('read').describe('Read one existing knowledge note by path.'),
     path: KnowledgeNodePathSchema.describe("Existing node path for 'read'."),
+    contentMode: KnowledgeReadContentModeSchema.optional().describe(
+      "Whether to return a bounded preview or the full note content. Defaults to 'preview'. Use 'full' only when the complete note is needed.",
+    ),
     includeInactive: z
       .boolean()
       .optional()

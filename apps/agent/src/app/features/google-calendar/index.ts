@@ -67,24 +67,10 @@ export const GoogleCalendarRouter = new Hono()
       );
     }
 
+    let result: Awaited<ReturnType<typeof GoogleCalendarConnectionService.completeConnection>>;
+
     try {
-      const result = await GoogleCalendarConnectionService.completeConnection({ code, state });
-
-      await bot.initialize();
-      await bot.thread(result.threadId).post({
-        markdown: 'Google Calendar is connected. I can now help with calendar events.',
-      });
-
-      logger.info(
-        {
-          identityId: result.identityId,
-          threadId: result.threadId,
-          connectionId: result.connection.id,
-        },
-        '[GOOGLE_CALENDAR]: connection completed',
-      );
-
-      return c.redirect('/links/google-calendar/done');
+      result = await GoogleCalendarConnectionService.completeConnection({ code, state });
     } catch (error) {
       logger.error(
         {
@@ -96,6 +82,35 @@ export const GoogleCalendarRouter = new Hono()
 
       return c.html(renderConnectionFailurePage(error), 500);
     }
+
+    try {
+      await bot.initialize();
+      await bot.thread(result.threadId).post({
+        markdown: 'Google Calendar is connected. I can now help with calendar events.',
+      });
+    } catch (notificationError) {
+      logger.warn(
+        {
+          identityId: result.identityId,
+          threadId: result.threadId,
+          connectionId: result.connection.id,
+          error: notificationError,
+          safeError: ErrorService.toSafeLog(notificationError),
+        },
+        '[GOOGLE_CALENDAR]: connection completion notification failed',
+      );
+    }
+
+    logger.info(
+      {
+        identityId: result.identityId,
+        threadId: result.threadId,
+        connectionId: result.connection.id,
+      },
+      '[GOOGLE_CALENDAR]: connection completed',
+    );
+
+    return c.redirect('/links/google-calendar/done');
   })
   .get('/links/google-calendar/done', (c) =>
     c.html(

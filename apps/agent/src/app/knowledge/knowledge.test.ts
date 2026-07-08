@@ -95,6 +95,46 @@ describe('AgentKnowledgeService', () => {
     );
   });
 
+  it('creates a durable knowledge node without embedding when embedding generation fails', async () => {
+    const error = new Error('embedding provider unavailable');
+    const node = createKnowledgeContextNode({
+      title: 'Default location',
+      content: 'Warsaw is the user default location.',
+    });
+
+    mockAIService.embed.mockRejectedValue(error);
+    mockAgentKnowledgeDbService.createNode.mockResolvedValue(node);
+
+    await AgentKnowledgeService.createNode({
+      identityId: 'identity-1',
+      title: 'Default location',
+      content: 'Warsaw is the user default location.',
+      source: 'explicit',
+      sourceMessageId: 'message-1',
+    });
+
+    expect(mockAgentKnowledgeDbService.createNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        title: 'Default location',
+        content: 'Warsaw is the user default location.',
+        source: 'explicit',
+        sourceMessageId: 'message-1',
+        embedding: undefined,
+        embeddingModel: undefined,
+        embeddingContentHash: undefined,
+      }),
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        operation: 'knowledge.create',
+        error,
+      }),
+      '[AGENT_KNOWLEDGE]: embedding generation failed',
+    );
+  });
+
   it('persists bounded long notes while embedding only a content excerpt', async () => {
     const longContent = [
       '## Idea',
@@ -276,6 +316,35 @@ describe('AgentKnowledgeService', () => {
       }),
       '[AGENT_KNOWLEDGE]: context retrieved',
     );
+  });
+
+  it('includes full retrieved knowledge content before memory context token budgeting', async () => {
+    const longContent = [
+      'Durable note starts here.',
+      'a'.repeat(2_200),
+      'tail marker beyond the old context preview cap',
+    ].join('\n');
+
+    mockAIService.embed.mockResolvedValue([0.4, 0.5, 0.6]);
+    mockAgentKnowledgeDbService.getRelevantContextNodes.mockResolvedValue([
+      createKnowledgeContextNode({
+        path: 'projects/lab-agent/long-note',
+        title: 'Long note',
+        content: longContent,
+        relationship: 'match',
+        similarity: 0.91,
+      }),
+    ]);
+
+    const items = await AgentKnowledgeService.getContextItems({
+      identityId: 'identity-1',
+      shortTermMemory: [{ role: 'user', text: 'What should you remember about the agent?' }],
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toContain('Durable note starts here.');
+    expect(items[0]).toContain('tail marker beyond the old context preview cap');
+    expect(items[0]).not.toContain('[truncated]');
   });
 
   it('lists knowledge nodes with normalized parent paths and bounded limits', async () => {
