@@ -18,7 +18,12 @@ const DAY_OF_WEEK_CRON_VALUE: Record<QStashScheduleDayOfWeek, number> = {
 };
 
 export class QStashService {
-  static async scheduleOneTimeTask({ taskId, runAt, triggerVersion }: ScheduleOneTimeTaskInput) {
+  static async scheduleOneTimeTask({
+    taskId,
+    runAt,
+    triggerVersion,
+    previewSlug,
+  }: ScheduleOneTimeTaskInput) {
     const response = await this.#client.publishJSON<ScheduleTaskPayload>({
       url: this.#executionUrl,
       body: {
@@ -26,13 +31,19 @@ export class QStashService {
         scheduleKind: 'one_time',
         scheduledFor: runAt.toISOString(),
         triggerVersion,
+        previewSlug,
       },
       notBefore: Math.floor(runAt.getTime() / 1000),
       retries: QSTASH_EXECUTION_RETRIES,
       timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
       failureCallback: this.#failureUrl,
       deduplicationId: this.#oneTimeDeduplicationId({ taskId, runAt, triggerVersion }),
-      label: ['agent-schedule', 'agent-schedule-one-time', `task-${taskId}`],
+      label: [
+        'agent-schedule',
+        'agent-schedule-one-time',
+        this.#previewLabel({ scheduleKind: 'one_time', previewSlug }),
+        `task-${taskId}`,
+      ],
     });
 
     if (Array.isArray(response) || !('messageId' in response)) {
@@ -63,6 +74,7 @@ export class QStashService {
     recurrence,
     timeZone,
     triggerVersion,
+    previewSlug,
   }: ScheduleRecurringTaskInput) {
     const scheduleId = this.getRecurringScheduleId(taskId);
     const response = await this.#client.schedules.create({
@@ -75,13 +87,14 @@ export class QStashService {
         taskId,
         scheduleKind: 'recurring',
         triggerVersion,
+        previewSlug,
       } satisfies ScheduleTaskPayload),
       cron: this.#toCronExpression({ recurrence, timeZone }),
       retries: QSTASH_EXECUTION_RETRIES,
       timeout: QSTASH_EXECUTION_TIMEOUT_SECONDS,
       failureCallback: this.#failureUrl,
       scheduleId,
-      label: 'agent-schedule-recurring',
+      label: this.#previewLabel({ scheduleKind: 'recurring', previewSlug }),
     });
 
     return response.scheduleId;
@@ -114,6 +127,16 @@ export class QStashService {
     triggerVersion: string;
   }) {
     return `agent-schedule-${taskId}-${runAt.getTime()}-${triggerVersion}`;
+  }
+
+  static #previewLabel({
+    scheduleKind,
+    previewSlug,
+  }: {
+    scheduleKind: ScheduleTaskPayload['scheduleKind'];
+    previewSlug: string;
+  }) {
+    return `agent-schedule-${scheduleKind.replace('_', '-')}-${previewSlug}`;
   }
 
   static get #client() {
@@ -204,6 +227,7 @@ type ScheduleTaskPayload = {
   scheduleKind: 'one_time' | 'recurring';
   scheduledFor?: string;
   triggerVersion: string;
+  previewSlug: string;
 };
 
 type QStashScheduleDayOfWeek =
@@ -225,6 +249,7 @@ type ScheduleOneTimeTaskInput = {
   taskId: string;
   runAt: Date;
   triggerVersion: string;
+  previewSlug: string;
 };
 
 type ScheduleRecurringTaskInput = {
@@ -232,6 +257,7 @@ type ScheduleRecurringTaskInput = {
   recurrence: QStashScheduleRecurrence;
   timeZone: string;
   triggerVersion: string;
+  previewSlug: string;
 };
 
 type CancelScheduledTaskInput = {
