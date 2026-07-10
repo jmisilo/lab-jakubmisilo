@@ -97,6 +97,7 @@ export class AgentService {
               skills,
             }),
             promptCacheRetention: PROMPT_CACHE_RETENTION,
+            passThroughUnsupportedFiles: true,
           } satisfies OpenAILanguageModelResponsesOptions,
         },
         toolsContext: {

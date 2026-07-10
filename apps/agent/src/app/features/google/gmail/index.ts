@@ -1,14 +1,14 @@
 import type {
   GoogleGmailMessage,
   GoogleGmailMessageSummary,
-} from '@/app/features/google-gmail/types';
+} from '@/app/features/google/gmail/types';
 
+import { GoogleConnectionService } from '@/app/features/google/connection';
 import {
   GOOGLE_GMAIL_MESSAGE_BODY_MAX_CHARACTERS,
   GOOGLE_GMAIL_SEARCH_MAX_RESULTS,
   GOOGLE_GMAIL_THREAD_MAX_MESSAGES,
-} from '@/app/features/google-gmail/schemas';
-import { GoogleConnectionService } from '@/app/features/google/connection';
+} from '@/app/features/google/gmail/schemas';
 import { GoogleGmailApiClient } from '@/infrastructure/google/gmail';
 
 export class GoogleGmailService {

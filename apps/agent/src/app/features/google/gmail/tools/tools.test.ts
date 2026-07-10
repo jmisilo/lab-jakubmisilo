@@ -10,7 +10,7 @@ const mockGoogleConnectionService = {
 };
 
 jest.mock('ai', () => ({ tool: jest.fn((definition) => definition) }));
-jest.mock('@/app/features/google-gmail', () => ({
+jest.mock('@/app/features/google/gmail', () => ({
   GoogleGmailService: mockGoogleGmailService,
 }));
 jest.mock('@/app/features/google/connection', () => ({

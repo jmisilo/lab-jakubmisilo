@@ -22,7 +22,7 @@ jest.mock('@/app/features/google/connection', () => ({
   GoogleConnectionService: mockGoogleConnectionService,
 }));
 
-jest.mock('@/app/features/google-calendar/events', () => ({
+jest.mock('@/app/features/google/calendar/events', () => ({
   GoogleCalendarEventService: mockGoogleCalendarEventService,
 }));
 

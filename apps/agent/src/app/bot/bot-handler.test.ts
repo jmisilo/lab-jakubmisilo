@@ -4,6 +4,9 @@ const mockWaitUntil = jest.fn();
 const mockAgentService = {
   generate: jest.fn(),
 };
+const mockAgentAttachmentService = {
+  addToLatestUserMessage: jest.fn(),
+};
 const mockAgentMemoryService = {
   recordMessage: jest.fn(),
   buildContext: jest.fn(),
@@ -25,6 +28,10 @@ jest.mock('@vercel/functions', () => ({
 
 jest.mock('@/app/agent', () => ({
   AgentService: mockAgentService,
+}));
+
+jest.mock('@/app/attachments', () => ({
+  AgentAttachmentService: mockAgentAttachmentService,
 }));
 
 jest.mock('@/app/memory', () => ({
@@ -57,6 +64,9 @@ beforeEach(() => {
 
   mockAgentMemoryService.recordMessage.mockResolvedValue(undefined);
   mockAgentMemoryService.buildContext.mockResolvedValue([{ role: 'user', content: 'Hello' }]);
+  mockAgentAttachmentService.addToLatestUserMessage.mockImplementation(
+    ({ messages }: { messages: unknown[] }) => messages,
+  );
   mockAgentMemoryService.compressShortTermMemory.mockResolvedValue(undefined);
   mockAgentKnowledgeService.extractImplicitKnowledge.mockResolvedValue(undefined);
   mockAgentService.generate.mockResolvedValue({ text: 'Hi there.' });
@@ -91,6 +101,10 @@ describe('BotHandler', () => {
       identityId: 'identity-1',
       threadId: 'thread-1',
       sourceMessageId: 'message-1',
+    });
+    expect(mockAgentAttachmentService.addToLatestUserMessage).toHaveBeenCalledWith({
+      messages: [{ role: 'user', content: 'Hello' }],
+      attachments: undefined,
     });
     expect(thread.startTyping).toHaveBeenCalled();
     expect(getFirstInvocationOrder(thread.startTyping as jest.Mock)).toBeLessThan(

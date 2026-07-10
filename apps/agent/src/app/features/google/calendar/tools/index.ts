@@ -5,14 +5,14 @@ import type { z } from 'zod';
 import { tool } from 'ai';
 import dedent from 'dedent';
 
-import { GoogleCalendarEventService } from '@/app/features/google-calendar/events';
+import { GoogleCalendarEventService } from '@/app/features/google/calendar/events';
 import {
   CalendarToolContextSchema,
   ManageCalendarToolInputSchema,
   ManageCalendarToolOutputSchema,
   ReadCalendarToolInputSchema,
   ReadCalendarToolOutputSchema,
-} from '@/app/features/google-calendar/schemas';
+} from '@/app/features/google/calendar/schemas';
 import { GoogleConnectionService } from '@/app/features/google/connection';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';

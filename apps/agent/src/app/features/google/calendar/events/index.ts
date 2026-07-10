@@ -1,13 +1,13 @@
 import type {
   CalendarEventDraftSchema,
   CalendarEventUpdateSchema,
-} from '@/app/features/google-calendar/schemas';
+} from '@/app/features/google/calendar/schemas';
 import type {
   GoogleCalendarEventAttendee,
   GoogleCalendarEventDate,
   GoogleCalendarEventPatch,
   GoogleCalendarSendUpdates,
-} from '@/app/features/google-calendar/types';
+} from '@/app/features/google/calendar/types';
 import type { AppErrorCode } from '@/infrastructure/errors';
 import type { z } from 'zod';
 

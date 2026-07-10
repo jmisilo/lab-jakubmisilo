@@ -40,11 +40,14 @@ flowchart LR
 Core modules:
 
 - `src/app/bot` owns Chat SDK wiring and inbound message handling.
+- `src/app/attachments` validates current inbound files and normalizes images for model input.
 - `src/app/agent` owns the AI SDK agent, prompt, and tool registry.
 - `src/app/memory` owns short-term transcripts, rolling summaries, and context assembly.
 - `src/app/knowledge` owns durable tree notes, retrieval, and implicit ingestion.
 - `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
 - `src/infrastructure/*` wraps AI, DB, QStash, logging, and app errors.
+
+Incoming attachments are ephemeral. The agent accepts up to three files per message, with a 7 MB limit per file. JPEG, PNG, and WebP images are limited to 40 decoded megapixels, resized within 1536x1536, and stripped of metadata. PDFs, videos, and other files are passed through as current-turn model file inputs. Original attachment bytes are not persisted by the application.
 
 Scheduling states:
 

@@ -1,5 +1,5 @@
-import type { ManageCalendarTool, ReadCalendarTool } from '@/app/features/google-calendar/tools';
-import type { ReadGmailTool } from '@/app/features/google-gmail/tools';
+import type { ManageCalendarTool, ReadCalendarTool } from '@/app/features/google/calendar/tools';
+import type { ReadGmailTool } from '@/app/features/google/gmail/tools';
 import type { ManageGoogleConnectionTool } from '@/app/features/google/tools';
 import type { GetLocalTimeTool, GetWeatherTool } from '@/app/features/weather/tools';
 import type {
@@ -13,8 +13,8 @@ import type { LoadSkillTool } from '@/app/skills/tools';
 
 import { openai } from '@ai-sdk/openai';
 
-import { manageCalendarTool, readCalendarTool } from '@/app/features/google-calendar/tools';
-import { readGmailTool } from '@/app/features/google-gmail/tools';
+import { manageCalendarTool, readCalendarTool } from '@/app/features/google/calendar/tools';
+import { readGmailTool } from '@/app/features/google/gmail/tools';
 import { manageGoogleConnectionTool } from '@/app/features/google/tools';
 import { getLocalTimeTool, getWeatherTool } from '@/app/features/weather/tools';
 import {
