@@ -55,12 +55,21 @@ export class AgentService {
       'read-gmail': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
+      'read-nutrition': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+        timeZone: DEFAULT_USER_TIME_ZONE,
+      },
       'manage-calendar': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
       'manage-schedule': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
         threadId: UNAVAILABLE_TOOL_CONTEXT,
+      },
+      'manage-nutrition': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+        threadId: UNAVAILABLE_TOOL_CONTEXT,
+        timeZone: DEFAULT_USER_TIME_ZONE,
       },
       'manage-world-cup-subscription': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
@@ -127,6 +136,13 @@ export class AgentService {
             sourceMessageId: options?.sourceMessageId,
             mode: options?.mode,
           },
+          'read-nutrition': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            timeZone,
+            mode: options?.mode,
+          },
           'manage-calendar': {
             identityId,
             threadId: options?.threadId,
@@ -138,6 +154,13 @@ export class AgentService {
             identityId,
             threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
             sourceMessageId: options?.sourceMessageId,
+          },
+          'manage-nutrition': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            timeZone,
+            mode: options?.mode,
           },
           'manage-world-cup-subscription': {
             identityId,
@@ -248,6 +271,7 @@ export class AgentService {
       activeTools.push('read-knowledge');
       activeTools.push('read-calendar');
       activeTools.push('read-gmail');
+      activeTools.push('read-nutrition');
     }
 
     if (options?.mode === 'scheduled_task') {
@@ -262,6 +286,7 @@ export class AgentService {
       activeTools.push('manage-google-connection');
       activeTools.push('manage-calendar');
       activeTools.push('manage-schedule');
+      activeTools.push('manage-nutrition');
       activeTools.push('manage-knowledge');
       activeTools.push('manage-world-cup-subscription');
       activeTools.push('get-world-cup-tracking');

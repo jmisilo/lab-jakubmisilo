@@ -1,6 +1,7 @@
 import type { ManageCalendarTool, ReadCalendarTool } from '@/app/features/google/calendar/tools';
 import type { ReadGmailTool } from '@/app/features/google/gmail/tools';
 import type { ManageGoogleConnectionTool } from '@/app/features/google/tools';
+import type { ManageNutritionTool, ReadNutritionTool } from '@/app/features/nutrition/tools';
 import type { GetLocalTimeTool, GetWeatherTool } from '@/app/features/weather/tools';
 import type {
   GetWorldCupContextTool,
@@ -16,6 +17,7 @@ import { openai } from '@ai-sdk/openai';
 import { manageCalendarTool, readCalendarTool } from '@/app/features/google/calendar/tools';
 import { readGmailTool } from '@/app/features/google/gmail/tools';
 import { manageGoogleConnectionTool } from '@/app/features/google/tools';
+import { manageNutritionTool, readNutritionTool } from '@/app/features/nutrition/tools';
 import { getLocalTimeTool, getWeatherTool } from '@/app/features/weather/tools';
 import {
   getWorldCupContextTool,
@@ -38,8 +40,10 @@ export const agentTools: AgentTools = {
   'manage-google-connection': manageGoogleConnectionTool,
   'read-calendar': readCalendarTool,
   'read-gmail': readGmailTool,
+  'read-nutrition': readNutritionTool,
   'manage-calendar': manageCalendarTool,
   'manage-schedule': manageScheduleTool,
+  'manage-nutrition': manageNutritionTool,
   'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
   'get-world-cup-tracking': getWorldCupTrackingTool,
   'get-world-cup-context': getWorldCupContextTool,
@@ -55,8 +59,10 @@ export type AgentTools = {
   'manage-google-connection': ManageGoogleConnectionTool;
   'read-calendar': ReadCalendarTool;
   'read-gmail': ReadGmailTool;
+  'read-nutrition': ReadNutritionTool;
   'manage-calendar': ManageCalendarTool;
   'manage-schedule': ManageScheduleTool;
+  'manage-nutrition': ManageNutritionTool;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
   'get-world-cup-tracking': GetWorldCupTrackingTool;
   'get-world-cup-context': GetWorldCupContextTool;
