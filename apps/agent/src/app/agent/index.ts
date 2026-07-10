@@ -26,11 +26,11 @@ const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
 const PROMPT_CACHE_RETENTION = '24h';
 
 export class AgentService {
-  static #model: Parameters<typeof openai>[0] = 'gpt-5.4-mini';
+  static #model: Parameters<typeof openai>[0] = 'gpt-5.6-luna';
 
   static readonly agent = new ToolLoopAgent({
     model: openai(this.#model),
-    reasoning: 'xhigh',
+    reasoning: 'high',
     instructions: AgentPromptService.buildSystemPrompt({
       skills: SkillService.listSkills(),
     }),

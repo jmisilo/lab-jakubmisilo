@@ -96,7 +96,7 @@ export class AgentMemoryService {
         .map((message) => `${message.role}: ${message.content}`)
         .join('\n');
       const summaryResult = await AIService.generate({
-        reasoning: 'xhigh',
+        reasoning: 'high',
         maxOutputTokens: this.compressionSummaryMaxOutputTokens,
         messages: [
           {

@@ -117,7 +117,7 @@ export class WorldCupNotificationService {
       );
 
       const result = await AIService.generate({
-        reasoning: 'xhigh',
+        reasoning: 'high',
         instructions: dedent`
           Write a short message notification for a FIFA World Cup 2026 event.
           Use the prior conversation only to match the user's tone and preferences.

@@ -150,7 +150,7 @@ describe('AgentMemoryService', () => {
 
       expect(generateInput).toEqual(
         expect.objectContaining({
-          reasoning: 'xhigh',
+          reasoning: 'high',
           maxOutputTokens: AgentMemoryService.compressionSummaryMaxOutputTokens,
         }),
       );
