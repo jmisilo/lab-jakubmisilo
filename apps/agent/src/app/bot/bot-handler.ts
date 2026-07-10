@@ -4,6 +4,7 @@ import type { Chat, Message, Thread } from 'chat';
 import { waitUntil } from '@vercel/functions';
 
 import { AgentService } from '@/app/agent';
+import { AgentAttachmentService } from '@/app/attachments';
 import { AgentKnowledgeService } from '@/app/knowledge';
 import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
@@ -67,18 +68,23 @@ export class BotHandler {
             threadId: thread.id,
             shortTermMemory,
           });
+          const messages = await AgentAttachmentService.addToLatestUserMessage({
+            messages: contextMessages,
+            attachments: message.attachments,
+          });
 
           logger.debug(
             {
               threadId: thread.id,
               messageId: message.id,
-              contextMessageCount: contextMessages.length,
+              contextMessageCount: messages.length,
+              attachmentCount: message.attachments?.length ?? 0,
             },
             '[BOT]: context prepared',
           );
 
           const result = await AgentService.generate({
-            messages: contextMessages,
+            messages,
             identityId,
             threadId: thread.id,
             sourceMessageId: message.id,

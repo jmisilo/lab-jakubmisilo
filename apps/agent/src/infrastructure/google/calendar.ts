@@ -4,7 +4,7 @@ import type {
   GoogleCalendarEventPatch,
   GoogleCalendarSendUpdates,
   GoogleCalendarSummary,
-} from '@/app/features/google-calendar/types';
+} from '@/app/features/google/calendar/types';
 
 import { z } from 'zod';
 

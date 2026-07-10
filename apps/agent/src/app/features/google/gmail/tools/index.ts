@@ -5,13 +5,13 @@ import type { z } from 'zod';
 import { tool } from 'ai';
 import dedent from 'dedent';
 
-import { GoogleGmailService } from '@/app/features/google-gmail';
+import { GoogleConnectionService } from '@/app/features/google/connection';
+import { GoogleGmailService } from '@/app/features/google/gmail';
 import {
   GmailToolContextSchema,
   ReadGmailToolInputSchema,
   ReadGmailToolOutputSchema,
-} from '@/app/features/google-gmail/schemas';
-import { GoogleConnectionService } from '@/app/features/google/connection';
+} from '@/app/features/google/gmail/schemas';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
