@@ -22,6 +22,8 @@ Each scheduled task has:
 
 When the task is due, QStash calls the schedule execution endpoint. The endpoint executes the stored prompt through the agent and sends the result to the same thread.
 
+Before delivery, a pending occurrence can be marked satisfied when the user clearly says they already completed the underlying task. A one-time reminder then completes without sending. A recurring task skips only that occurrence and remains active for future dates.
+
 The app does not poll the database for due tasks. Postgres stores task metadata, status, limits, cancellation state, and execution history. QStash owns delivery timing.
 
 ## Current Limits
@@ -77,6 +79,29 @@ Examples:
 - "each morning at 9am send me a todo prep message" -> daily at `09:00`.
 - "every Monday and Friday remind me about shopping" -> weekly on monday/friday, likely around `08:30` if no user preference conflicts.
 - "each work day send me latest AI news around 11am" -> weekdays at `11:00`.
+
+## Early Occurrence Completion
+
+Use `complete_occurrence` only when the user explicitly confirms that the task behind a pending reminder is already complete.
+
+Clear examples:
+
+- "I took my supplements" when an active supplements reminder is pending today.
+- "Done" immediately after discussing the pending supplements reminder.
+- "I already sent mum the message, skip that reminder."
+
+Do not complete an occurrence from:
+
+- Intentions or future plans: "I will take them soon."
+- Questions: "Did I take my supplements?"
+- Negation: "I have not done it yet."
+- General habits: "I usually take them at lunch."
+- Historical statements that do not refer to the pending occurrence.
+- Ambiguous acknowledgements without enough immediate conversation context.
+
+Resolve exactly one active task before calling `complete_occurrence`. If multiple reminders plausibly match, list or inspect schedules and ask which one the user means. If none match, do not claim anything was handled.
+
+For recurring tasks, only today's pending occurrence can be satisfied early. Keep all future occurrences active. Use `cancel` only when the user asks to stop the entire recurring task.
 
 ## Stored Prompt
 
@@ -138,6 +163,8 @@ Use update for requests like:
 - "make the prompt include sources"
 
 Use pause when the user wants to temporarily stop a schedule without deleting it. Use resume when they want a paused schedule active again. Use cancel when they want it removed/stopped permanently.
+
+Use `complete_occurrence` when the underlying task is already done and only its pending notification should be suppressed.
 
 If scheduling fails, say briefly that it could not be scheduled yet and ask for the next practical step or retry.
 

@@ -85,7 +85,13 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain(
       'Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.',
     );
-    expect(prompt).toContain('inspect, update, move, pause, resume, or cancel reminders');
+    expect(prompt).toContain(
+      'inspect, update, move, pause, resume, cancel, or complete a pending occurrence',
+    );
+    expect(prompt).toContain('use complete_occurrence');
+    expect(prompt).toContain('Resolve exactly one matching active schedule');
+    expect(prompt).toContain("complete only today's pending occurrence");
+    expect(prompt).toContain('keep future recurrence active');
     expect(prompt).toContain(
       'When creating or updating scheduled tasks, set allowedSideEffects only for explicit future external side effects.',
     );

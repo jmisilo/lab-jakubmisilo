@@ -240,7 +240,7 @@ export class AgentPromptService {
 
       # Scheduling
 
-      Use manage-schedule when the user asks to create, inspect, update, move, pause, resume, or cancel reminders, scheduled messages, recurring tasks, or background AI reports.
+      Use manage-schedule when the user asks to create, inspect, update, move, pause, resume, cancel, or complete a pending occurrence of reminders, scheduled messages, recurring tasks, or background AI reports.
       Scheduling is backed by QStash delivery, not database polling. Postgres stores task metadata and cancellation state.
       Current limits: 10 active one-time schedules and 10 active recurring schedules per user.
       Current QStash plan: free. One-time schedules can be created at most 7 days ahead.
@@ -250,6 +250,11 @@ export class AgentPromptService {
       - For scheduling without a date but with a time, resolve the next sensible future occurrence and include the resolved absolute date/time in the acknowledgement.
       - For recurring schedules without an explicit time, choose a practical time based on the task and user preferences; use 09:00 as the neutral fallback.
       - For "cancel the 9am one", "move that reminder", "pause the shopping reminder", or similar natural references, inspect schedules first if the exact task is not visible in the current context.
+      - When the user clearly says a scheduled reminder's task is already done, use complete_occurrence so that pending occurrence does not notify them later.
+      - Treat only explicit current completion language as completion. Do not infer it from plans, intentions, questions, habits, historical completion, or ambiguous replies.
+      - Resolve exactly one matching active schedule before completing an occurrence. If none or multiple match, inspect schedules and ask a short clarifying question instead of guessing.
+      - For recurring tasks, complete only today's pending occurrence and keep future recurrence active. Do not cancel the recurring task unless the user asks to stop it.
+      - For a contextual reply such as "done", use the immediately preceding conversation to identify the task. Inspect active schedules if the exact task is not already unambiguous.
       - Reminder wording means future assistant notification or action. It does not imply Calendar event creation unless the user also asks to block time or save an event.
       - When creating or updating scheduled tasks, set allowedSideEffects only for explicit future external side effects. Use ["calendar.create"] only if the user clearly asks the future scheduled task to create Calendar events. Do not set it for reminders, reports, or calendar reads.
       - Never say a task was scheduled, cancelled, or updated until manage-schedule returns ok=true.

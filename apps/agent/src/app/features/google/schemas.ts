@@ -29,6 +29,7 @@ export const ManageGoogleConnectionToolInputSchema = z.discriminatedUnion('actio
     services: z
       .array(GoogleServiceSchema)
       .min(1)
+      .optional()
       .describe('Google services the user wants to connect or add to the existing connection.'),
   }),
   z.object({

@@ -268,6 +268,130 @@ export class AgentScheduleDbService extends DbService {
     return run ?? null;
   }
 
+  static async satisfyTaskOccurrence({
+    identityId,
+    threadId,
+    taskId,
+    sourceMessageId,
+    satisfiedAt,
+  }: SatisfyScheduledTaskOccurrenceInput) {
+    return this.client.transaction(async (tx) => {
+      const [task] = await tx
+        .select()
+        .from(agentScheduledTasks)
+        .where(
+          and(
+            eq(agentScheduledTasks.identityId, identityId),
+            eq(agentScheduledTasks.threadId, threadId),
+            eq(agentScheduledTasks.id, taskId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+
+      if (!task) {
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
+          message: 'Scheduled task was not found for occurrence completion.',
+          context: { identityId, threadId, taskId },
+          retryable: false,
+          userMessage: 'I could not find that reminder.',
+        });
+      }
+
+      const [run] = await tx
+        .insert(agentScheduledTaskRuns)
+        .values({
+          taskId,
+          scheduledFor: task.nextRunAt,
+          status: 'satisfied',
+          sourceMessageId,
+          startedAt: satisfiedAt,
+          finishedAt: satisfiedAt,
+        })
+        .onConflictDoUpdate({
+          target: [agentScheduledTaskRuns.taskId, agentScheduledTaskRuns.scheduledFor],
+          set: {
+            status: 'satisfied',
+            sourceMessageId,
+            error: null,
+            startedAt: satisfiedAt,
+            finishedAt: satisfiedAt,
+          },
+          where: eq(agentScheduledTaskRuns.status, 'failed'),
+        })
+        .returning();
+
+      if (!run) {
+        const [existingRun] = await tx
+          .select()
+          .from(agentScheduledTaskRuns)
+          .where(
+            and(
+              eq(agentScheduledTaskRuns.taskId, taskId),
+              eq(agentScheduledTaskRuns.scheduledFor, task.nextRunAt),
+            ),
+          )
+          .limit(1);
+
+        if (existingRun?.status === 'satisfied') {
+          return { task, alreadySatisfied: true };
+        }
+
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_OCCURRENCE_NOT_PENDING,
+          message: 'Scheduled task occurrence is already running or delivered.',
+          context: {
+            identityId,
+            threadId,
+            taskId,
+            scheduledFor: task.nextRunAt.toISOString(),
+            runStatus: existingRun?.status,
+          },
+          retryable: false,
+          userMessage: 'That reminder is already being handled or was already sent.',
+        });
+      }
+
+      if (task.status !== 'active') {
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_OCCURRENCE_NOT_PENDING,
+          message: 'Scheduled task is not active.',
+          context: { identityId, threadId, taskId, status: task.status },
+          retryable: false,
+          userMessage: 'That reminder is not currently active.',
+        });
+      }
+
+      if (task.scheduleKind === 'recurring') {
+        return { task, alreadySatisfied: false };
+      }
+
+      const [completedTask] = await tx
+        .update(agentScheduledTasks)
+        .set({
+          status: 'completed',
+          lastRunAt: satisfiedAt,
+          completedAt: satisfiedAt,
+          updatedAt: satisfiedAt,
+        })
+        .where(and(eq(agentScheduledTasks.id, taskId), eq(agentScheduledTasks.status, 'active')))
+        .returning();
+
+      if (!completedTask) {
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_OCCURRENCE_NOT_PENDING,
+          message: 'One-time scheduled task could not be completed.',
+          context: { identityId, threadId, taskId },
+          retryable: false,
+          userMessage: 'That reminder is no longer pending.',
+        });
+      }
+
+      return { task: completedTask, alreadySatisfied: false };
+    });
+  }
+
   static async getTaskRunByScheduledFor({
     taskId,
     scheduledFor,
@@ -478,6 +602,14 @@ type CreateScheduledTaskRunInput = {
 type GetScheduledTaskRunByScheduledForInput = {
   taskId: string;
   scheduledFor: Date;
+};
+
+type SatisfyScheduledTaskOccurrenceInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  sourceMessageId?: string;
+  satisfiedAt: Date;
 };
 
 type MarkScheduledTaskRunSentInput = {

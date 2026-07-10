@@ -5,6 +5,7 @@ const mockAgentScheduleService = {
   pauseTask: jest.fn(),
   resumeTask: jest.fn(),
   cancelTask: jest.fn(),
+  completeOccurrence: jest.fn(),
   formatTaskSchedule: jest.fn(),
 };
 const mockLogger = {
@@ -216,6 +217,43 @@ describe('manageScheduleTool', () => {
         allowedSideEffects: undefined,
       },
     });
+  });
+
+  it('marks only the pending recurring occurrence as completed', async () => {
+    mockAgentScheduleService.completeOccurrence.mockResolvedValue({
+      task: createTask({
+        id: 'task-1',
+        title: 'Supplements reminder',
+        prompt: 'Ask whether the user took their supplements.',
+        scheduleKind: 'recurring',
+        nextRunAt: new Date('2026-07-06T18:00:00.000Z'),
+      }),
+      alreadySatisfied: false,
+    });
+
+    const result = await executeManageScheduleTool({
+      action: 'complete_occurrence',
+      taskId: 'task-1',
+    });
+
+    expect(mockAgentScheduleService.completeOccurrence).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      sourceMessageId: 'message-1',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message:
+          'Occurrence completion confirmed: "Supplements reminder" will stay active, but its pending occurrence will not send.',
+        task: expect.objectContaining({
+          title: 'Supplements reminder',
+          status: 'active',
+          scheduleKind: 'recurring',
+        }),
+      }),
+    );
   });
 
   it('updates an existing scheduled task', async () => {

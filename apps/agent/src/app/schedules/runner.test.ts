@@ -460,6 +460,48 @@ describe('AgentScheduleRunner', () => {
     });
   });
 
+  it('silently advances a recurring occurrence already satisfied by the user', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'recurring',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      recurrence: {
+        frequency: 'daily',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        timeOfDay: '19:00',
+      },
+    });
+    const bot = createBot();
+
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue(null);
+    mockAgentScheduleDbService.getTaskRunByScheduledFor.mockResolvedValue({
+      id: 'run-1',
+      taskId: 'task-1',
+      scheduledFor: task.nextRunAt,
+      status: 'satisfied',
+    });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: bot as never,
+      taskId: 'task-1',
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentScheduleDbService.rescheduleTask).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: new Date('2026-07-07T17:00:00.000Z'),
+    });
+    expect(mockAgentService.generate).not.toHaveBeenCalled();
+    expect(bot.initialize).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      taskId: 'task-1',
+      status: 'skipped',
+      reason: 'already_satisfied',
+    });
+  });
+
   it('retries without marking the run failed when post-send bookkeeping fails after delivery', async () => {
     const task = createTask({
       id: 'task-1',

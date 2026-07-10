@@ -13,6 +13,8 @@ import {
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
+const DEFAULT_GOOGLE_SERVICES = ['calendar', 'gmail'] as const;
+
 export const manageGoogleConnectionTool: ManageGoogleConnectionTool = tool({
   description: dedent`
     Connect, disconnect, or inspect Google access for the current user. One Google connection can grant Calendar, Gmail, or both.
@@ -24,7 +26,8 @@ export const manageGoogleConnectionTool: ManageGoogleConnectionTool = tool({
     - The user asks to disconnect Google access completely.
 
     # Usage
-    - For connect, request only the services needed now. Existing granted services are preserved through incremental authorization.
+    - For a normal connect request, omit services so both Calendar and Gmail are connected by default.
+    - Request a specific service only when recovering a missing permission for that service. Existing grants are preserved through incremental authorization.
     - Send the returned connectionUrl to the user and mention that it expires soon.
     - Disconnect revokes the combined Google grant, so it disconnects both Calendar and Gmail.
     - Never say access is connected until this tool or the OAuth callback confirms it.
@@ -53,18 +56,19 @@ export const manageGoogleConnectionTool: ManageGoogleConnectionTool = tool({
           return { ok: false, message: 'Google connection links require a chat thread.' };
         }
 
+        const services = input.services ?? [...DEFAULT_GOOGLE_SERVICES];
         const request = await GoogleConnectionService.createConnectionRequest({
           identityId: context.identityId,
           threadId: context.threadId,
           sourceMessageId: context.sourceMessageId,
-          services: input.services,
+          services,
         });
 
         logger.info(
           {
             identityId: context.identityId,
             threadId: context.threadId,
-            services: input.services,
+            services,
             expiresAt: request.expiresAt,
           },
           '[GOOGLE]: connection link created',

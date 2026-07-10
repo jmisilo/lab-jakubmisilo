@@ -327,6 +327,10 @@ export class AgentScheduleRunner {
       return this.#recoverAlreadySentRun({ task, run: existingRun, scheduledFor, now });
     }
 
+    if (existingRun.status === 'satisfied') {
+      return this.#advanceSatisfiedOccurrence({ task, run: existingRun, scheduledFor, now });
+    }
+
     throw new AppError({
       code: AppErrorCode.SCHEDULE_TASK_EXECUTION_FAILED,
       message: 'Scheduled task run is already claimed and not complete yet.',
@@ -377,6 +381,41 @@ export class AgentScheduleRunner {
     await this.#advanceTaskAfterSuccess({ task, ranAt: now });
 
     return { taskId: task.id, status: 'sent', reason: 'already_sent_recovered' };
+  }
+
+  static async #advanceSatisfiedOccurrence({
+    task,
+    run,
+    scheduledFor,
+    now,
+  }: {
+    task: AgentScheduledTask;
+    run: AgentScheduledTaskRun;
+    scheduledFor: Date;
+    now: Date;
+  }): Promise<ExecuteScheduleTaskResult> {
+    logger.info(
+      {
+        taskId: task.id,
+        runId: run.id,
+        scheduledFor: scheduledFor.toISOString(),
+      },
+      '[AGENT_SCHEDULE]: satisfied occurrence skipped before delivery',
+    );
+
+    if (task.scheduleKind === 'one_time') {
+      await AgentScheduleDbService.completeTask({ taskId: task.id, ranAt: now });
+    } else {
+      const nextRunAt = AgentScheduleService.getNextRunAtForTask({ task, now });
+
+      if (nextRunAt) {
+        await AgentScheduleDbService.rescheduleTask({ taskId: task.id, ranAt: now, nextRunAt });
+      } else {
+        await AgentScheduleDbService.failTask({ taskId: task.id, ranAt: now });
+      }
+    }
+
+    return { taskId: task.id, status: 'skipped', reason: 'already_satisfied' };
   }
 
   static async #generateTaskMessage({
