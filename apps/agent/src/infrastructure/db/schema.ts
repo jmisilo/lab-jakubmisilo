@@ -4,12 +4,14 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
   pgSequence,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -214,6 +216,94 @@ export const agentScheduledTaskRuns = pgTable(
   ],
 );
 
+export const agentNutritionProfiles = pgTable(
+  'agent_nutrition_profiles',
+  {
+    identityId: text('identity_id').primaryKey(),
+    dailyCaloriesGoal: integer('daily_calories_goal').notNull(),
+    dailyProteinGoalGrams: real('daily_protein_goal_grams'),
+    dailyCarbsGoalGrams: real('daily_carbs_goal_grams'),
+    dailyFatGoalGrams: real('daily_fat_goal_grams'),
+    dailyFiberGoalGrams: real('daily_fiber_goal_grams'),
+    sourceMessageId: text('source_message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'agent_nutrition_profiles_calories_goal_check',
+      sql`${table.dailyCaloriesGoal} between 500 and 10000`,
+    ),
+    check(
+      'agent_nutrition_profiles_protein_goal_check',
+      sql`${table.dailyProteinGoalGrams} is null or ${table.dailyProteinGoalGrams} between 0 and 1000`,
+    ),
+    check(
+      'agent_nutrition_profiles_carbs_goal_check',
+      sql`${table.dailyCarbsGoalGrams} is null or ${table.dailyCarbsGoalGrams} between 0 and 2000`,
+    ),
+    check(
+      'agent_nutrition_profiles_fat_goal_check',
+      sql`${table.dailyFatGoalGrams} is null or ${table.dailyFatGoalGrams} between 0 and 1000`,
+    ),
+    check(
+      'agent_nutrition_profiles_fiber_goal_check',
+      sql`${table.dailyFiberGoalGrams} is null or ${table.dailyFiberGoalGrams} between 0 and 500`,
+    ),
+  ],
+);
+
+export const agentNutritionMeals = pgTable(
+  'agent_nutrition_meals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    identityId: text('identity_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    status: text('status', { enum: ['draft', 'confirmed', 'deleted'] })
+      .notNull()
+      .default('draft'),
+    name: text('name').notNull(),
+    items: jsonb('items').$type<NutritionMealItemStorage[]>().notNull(),
+    source: text('source', { enum: ['photo', 'text', 'manual'] }).notNull(),
+    calories: integer('calories').notNull(),
+    caloriesMin: integer('calories_min'),
+    caloriesMax: integer('calories_max'),
+    proteinGrams: real('protein_grams').notNull(),
+    carbsGrams: real('carbs_grams').notNull(),
+    fatGrams: real('fat_grams').notNull(),
+    fiberGrams: real('fiber_grams').notNull(),
+    confidence: text('confidence', { enum: ['high', 'medium', 'low'] }).notNull(),
+    localDate: date('local_date', { mode: 'string' }).notNull(),
+    eatenAt: timestamp('eaten_at', { withTimezone: true }).notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    sourceMessageId: text('source_message_id'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_nutrition_meals_identity_idempotency_idx').on(
+      table.identityId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex('agent_nutrition_meals_active_draft_idx')
+      .on(table.identityId, table.threadId)
+      .where(sql`${table.status} = 'draft'`),
+    index('agent_nutrition_meals_daily_idx').on(table.identityId, table.localDate, table.status),
+    check('agent_nutrition_meals_name_length_check', sql`char_length(${table.name}) <= 180`),
+    check('agent_nutrition_meals_calories_check', sql`${table.calories} between 0 and 20000`),
+    check(
+      'agent_nutrition_meals_calories_range_check',
+      sql`(${table.caloriesMin} is null or ${table.caloriesMin} between 0 and ${table.calories}) and (${table.caloriesMax} is null or ${table.caloriesMax} between ${table.calories} and 20000)`,
+    ),
+    check(
+      'agent_nutrition_meals_macros_check',
+      sql`${table.proteinGrams} between 0 and 2000 and ${table.carbsGrams} between 0 and 3000 and ${table.fatGrams} between 0 and 2000 and ${table.fiberGrams} between 0 and 1000`,
+    ),
+  ],
+);
+
 export const agentGoogleCalendarOauthStates = pgTable(
   'agent_google_calendar_oauth_states',
   {
@@ -381,3 +471,15 @@ export const worldCup2026EventDeliveries = pgTable(
 
 type WorldCup2026EventType = 'kickoff' | 'goal' | 'game-end';
 type AgentKnowledgeSource = 'explicit' | 'implicit' | 'system';
+type NutritionMealItemStorage = {
+  name: string;
+  estimatedGrams: number;
+  preparationMethod: string;
+  calories: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+  fiberGrams: number;
+  confidence: 'high' | 'medium' | 'low';
+  notes?: string;
+};
