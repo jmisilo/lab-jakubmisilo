@@ -9,6 +9,8 @@ export type {
 } from './agent-knowledge-node-closure';
 export type { AgentMemoryChunk, NewAgentMemoryChunk } from './agent-memory-chunk';
 export type { AgentMessage, NewAgentMessage } from './agent-message';
+export type { AgentNutritionMeal, NewAgentNutritionMeal } from './agent-nutrition-meal';
+export type { AgentNutritionProfile, NewAgentNutritionProfile } from './agent-nutrition-profile';
 export type { AgentScheduledTask, NewAgentScheduledTask } from './agent-scheduled-task';
 export type { AgentScheduledTaskRun, NewAgentScheduledTaskRun } from './agent-scheduled-task-run';
 export type {

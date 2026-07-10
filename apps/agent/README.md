@@ -8,6 +8,7 @@ Custom AI agent. Provide Telegram bot credentials to deploy the agent and receiv
 - **Telegram bot** — webhook endpoint for direct messages, mentions, and subscribed threads
 - **Memory** — PostgreSQL-backed chat state and agent memory
 - **Google integration** — Calendar management and strictly read-only Gmail access through one OAuth connection
+- **Nutrition tracking** — photo/text meal estimates, explicit confirmation, and daily calorie/macro progress
 
 ## How The Agent Works
 
@@ -44,10 +45,13 @@ Core modules:
 - `src/app/agent` owns the AI SDK agent, prompt, and tool registry.
 - `src/app/memory` owns short-term transcripts, rolling summaries, and context assembly.
 - `src/app/knowledge` owns durable tree notes, retrieval, and implicit ingestion.
+- `src/app/features/nutrition` owns calorie goals, meal estimation workflows, and daily totals.
 - `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
 - `src/infrastructure/*` wraps AI, DB, QStash, logging, and app errors.
 
 Incoming attachments are ephemeral. The agent accepts up to three files per message, with a 7 MB limit per file. JPEG, PNG, and WebP images are limited to 40 decoded megapixels, resized within 1536x1536, and stripped of metadata. PDFs, videos, and other files are passed through as current-turn model file inputs. Original attachment bytes are not persisted by the application.
+
+Nutrition estimates follow `photo/text -> draft -> explicit confirmation -> daily totals`. PostgreSQL is the source of truth for goals and confirmed meals; conversational memory is not used as the nutrition ledger. Corrections replace the structured meal estimate, and deletion is soft so totals remain auditable.
 
 Scheduling states:
 
