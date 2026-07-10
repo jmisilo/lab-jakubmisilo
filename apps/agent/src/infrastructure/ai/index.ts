@@ -4,7 +4,7 @@ import { openai } from '@ai-sdk/openai';
 import { embed, generateText, Output } from 'ai';
 
 export class AIService {
-  static readonly model: Parameters<typeof openai>[0] = 'gpt-5.6-luna';
+  static readonly model: Parameters<typeof openai>[0] = 'gpt-5.4-mini';
 
   static readonly embeddingModel: Parameters<typeof openai.embedding>[0] = 'text-embedding-3-small';
   static readonly embeddingDimensions = 1536;
