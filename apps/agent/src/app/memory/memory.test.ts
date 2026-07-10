@@ -163,6 +163,9 @@ describe('AgentMemoryService', () => {
       expect(prompt).toContain('# Discard');
       expect(prompt).toContain('Raw tool payloads');
       expect(prompt).toContain('# Conversation Transcript');
+      expect(prompt).toContain(
+        '[2026-01-01 01:00 Europe/Warsaw] user: First durable decision: keep domain logic in services.',
+      );
       expect(prompt).toContain('First durable decision: keep domain logic in services.');
       expect(mockAgentMemoryDbService.createMemoryChunk).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -399,6 +402,39 @@ describe('AgentContextService', () => {
       { role: 'user', content: 'First user message.' },
       { role: 'assistant', content: 'First assistant reply.' },
       { role: 'user', content: 'Latest user message.' },
+    ]);
+  });
+
+  it('adds local timestamps to short-term transcript messages when available', async () => {
+    mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([]);
+
+    const context = await AgentContextService.buildContext({
+      identityId: 'identity-1',
+      threadId: 'thread-1',
+      timeZone: 'Europe/Warsaw',
+      shortTermMemory: [
+        {
+          role: 'user',
+          text: 'today my tasks are x, y, and z',
+          timestamp: Date.parse('2026-07-09T07:00:00.000Z'),
+        },
+        {
+          role: 'user',
+          text: 'i finished x',
+          timestamp: Date.parse('2026-07-09T12:30:00.000Z'),
+        },
+      ],
+    });
+
+    expect(context).toEqual([
+      {
+        role: 'user',
+        content: '[2026-07-09 09:00 Europe/Warsaw] today my tasks are x, y, and z',
+      },
+      {
+        role: 'user',
+        content: '[2026-07-09 14:30 Europe/Warsaw] i finished x',
+      },
     ]);
   });
 

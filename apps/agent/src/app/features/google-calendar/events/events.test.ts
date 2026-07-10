@@ -9,8 +9,8 @@ const mockGoogleCalendarDbService = {
   createActionAudit: jest.fn(),
 };
 
-jest.mock('@/app/features/google-calendar/connection', () => ({
-  GoogleCalendarConnectionService: mockGoogleCalendarConnectionService,
+jest.mock('@/app/features/google/connection', () => ({
+  GoogleConnectionService: mockGoogleCalendarConnectionService,
 }));
 
 jest.mock('@/infrastructure/google/calendar', () => ({

@@ -15,6 +15,7 @@ const mockAgentService = {
 };
 const mockAgentMemoryService = {
   buildContext: jest.fn(),
+  getRecentMessages: jest.fn(),
   recordMessage: jest.fn(),
 };
 const mockLogger = {
@@ -109,6 +110,7 @@ describe('AgentScheduleRunner', () => {
     expect(mockAgentMemoryService.buildContext).toHaveBeenCalledWith({
       identityId: 'identity-1',
       threadId: 'telegram:1',
+      timeZone: 'Europe/Warsaw',
       shortTermMemory: [
         {
           role: 'user',
@@ -117,6 +119,7 @@ describe('AgentScheduleRunner', () => {
         {
           role: 'user',
           text: task.prompt,
+          timestamp: expect.any(Number),
         },
       ],
     });
@@ -168,6 +171,58 @@ describe('AgentScheduleRunner', () => {
       taskId: 'task-1',
       status: 'sent',
     });
+  });
+
+  it('falls back to app memory when Chat SDK transcript retrieval fails', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const bot = createBot();
+    const transcriptError = new Error('state adapter unavailable');
+    const fallbackMessages = [
+      {
+        role: 'user' as const,
+        text: 'I finished task X yesterday.',
+        timestamp: Date.parse('2026-07-06T12:00:00.000Z'),
+      },
+    ];
+
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    bot.transcripts.list.mockRejectedValue(transcriptError);
+    mockAgentMemoryService.getRecentMessages.mockResolvedValue(fallbackMessages);
+    mockAgentService.generate.mockResolvedValue({ text: 'Here is the current reminder.' });
+
+    await AgentScheduleRunner.executeTask({
+      bot: bot as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentMemoryService.getRecentMessages).toHaveBeenCalledWith({
+      identityId: task.identityId,
+      threadId: task.threadId,
+      limit: 200,
+    });
+    expect(mockAgentMemoryService.buildContext).toHaveBeenCalledWith({
+      identityId: task.identityId,
+      threadId: task.threadId,
+      timeZone: task.timeZone,
+      shortTermMemory: [
+        ...fallbackMessages,
+        {
+          role: 'user',
+          text: task.prompt,
+          timestamp: expect.any(Number),
+        },
+      ],
+    });
+    expect(mockAgentService.generate).toHaveBeenCalled();
   });
 
   it('passes explicit scheduled task side effects into scheduled agent execution', async () => {

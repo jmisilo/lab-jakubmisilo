@@ -9,7 +9,7 @@ Use this skill when the user asks about calendar events, availability, free/busy
 
 ## Tool Split
 
-Use `manage-google-calendar-connection` for connection lifecycle only:
+Use `manage-google-connection` for the shared Google connection lifecycle:
 
 - Connect Calendar.
 - Check connection status.

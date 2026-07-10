@@ -314,8 +314,12 @@ export class GoogleCalendarApiClient {
   }
 
   static #getFailureCode(status: number): AppErrorCode {
-    if (status === 401 || status === 403) {
-      return AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID;
+    if (status === 401) {
+      return AppErrorCode.GOOGLE_TOKEN_INVALID;
+    }
+
+    if (status === 403) {
+      return AppErrorCode.GOOGLE_PERMISSION_REQUIRED;
     }
 
     if (status === 404) {
@@ -326,8 +330,12 @@ export class GoogleCalendarApiClient {
   }
 
   static #getFailureUserMessage(status: number) {
-    if (status === 401 || status === 403) {
-      return 'Google Calendar access expired or was revoked. Please reconnect Calendar.';
+    if (status === 401) {
+      return 'Google access expired or was revoked. Please reconnect.';
+    }
+
+    if (status === 403) {
+      return 'Google Calendar permission is missing. Please reconnect Google.';
     }
 
     if (status === 404) {

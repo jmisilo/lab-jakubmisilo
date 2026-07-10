@@ -46,10 +46,13 @@ export class AgentService {
       'manage-knowledge': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
-      'manage-google-calendar-connection': {
+      'manage-google-connection': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
       'read-calendar': {
+        identityId: UNAVAILABLE_TOOL_CONTEXT,
+      },
+      'read-gmail': {
         identityId: UNAVAILABLE_TOOL_CONTEXT,
       },
       'manage-calendar': {
@@ -105,13 +108,19 @@ export class AgentService {
             identityId,
             sourceMessageId: options?.sourceMessageId,
           },
-          'manage-google-calendar-connection': {
+          'manage-google-connection': {
             identityId,
             threadId: options?.threadId,
             sourceMessageId: options?.sourceMessageId,
             mode: options?.mode,
           },
           'read-calendar': {
+            identityId,
+            threadId: options?.threadId,
+            sourceMessageId: options?.sourceMessageId,
+            mode: options?.mode,
+          },
+          'read-gmail': {
             identityId,
             threadId: options?.threadId,
             sourceMessageId: options?.sourceMessageId,
@@ -237,6 +246,7 @@ export class AgentService {
     if (options?.identityId) {
       activeTools.push('read-knowledge');
       activeTools.push('read-calendar');
+      activeTools.push('read-gmail');
     }
 
     if (options?.mode === 'scheduled_task') {
@@ -248,7 +258,7 @@ export class AgentService {
     }
 
     if (options?.identityId && options.threadId) {
-      activeTools.push('manage-google-calendar-connection');
+      activeTools.push('manage-google-connection');
       activeTools.push('manage-calendar');
       activeTools.push('manage-schedule');
       activeTools.push('manage-knowledge');

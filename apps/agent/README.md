@@ -7,6 +7,7 @@ Custom AI agent. Provide Telegram bot credentials to deploy the agent and receiv
 - **Local TUI** — terminal chat UI for testing the agent locally
 - **Telegram bot** — webhook endpoint for direct messages, mentions, and subscribed threads
 - **Memory** — PostgreSQL-backed chat state and agent memory
+- **Google integration** — Calendar management and strictly read-only Gmail access through one OAuth connection
 
 ## How The Agent Works
 
@@ -181,16 +182,18 @@ Required:
 - `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
 - `QSTASH_TOKEN` — required for creating QStash one-time messages and recurring schedules
 - `AGENT_PUBLIC_URL` — stable public base URL used as the QStash scheduled-task destination, for example `https://agent.example.com`
-- `GOOGLE_OAUTH_CLIENT_ID` — Google OAuth web application client id for Calendar integration
+- `GOOGLE_OAUTH_CLIENT_ID` — Google OAuth web application client id for Calendar and Gmail integration
 - `GOOGLE_OAUTH_CLIENT_SECRET` — Google OAuth web application client secret
-- `GOOGLE_OAUTH_REDIRECT_URI` — exact Google OAuth redirect URI, for example `https://agent.lab.jakubmisilo.com/links/google-calendar/callback`
-- `GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY` — base64-encoded 32-byte key used to encrypt stored Google refresh tokens
+- `GOOGLE_OAUTH_REDIRECT_URI` — exact Google OAuth redirect URI, for example `https://agent.lab.jakubmisilo.com/links/google/callback`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY` — base64-encoded 32-byte key used to encrypt stored Google refresh tokens
 
-Generate the Calendar token encryption key with:
+Generate the Google token encryption key with:
 
 ```sh
 openssl rand -base64 32
 ```
+
+Enable both Google Calendar API and Gmail API in the same Google Cloud project. Configure the OAuth consent screen with the Calendar scopes used by the app and `https://www.googleapis.com/auth/gmail.readonly`. Use publishing status `In production` for durable refresh tokens; a personal unverified app will still show Google's warning screen.
 
 Add the optional env vars the same way when those integrations are enabled.
 

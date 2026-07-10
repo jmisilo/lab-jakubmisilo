@@ -1,49 +1,53 @@
+import type { GoogleService } from '@/app/features/google/types';
+
 import { createHash, randomBytes } from 'node:crypto';
 
 import { UrlComposer } from '@labjm/utilities/url-composer';
 
 import {
-  GOOGLE_CALENDAR_CONNECTION_EXPIRES_IN_MINUTES,
-  GOOGLE_CALENDAR_SCOPES,
-} from '@/app/features/google-calendar/schemas';
+  GOOGLE_CONNECTION_EXPIRES_IN_MINUTES,
+  GOOGLE_SERVICE_SCOPES,
+} from '@/app/features/google/schemas';
 import { GoogleCalendarDbService } from '@/infrastructure/db/services/google-calendar';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { GoogleOAuthService } from '@/infrastructure/google/oauth';
-import { GoogleCalendarTokenEncryptionService } from '@/infrastructure/google/token-crypto';
+import { GoogleTokenEncryptionService } from '@/infrastructure/google/token-crypto';
 import { logger } from '@/infrastructure/logger';
 
 const OAUTH_STATE_BYTES = 32;
 
-export class GoogleCalendarConnectionService {
+export class GoogleConnectionService {
   static async createConnectionRequest({
     identityId,
     threadId,
     sourceMessageId,
+    services,
     now = new Date(),
   }: CreateConnectionRequestInput) {
     this.#assertConfigured();
 
     const requestId = this.#createOpaqueToken();
-    const expiresAt = new Date(
-      now.getTime() + GOOGLE_CALENDAR_CONNECTION_EXPIRES_IN_MINUTES * 60 * 1000,
-    );
+    const expiresAt = new Date(now.getTime() + GOOGLE_CONNECTION_EXPIRES_IN_MINUTES * 60 * 1000);
+    const existingConnection = await GoogleCalendarDbService.getActiveConnection({ identityId });
+    const requestedScopes = this.#getRequiredScopes(services);
+    const scopes = [...new Set([...(existingConnection?.grantedScopes ?? []), ...requestedScopes])];
     const state = await GoogleCalendarDbService.createOauthState({
       requestId,
       stateHash: this.#hashState(requestId),
       identityId,
       threadId,
       sourceMessageId,
-      scopes: [...GOOGLE_CALENDAR_SCOPES],
+      scopes,
       expiresAt,
     });
 
     if (!state) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
-        message: 'Google Calendar OAuth state could not be created.',
-        context: { identityId, threadId },
+        code: AppErrorCode.GOOGLE_OAUTH_INVALID,
+        message: 'Google OAuth state could not be created.',
+        context: { identityId, threadId, services },
         retryable: true,
-        userMessage: 'I could not create a Calendar connection link. Please try again.',
+        userMessage: 'I could not create a Google connection link. Please try again.',
       });
     }
 
@@ -59,6 +63,7 @@ export class GoogleCalendarConnectionService {
 
     return {
       connected: Boolean(connection),
+      connectedServices: this.#getConnectedServices(connection?.grantedScopes ?? []),
       googleAccountEmail: connection?.googleAccountEmail ?? undefined,
       grantedScopes: connection?.grantedScopes ?? [],
       connectedAt: connection?.connectedAt,
@@ -77,11 +82,11 @@ export class GoogleCalendarConnectionService {
 
     if (!state) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_EXPIRED,
-        message: 'Google Calendar OAuth request was not found or expired.',
+        code: AppErrorCode.GOOGLE_OAUTH_EXPIRED,
+        message: 'Google OAuth request was not found or expired.',
         context: { requestId },
         retryable: false,
-        userMessage: 'That Calendar connection link expired. Ask me to connect Calendar again.',
+        userMessage: 'That Google connection link expired. Ask me to connect again.',
       });
     }
 
@@ -108,6 +113,7 @@ export class GoogleCalendarConnectionService {
       identityId: expiredState.identityId,
       threadId: expiredState.threadId,
       sourceMessageId: expiredState.sourceMessageId ?? undefined,
+      services: this.#getConnectedServices(expiredState.scopes),
       now,
     });
 
@@ -129,10 +135,10 @@ export class GoogleCalendarConnectionService {
 
     if (!oauthState) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_EXPIRED,
-        message: 'Google Calendar OAuth state was not found, expired, or already consumed.',
+        code: AppErrorCode.GOOGLE_OAUTH_EXPIRED,
+        message: 'Google OAuth state was not found, expired, or already consumed.',
         retryable: false,
-        userMessage: 'That Calendar connection link expired. Ask me to connect Calendar again.',
+        userMessage: 'That Google connection link expired. Ask me to connect again.',
       });
     }
 
@@ -140,12 +146,11 @@ export class GoogleCalendarConnectionService {
 
     if (!token.refreshToken) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
+        code: AppErrorCode.GOOGLE_OAUTH_INVALID,
         message: 'Google OAuth token response did not include a refresh token.',
         context: { identityId: oauthState.identityId },
         retryable: false,
-        userMessage:
-          'Google did not return long-term Calendar access. Please try connecting again.',
+        userMessage: 'Google did not return long-term access. Please try connecting again.',
       });
     }
 
@@ -155,7 +160,7 @@ export class GoogleCalendarConnectionService {
       identityId: oauthState.identityId,
     });
 
-    const encryptedToken = GoogleCalendarTokenEncryptionService.encryptToken(token.refreshToken);
+    const encryptedToken = GoogleTokenEncryptionService.encryptToken(token.refreshToken);
     const connection = await GoogleCalendarDbService.replaceActiveConnection({
       identityId: oauthState.identityId,
       status: 'active',
@@ -172,11 +177,11 @@ export class GoogleCalendarConnectionService {
 
     if (!connection) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
-        message: 'Google Calendar connection could not be stored.',
+        code: AppErrorCode.GOOGLE_OAUTH_INVALID,
+        message: 'Google connection could not be stored.',
         context: { identityId: oauthState.identityId },
         retryable: true,
-        userMessage: 'Google Calendar connected, but I could not save the connection.',
+        userMessage: 'Google connected, but I could not save the connection.',
       });
     }
 
@@ -195,7 +200,7 @@ export class GoogleCalendarConnectionService {
       return { disconnected: false, revocationOk: true };
     }
 
-    const refreshToken = GoogleCalendarTokenEncryptionService.decryptToken(connection);
+    const refreshToken = GoogleTokenEncryptionService.decryptToken(connection);
     let revocationOk = true;
 
     try {
@@ -209,7 +214,7 @@ export class GoogleCalendarConnectionService {
           error,
           safeError: ErrorService.toSafeLog(error),
         },
-        '[GOOGLE_CALENDAR]: token revocation failed',
+        '[GOOGLE]: token revocation failed',
       );
     }
 
@@ -221,21 +226,27 @@ export class GoogleCalendarConnectionService {
     return { disconnected: true, revocationOk };
   }
 
-  static async getAccessToken({ identityId }: { identityId: string }) {
+  static async getAccessToken({ identityId, service }: GetAccessTokenInput) {
     const connection = await GoogleCalendarDbService.getActiveConnection({ identityId });
 
     if (!connection) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONNECTION_REQUIRED,
-        message: 'Google Calendar connection is required.',
-        context: { identityId },
+        code: AppErrorCode.GOOGLE_CONNECTION_REQUIRED,
+        message: 'Google connection is required.',
+        context: { identityId, service },
         retryable: false,
-        userMessage: 'Google Calendar is not connected yet. Ask me to connect Calendar first.',
+        userMessage: `Google ${this.#getServiceName(service)} is not connected yet.`,
       });
     }
 
+    this.#assertRequiredScopes({
+      grantedScopes: connection.grantedScopes,
+      requiredScopes: this.#getRequiredScopes([service]),
+      identityId,
+    });
+
     try {
-      const refreshToken = GoogleCalendarTokenEncryptionService.decryptToken(connection);
+      const refreshToken = GoogleTokenEncryptionService.decryptToken(connection);
       const accessToken = await GoogleOAuthService.refreshAccessToken({ refreshToken });
 
       await GoogleCalendarDbService.touchConnectionLastUsed({
@@ -248,7 +259,7 @@ export class GoogleCalendarConnectionService {
       if (
         AppError.is(error) &&
         !error.retryable &&
-        error.code === AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID
+        error.code === AppErrorCode.GOOGLE_TOKEN_INVALID
       ) {
         await GoogleCalendarDbService.markConnectionInvalid({
           identityId,
@@ -274,26 +285,26 @@ export class GoogleCalendarConnectionService {
 
     if (missingScopes.length > 0) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
-        message: 'Google Calendar OAuth response did not include required scopes.',
+        code: AppErrorCode.GOOGLE_PERMISSION_REQUIRED,
+        message: 'Google OAuth response did not include required scopes.',
         context: {
           identityId,
           missingScopes,
         },
         retryable: false,
-        userMessage: 'Google Calendar access was missing required permissions. Please reconnect.',
+        userMessage: 'Google access is missing the required permission. Please reconnect.',
       });
     }
   }
 
   static #assertConfigured() {
     GoogleOAuthService.assertConfigured();
-    GoogleCalendarTokenEncryptionService.assertConfigured();
+    GoogleTokenEncryptionService.assertConfigured();
   }
 
   static #createConnectionUrl({ requestId }: { requestId: string }) {
     return this.#getPublicUrlComposer().compose({
-      pathSegments: ['/links', '/google-calendar', '/connect', requestId],
+      pathSegments: ['/links', '/google', '/connect', requestId],
     });
   }
 
@@ -317,10 +328,10 @@ export class GoogleCalendarConnectionService {
     }
 
     throw new AppError({
-      code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
-      message: 'Agent public URL could not be resolved for Google Calendar links.',
+      code: AppErrorCode.GOOGLE_OAUTH_INVALID,
+      message: 'Agent public URL could not be resolved for Google links.',
       retryable: false,
-      userMessage: 'Google Calendar is not configured yet.',
+      userMessage: 'Google is not configured yet.',
     });
   }
 
@@ -338,13 +349,35 @@ export class GoogleCalendarConnectionService {
   static #hashState(state: string) {
     return createHash('sha256').update(state).digest('hex');
   }
+
+  static #getRequiredScopes(services: readonly GoogleService[]) {
+    return services.flatMap((service) => GOOGLE_SERVICE_SCOPES[service]);
+  }
+
+  static #getConnectedServices(grantedScopes: readonly string[]): GoogleService[] {
+    const granted = new Set(grantedScopes);
+
+    return (Object.keys(GOOGLE_SERVICE_SCOPES) as GoogleService[]).filter((service) =>
+      GOOGLE_SERVICE_SCOPES[service].every((scope) => granted.has(scope)),
+    );
+  }
+
+  static #getServiceName(service: GoogleService) {
+    return service === 'calendar' ? 'Calendar' : 'Gmail';
+  }
 }
 
 type CreateConnectionRequestInput = {
   identityId: string;
   threadId: string;
   sourceMessageId?: string;
+  services: GoogleService[];
   now?: Date;
+};
+
+type GetAccessTokenInput = {
+  identityId: string;
+  service: GoogleService;
 };
 
 type CreateAuthorizationUrlInput = {

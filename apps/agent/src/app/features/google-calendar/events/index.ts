@@ -13,7 +13,7 @@ import type { z } from 'zod';
 
 import { randomUUID } from 'node:crypto';
 
-import { GoogleCalendarConnectionService } from '@/app/features/google-calendar/connection';
+import { GoogleConnectionService } from '@/app/features/google/connection';
 import { GoogleCalendarDbService } from '@/infrastructure/db/services/google-calendar';
 import { AppError, ErrorService } from '@/infrastructure/errors';
 import { GoogleCalendarApiClient } from '@/infrastructure/google/calendar';
@@ -21,7 +21,10 @@ import { logger } from '@/infrastructure/logger';
 
 export class GoogleCalendarEventService {
   static async listCalendars({ identityId, includeReadOnly = false }: ListCalendarsInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
     const calendars = await GoogleCalendarApiClient.listCalendars({
       accessToken,
       minAccessRole: includeReadOnly ? 'freeBusyReader' : 'writer',
@@ -40,7 +43,10 @@ export class GoogleCalendarEventService {
     timeZone,
     maxResults,
   }: ListEventsInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
     const calendar = await this.#resolveCalendar({
       identityId,
       accessToken,
@@ -60,7 +66,10 @@ export class GoogleCalendarEventService {
   }
 
   static async getEvent({ identityId, calendarId, eventId }: GetEventInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
 
     return GoogleCalendarApiClient.getEvent({ accessToken, calendarId, eventId });
   }
@@ -72,7 +81,10 @@ export class GoogleCalendarEventService {
     timeMax,
     timeZone,
   }: QueryFreeBusyInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
     const resolvedCalendarIds =
       calendarIds && calendarIds.length > 0
         ? calendarIds
@@ -95,7 +107,10 @@ export class GoogleCalendarEventService {
     calendarName,
     event,
   }: CreateEventInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
     const calendar = await this.#resolveCalendar({
       identityId,
       accessToken,
@@ -146,7 +161,10 @@ export class GoogleCalendarEventService {
     eventId,
     updates,
   }: UpdateEventInput) {
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
     const googleEvent = this.#toGoogleEventPatch(updates);
 
     if (Object.keys(googleEvent).length === 0) {
@@ -214,7 +232,10 @@ export class GoogleCalendarEventService {
       });
     }
 
-    const accessToken = await GoogleCalendarConnectionService.getAccessToken({ identityId });
+    const accessToken = await GoogleConnectionService.getAccessToken({
+      identityId,
+      service: 'calendar',
+    });
 
     try {
       await GoogleCalendarApiClient.deleteEvent({

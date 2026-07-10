@@ -50,8 +50,8 @@ export class GoogleOAuthService {
         code,
         redirect_uri: this.getRedirectUri(),
       },
-      failureCode: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
-      failureUserMessage: 'Google Calendar connection failed. Please try again.',
+      failureCode: AppErrorCode.GOOGLE_OAUTH_INVALID,
+      failureUserMessage: 'Google connection failed. Please try again.',
     });
   }
 
@@ -61,9 +61,8 @@ export class GoogleOAuthService {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
       },
-      failureCode: AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID,
-      failureUserMessage:
-        'Google Calendar access expired or was revoked. Please reconnect Calendar.',
+      failureCode: AppErrorCode.GOOGLE_TOKEN_INVALID,
+      failureUserMessage: 'Google access expired or was revoked. Please reconnect.',
     });
 
     return token.accessToken;
@@ -86,11 +85,11 @@ export class GoogleOAuthService {
     }
 
     throw new AppError({
-      code: AppErrorCode.GOOGLE_CALENDAR_OAUTH_INVALID,
+      code: AppErrorCode.GOOGLE_OAUTH_INVALID,
       message: 'Google OAuth token revocation failed.',
       context: { status: response.status },
       retryable: response.status >= 500,
-      userMessage: 'Google Calendar was disconnected locally, but Google token revocation failed.',
+      userMessage: 'Google was disconnected locally, but token revocation failed.',
     });
   }
 
@@ -99,10 +98,10 @@ export class GoogleOAuthService {
 
     if (!redirectUri) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
         message: 'GOOGLE_OAUTH_REDIRECT_URI is not configured.',
         retryable: false,
-        userMessage: 'Google Calendar is not configured yet.',
+        userMessage: 'Google is not configured yet.',
       });
     }
 
@@ -177,12 +176,12 @@ export class GoogleOAuthService {
       });
     } catch (error) {
       throw AppError.timeout({
-        code: AppErrorCode.GOOGLE_CALENDAR_API_TIMEOUT,
+        code: AppErrorCode.GOOGLE_API_TIMEOUT,
         message: 'Google OAuth request timed out.',
         cause: error,
         timeoutMs: GOOGLE_OAUTH_TIMEOUT_MS,
         retryable: true,
-        userMessage: 'Google Calendar is temporarily unavailable. Please try again.',
+        userMessage: 'Google is temporarily unavailable. Please try again.',
       });
     } finally {
       clearTimeout(timeout);
@@ -198,10 +197,10 @@ export class GoogleOAuthService {
 
     if (!clientId) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
         message: 'GOOGLE_OAUTH_CLIENT_ID is not configured.',
         retryable: false,
-        userMessage: 'Google Calendar is not configured yet.',
+        userMessage: 'Google is not configured yet.',
       });
     }
 
@@ -213,10 +212,10 @@ export class GoogleOAuthService {
 
     if (!clientSecret) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
         message: 'GOOGLE_OAUTH_CLIENT_SECRET is not configured.',
         retryable: false,
-        userMessage: 'Google Calendar is not configured yet.',
+        userMessage: 'Google is not configured yet.',
       });
     }
 

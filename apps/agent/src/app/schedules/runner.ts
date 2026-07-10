@@ -1,3 +1,4 @@
+import type { ShortTermMemory } from '@/app/memory/types';
 import type {
   ExecuteScheduleTaskInput,
   ExecuteScheduleTaskResult,
@@ -383,34 +384,68 @@ export class AgentScheduleRunner {
     task,
   }: Pick<ExecuteScheduleTaskInput, 'bot'> & { task: AgentScheduledTask }) {
     const allowedSideEffects = this.#getAllowedSideEffects(task);
-    const shortTermMemory = await bot.transcripts
-      .list({
+    let shortTermMemory: ShortTermMemory[];
+
+    try {
+      shortTermMemory = await bot.transcripts.list({
         userKey: task.identityId,
         threadId: task.threadId,
         limit: AgentContextService.contextSourceMessageLimit,
-      })
-      .catch((error: unknown) => {
+      });
+    } catch (error) {
+      logger.warn(
+        {
+          taskId: task.id,
+          identityId: task.identityId,
+          threadId: task.threadId,
+          error,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[AGENT_SCHEDULE]: transcript context unavailable',
+      );
+
+      try {
+        shortTermMemory = await AgentMemoryService.getRecentMessages({
+          identityId: task.identityId,
+          threadId: task.threadId,
+          limit: AgentContextService.contextSourceMessageLimit,
+        });
+
+        logger.info(
+          {
+            taskId: task.id,
+            identityId: task.identityId,
+            threadId: task.threadId,
+            fallbackMessageCount: shortTermMemory.length,
+          },
+          '[AGENT_SCHEDULE]: application transcript fallback used',
+        );
+      } catch (fallbackError) {
         logger.warn(
           {
             taskId: task.id,
             identityId: task.identityId,
             threadId: task.threadId,
-            error,
-            safeError: ErrorService.toSafeLog(error),
+            error: fallbackError,
+            safeError: ErrorService.toSafeLog(fallbackError),
           },
-          '[AGENT_SCHEDULE]: transcript context unavailable',
+          '[AGENT_SCHEDULE]: application transcript fallback unavailable',
         );
 
-        return [];
-      });
+        shortTermMemory = [];
+      }
+    }
+
     const contextMessages = await AgentMemoryService.buildContext({
       identityId: task.identityId,
       threadId: task.threadId,
+      timeZone: task.timeZone,
       shortTermMemory: [
         ...shortTermMemory,
         {
           role: 'user',
           text: task.prompt,
+          timestamp: Date.now(),
         },
       ],
     });
@@ -443,6 +478,7 @@ export class AgentScheduleRunner {
 
             Relevant recent chat, compressed memory, durable knowledge, and current runtime time may already be included before this message.
             Use that context when the task depends on the user's plans, preferences, location, projects, todo items, or recent conversation.
+            For todo and planning tasks, use only tasks relevant to the current local date. Treat the latest user statements as authoritative over older assistant-generated lists. Do not carry one-time tasks into a new date unless the user explicitly deferred them.
             If the context does not contain enough information, ask a short useful follow-up instead of pretending.
 
             # Tool Use
