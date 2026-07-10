@@ -40,6 +40,13 @@ export type CancelScheduleTaskInput = {
   reason?: string;
 };
 
+export type CompleteScheduleOccurrenceInput = {
+  identityId: string;
+  threadId: string;
+  taskId: string;
+  sourceMessageId?: string;
+};
+
 export type UpdateScheduleTaskInput = {
   identityId: string;
   threadId: string;

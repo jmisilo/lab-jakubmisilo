@@ -19,7 +19,7 @@ const PROMPT_PREVIEW_CHARACTER_LIMIT = 500;
 
 export const manageScheduleTool: ManageScheduleTool = tool({
   description: dedent`
-    Create, list, update, pause, resume, or cancel scheduled AI tasks for the current user and chat thread.
+    Create, list, update, complete a pending occurrence, pause, resume, or cancel scheduled AI tasks for the current user and chat thread.
 
     # Core Behavior
     - A scheduled task stores a durable prompt.
@@ -28,7 +28,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - Current limits: 10 active one-time schedules and 10 active recurring schedules per user.
     - Current QStash plan: free. One-time schedules can be created at most 7 days ahead.
     - Recurring schedules must not run more often than once per hour. The current recurrence schema supports daily, weekdays, and weekly schedules.
-    - A create/list/update/pause/resume/cancel action is confirmed only when this tool returns ok=true. If ok=false, tell the user it was not completed and do not imply it was scheduled, changed, paused, resumed, or cancelled.
+    - An action is confirmed only when this tool returns ok=true. If ok=false, do not imply it succeeded.
 
     # When To Use
     - The user asks to remind, notify, ping, send a future message, run a background task, or create a recurring report.
@@ -37,6 +37,7 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - Requests that combine an event and reminder, such as "I have tennis at 19:00, remind me 30 minutes before"; use this tool for the reminder and Calendar tools for the event when event details are clear.
     - The user asks what tasks/reminders are scheduled.
     - The user asks to cancel, edit, move, reschedule, pause, or resume one.
+    - The user clearly reports that the exact pending reminder outcome is already done, so that occurrence is no longer useful.
     - If the user identifies a task naturally ("the 9am one", "the shopping reminder"), call list first when the task id is not already visible in context.
 
     # When Not To Use
@@ -44,6 +45,13 @@ export const manageScheduleTool: ManageScheduleTool = tool({
     - The user is asking about an existing World Cup notification subscription; use the World Cup subscription tool for those.
     - The user wants an immediate answer or immediate web search.
     - The requested time is ambiguous enough that the wrong schedule would be harmful; ask a brief clarification.
+
+    # Occurrence Completion Safety
+    - Use complete_occurrence only for explicit completion language such as "done", "I took them", "already handled", or "I bought it".
+    - Do not use it for intentions, future plans, questions, negated completion, habits, or historical completion unrelated to the pending occurrence.
+    - Resolve the exact active task first. If more than one task plausibly matches, ask which one instead of calling complete_occurrence.
+    - For recurring tasks, complete_occurrence suppresses only today's pending occurrence and keeps future recurrence active.
+    - Never use cancel when the user completed only the current occurrence of a recurring task.
 
     # Time Rules
     - Use the user's timezone from runtime context unless durable knowledge clearly says another timezone should be used.
@@ -173,6 +181,36 @@ export const manageScheduleTool: ManageScheduleTool = tool({
           ok: true,
           message: `Update confirmed: "${task.title}" is set for ${AgentScheduleService.formatTaskSchedule(task)}`,
           task: toToolTask(task),
+        };
+      }
+
+      if (input.action === 'complete_occurrence') {
+        const result = await AgentScheduleService.completeOccurrence({
+          identityId: context.identityId,
+          threadId: context.threadId,
+          taskId: input.taskId,
+          sourceMessageId: context.sourceMessageId,
+        });
+        const message =
+          result.task.scheduleKind === 'recurring'
+            ? `Occurrence completion confirmed: "${result.task.title}" will stay active, but its pending occurrence will not send.`
+            : `Completion confirmed: "${result.task.title}" will not send.`;
+
+        logger.info(
+          {
+            identityId: context.identityId,
+            threadId: context.threadId,
+            taskId: result.task.id,
+            scheduleKind: result.task.scheduleKind,
+            alreadySatisfied: result.alreadySatisfied,
+          },
+          '[AGENT_SCHEDULE]: occurrence completed before delivery',
+        );
+
+        return {
+          ok: true,
+          message,
+          task: toToolTask(result.task),
         };
       }
 

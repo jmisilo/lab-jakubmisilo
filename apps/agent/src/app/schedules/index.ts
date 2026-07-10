@@ -1,5 +1,6 @@
 import type {
   CancelScheduleTaskInput,
+  CompleteScheduleOccurrenceInput,
   CreateScheduleTaskInput,
   ListScheduleTasksInput,
   PauseScheduleTaskInput,
@@ -241,6 +242,88 @@ export class AgentScheduleService {
     });
 
     return task;
+  }
+
+  static async completeOccurrence({
+    identityId,
+    threadId,
+    taskId,
+    sourceMessageId,
+  }: CompleteScheduleOccurrenceInput) {
+    const satisfiedAt = new Date();
+    const task = await AgentScheduleDbService.getTaskForUser({
+      identityId,
+      threadId,
+      taskId,
+    });
+
+    if (!task || task.status !== 'active') {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_OCCURRENCE_NOT_PENDING,
+        message: 'Scheduled task has no active pending occurrence.',
+        context: { identityId, threadId, taskId, status: task?.status },
+        retryable: false,
+        userMessage: 'That reminder is not currently pending.',
+      });
+    }
+
+    if (
+      task.scheduleKind === 'recurring' &&
+      !this.#isSameLocalDate({ left: task.nextRunAt, right: satisfiedAt, timeZone: task.timeZone })
+    ) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_OCCURRENCE_NOT_PENDING,
+        message: 'Recurring task has no pending occurrence on the current local date.',
+        context: {
+          identityId,
+          threadId,
+          taskId,
+          nextRunAt: task.nextRunAt.toISOString(),
+          satisfiedAt: satisfiedAt.toISOString(),
+          timeZone: task.timeZone,
+        },
+        retryable: false,
+        userMessage: 'I could not match that completion to a pending reminder for today.',
+      });
+    }
+
+    const result = await AgentScheduleDbService.satisfyTaskOccurrence({
+      identityId,
+      threadId,
+      taskId,
+      sourceMessageId,
+      satisfiedAt,
+    });
+
+    if (result.task.scheduleKind === 'one_time') {
+      await this.#cancelExternalTrigger({
+        taskId,
+        qstashMessageId: result.task.qstashMessageId,
+        qstashScheduleId: null,
+        logMessage: '[AGENT_SCHEDULE]: satisfied one-time trigger cancellation failed',
+      });
+    }
+
+    return result;
+  }
+
+  static #isSameLocalDate({
+    left,
+    right,
+    timeZone,
+  }: {
+    left: Date;
+    right: Date;
+    timeZone: string;
+  }) {
+    const leftDate = this.#getLocalDateParts({ date: left, timeZone });
+    const rightDate = this.#getLocalDateParts({ date: right, timeZone });
+
+    return (
+      leftDate.year === rightDate.year &&
+      leftDate.month === rightDate.month &&
+      leftDate.day === rightDate.day
+    );
   }
 
   static async updateTask({

@@ -159,6 +159,19 @@ export const ManageScheduleToolInputSchema = z.discriminatedUnion('action', [
     ),
   }),
   z.object({
+    action: z
+      .literal('complete_occurrence')
+      .describe(
+        'Mark the exact pending reminder occurrence as already satisfied so it will not send. One-time tasks complete permanently; recurring tasks remain active for future occurrences.',
+      ),
+    taskId: z
+      .string()
+      .min(1)
+      .describe(
+        'Exact task id from list/create. Use list first unless one unambiguous matching task is already visible in a recent tool result.',
+      ),
+  }),
+  z.object({
     action: z.literal('pause').describe('Pause an active scheduled task without deleting it.'),
     taskId: z
       .string()

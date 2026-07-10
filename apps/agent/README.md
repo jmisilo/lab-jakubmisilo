@@ -49,8 +49,9 @@ Core modules:
 Scheduling states:
 
 - Tasks are `active`, `paused`, `completed`, `cancelled`, or `failed`.
-- Runs are claimed as `running`, then marked `sent` or `failed`.
+- Runs are claimed as `running`, then marked `sent` or `failed`; an occurrence completed early by the user is marked `satisfied`.
 - Recurring active tasks advance `nextRunAt`; one-time active tasks complete after a sent run.
+- A satisfied one-time occurrence completes without delivery. A satisfied recurring occurrence skips only that delivery and advances normally when QStash invokes it.
 - Paused tasks keep their metadata but have no active QStash trigger until resumed.
 - QStash owns delivery timing. Postgres owns task metadata, limits, and cancellation state.
 

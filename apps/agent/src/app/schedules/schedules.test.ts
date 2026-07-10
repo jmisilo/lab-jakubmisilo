@@ -8,6 +8,7 @@ const mockAgentScheduleDbService = {
   resumeTask: jest.fn(),
   listTasks: jest.fn(),
   cancelTask: jest.fn(),
+  satisfyTaskOccurrence: jest.fn(),
   countActiveTasksByKind: jest.fn(),
 };
 const mockQStashService = {
@@ -278,6 +279,79 @@ describe('AgentScheduleService', () => {
       qstashMessageId: 'msg-task-1',
       qstashScheduleId: null,
     });
+  });
+
+  it('completes a one-time occurrence and cancels its pending QStash message', async () => {
+    const task = createTask({
+      scheduleKind: 'one_time',
+      status: 'completed',
+      nextRunAt: new Date('2026-07-06T12:00:00.000Z'),
+      recurrence: {},
+      qstashMessageId: 'msg-task-1',
+    });
+    mockAgentScheduleDbService.getTaskForUser.mockResolvedValue({
+      ...task,
+      status: 'active',
+    });
+    mockAgentScheduleDbService.satisfyTaskOccurrence.mockResolvedValue({
+      task,
+      alreadySatisfied: false,
+    });
+
+    const result = await AgentScheduleService.completeOccurrence({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      sourceMessageId: 'message-2',
+    });
+
+    expect(mockAgentScheduleDbService.satisfyTaskOccurrence).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      taskId: 'task-1',
+      sourceMessageId: 'message-2',
+      satisfiedAt: new Date('2026-07-06T06:00:00.000Z'),
+    });
+    expect(mockQStashService.cancelScheduledTask).toHaveBeenCalledWith({
+      qstashMessageId: 'msg-task-1',
+      qstashScheduleId: null,
+    });
+    expect(result).toEqual({ task, alreadySatisfied: false });
+  });
+
+  it('does not apply a completion statement to a future recurring occurrence', async () => {
+    mockAgentScheduleDbService.getTaskForUser.mockResolvedValue(
+      createTask({
+        scheduleKind: 'recurring',
+        nextRunAt: new Date('2026-07-07T18:00:00.000Z'),
+        recurrence: {
+          frequency: 'daily',
+          daysOfWeek: [
+            'monday',
+            'tuesday',
+            'wednesday',
+            'thursday',
+            'friday',
+            'saturday',
+            'sunday',
+          ],
+          timeOfDay: '20:00',
+        },
+      }),
+    );
+
+    await expect(
+      AgentScheduleService.completeOccurrence({
+        identityId: 'identity-1',
+        threadId: 'telegram:1',
+        taskId: 'task-1',
+        sourceMessageId: 'message-2',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_TASK_OCCURRENCE_NOT_PENDING',
+      userMessage: 'I could not match that completion to a pending reminder for today.',
+    });
+    expect(mockAgentScheduleDbService.satisfyTaskOccurrence).not.toHaveBeenCalled();
   });
 
   it('updates an active one-time schedule and cancels the previous external trigger', async () => {

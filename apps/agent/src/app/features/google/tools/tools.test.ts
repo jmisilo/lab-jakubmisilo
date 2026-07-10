@@ -32,14 +32,14 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-it('creates a Gmail connection link while preserving the shared Google connection', async () => {
+it('connects Calendar and Gmail by default', async () => {
   mockGoogleConnectionService.createConnectionRequest.mockResolvedValue({
     connectionUrl: 'https://agent.jakubmisilo.com/links/google/connect/request-1',
     expiresAt: new Date('2026-07-10T12:10:00.000Z'),
   });
 
   const execute = manageGoogleConnectionTool.execute!;
-  const result = await execute({ action: 'connect', services: ['gmail'] }, {
+  const result = await execute({ action: 'connect' }, {
     context: {
       identityId: 'identity-1',
       threadId: 'telegram:1',
@@ -51,7 +51,7 @@ it('creates a Gmail connection link while preserving the shared Google connectio
     identityId: 'identity-1',
     threadId: 'telegram:1',
     sourceMessageId: 'message-1',
-    services: ['gmail'],
+    services: ['calendar', 'gmail'],
   });
   expect(result).toEqual({
     ok: true,

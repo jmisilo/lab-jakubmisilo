@@ -195,9 +195,10 @@ export const agentScheduledTaskRuns = pgTable(
       .notNull()
       .references(() => agentScheduledTasks.id, { onDelete: 'cascade' }),
     scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
-    status: text('status', { enum: ['running', 'sent', 'failed'] })
+    status: text('status', { enum: ['running', 'sent', 'failed', 'satisfied'] })
       .notNull()
       .default('running'),
+    sourceMessageId: text('source_message_id'),
     output: text('output'),
     error: text('error'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),

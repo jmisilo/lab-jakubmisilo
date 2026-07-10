@@ -9,7 +9,7 @@ Use this skill when the user asks to connect Gmail, inspect email, find a messag
 
 ## Connection
 
-Calendar and Gmail share one Google connection. Use `manage-google-connection` with `services: ["gmail"]` to add Gmail access. Existing Calendar access is preserved through incremental authorization.
+Calendar and Gmail share one Google connection. A normal `manage-google-connection` connect action grants both services by default. Use `services: ["gmail"]` only when recovering missing Gmail permission. Existing Calendar access is preserved through incremental authorization.
 
 If a Gmail tool returns a fresh connection URL, send it to the user and say briefly that Gmail needs reconnecting. The link expires soon.
 
