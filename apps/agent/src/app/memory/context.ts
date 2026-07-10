@@ -10,6 +10,7 @@ import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory'
 import { logger } from '@/infrastructure/logger';
 
 export class AgentContextService {
+  static readonly defaultTimeZone = 'Europe/Warsaw';
   static readonly contextSourceMessageLimit = 200;
   static readonly contextTokenLimit = 400_000;
   static readonly contextCompressedMemoryRatio = 0.37;
@@ -37,10 +38,12 @@ export class AgentContextService {
     identityId,
     threadId,
     shortTermMemory,
+    timeZone = this.defaultTimeZone,
   }: {
     identityId: string;
     threadId: string;
     shortTermMemory: ShortTermMemory[];
+    timeZone?: string;
   }) {
     const [compressedChunks, knowledgeItems] = await Promise.all([
       AgentMemoryDbService.getRecentMemoryChunks({
@@ -74,6 +77,7 @@ export class AgentContextService {
     const shortTermSelection = this.#selectShortTermContext({
       shortTermMemory,
       tokenBudget: shortMemoryTokenBudget,
+      timeZone,
     });
 
     context.push(...shortTermSelection.messages);
@@ -101,6 +105,35 @@ export class AgentContextService {
 
   static countMessagesTokens(messages: Array<{ role: string; content: string }>) {
     return messages.reduce((total, message) => total + this.#countMemoryMessageTokens(message), 0);
+  }
+
+  static formatTimestamp(timestamp: Date | number, timeZone = this.defaultTimeZone) {
+    const value = timestamp instanceof Date ? timestamp : new Date(timestamp);
+
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).formatToParts(value);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+      const hour = parts.find((part) => part.type === 'hour')?.value;
+      const minute = parts.find((part) => part.type === 'minute')?.value;
+
+      if (year && month && day && hour && minute) {
+        return `${year}-${month}-${day} ${hour}:${minute} ${timeZone}`;
+      }
+    } catch {
+      // Fall through to an unambiguous UTC timestamp when the timezone is invalid.
+    }
+
+    return `${value.toISOString()} UTC`;
   }
 
   static countCompressedTokens(compressedChunks: MemoryChunk[]) {
@@ -183,9 +216,11 @@ export class AgentContextService {
   static #selectShortTermContext({
     shortTermMemory,
     tokenBudget,
+    timeZone,
   }: {
     shortTermMemory: ShortTermMemory[];
     tokenBudget: number;
+    timeZone: string;
   }): { messages: ModelMessage[]; usedTokens: number } {
     const selected: ModelMessage[] = [];
     let usedTokens = 0;
@@ -193,7 +228,9 @@ export class AgentContextService {
     for (const entry of [...shortTermMemory].reverse()) {
       const message: ModelMessage = {
         role: entry.role,
-        content: entry.text,
+        content: entry.timestamp
+          ? `[${this.formatTimestamp(entry.timestamp, timeZone)}] ${entry.text}`
+          : entry.text,
       };
       const tokens = this.#countModelMessageTokens(message);
 

@@ -12,6 +12,28 @@ export class AgentMemoryService {
   static readonly compressionSummaryMaxOutputTokens = 1_600;
   static buildContext = AgentContextService.buildContext.bind(AgentContextService);
 
+  static async getRecentMessages({
+    identityId,
+    threadId,
+    limit,
+  }: {
+    identityId: string;
+    threadId: string;
+    limit: number;
+  }) {
+    const messages = await AgentMemoryDbService.getRecentMessages({
+      identityId,
+      threadId,
+      limit,
+    });
+
+    return messages.map((message) => ({
+      role: message.role,
+      text: message.content,
+      timestamp: message.createdAt.getTime(),
+    }));
+  }
+
   static async recordMessage({
     identityId,
     threadId,
@@ -93,7 +115,13 @@ export class AgentMemoryService {
       );
 
       const transcript = messages
-        .map((message) => `${message.role}: ${message.content}`)
+        .map((message) => {
+          const timestamp = message.createdAt
+            ? `[${AgentContextService.formatTimestamp(message.createdAt)}] `
+            : '';
+
+          return `${timestamp}${message.role}: ${message.content}`;
+        })
         .join('\n');
       const summaryResult = await AIService.generate({
         reasoning: 'high',
@@ -127,6 +155,7 @@ export class AgentMemoryService {
               - Project facts, architecture decisions, constraints, and implementation direction.
               - Commitments already made by the assistant or user.
               - Open tasks, unresolved questions, blockers, and next steps.
+              - Preserve the dates of tasks and commitments. A completed task must not become an open task merely because it appears in older context.
               - Tool-relevant state such as calendar/schedule/knowledge decisions, selected paths, important dates/times/timezones, and external facts the user may expect continuity on.
               - Replacements or corrections to earlier facts. Prefer the latest corrected value, and mention older values only when useful history matters.
 
@@ -139,6 +168,7 @@ export class AgentMemoryService {
               # Style
 
               - Use brief bullets and concrete nouns.
+              - Keep dates attached to time-sensitive tasks, commitments, and completions.
               - Preserve exact user wording only when it matters for a preference, note, title, or commitment.
               - Keep the summary compact; do not pad empty sections.
 

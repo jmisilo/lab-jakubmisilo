@@ -6,7 +6,7 @@ const TOKEN_KEY_BYTES = 32;
 const TOKEN_IV_BYTES = 12;
 const TOKEN_ALGORITHM = 'aes-256-gcm';
 
-export class GoogleCalendarTokenEncryptionService {
+export class GoogleTokenEncryptionService {
   static assertConfigured() {
     this.#getKey();
   }
@@ -48,24 +48,25 @@ export class GoogleCalendarTokenEncryptionService {
       ]).toString('utf8');
     } catch (error) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID,
-        message: 'Google Calendar refresh token could not be decrypted.',
+        code: AppErrorCode.GOOGLE_TOKEN_INVALID,
+        message: 'Google refresh token could not be decrypted.',
         cause: error,
         retryable: false,
-        userMessage: 'Google Calendar access is invalid. Please reconnect Calendar.',
+        userMessage: 'Google access is invalid. Please reconnect.',
       });
     }
   }
 
   static #getKey() {
-    const encodedKey = process.env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY;
+    const encodedKey =
+      process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? process.env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY;
 
     if (!encodedKey) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
-        message: 'GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY is not configured.',
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
+        message: 'GOOGLE_TOKEN_ENCRYPTION_KEY is not configured.',
         retryable: false,
-        userMessage: 'Google Calendar is not configured yet.',
+        userMessage: 'Google is not configured yet.',
       });
     }
 
@@ -73,10 +74,10 @@ export class GoogleCalendarTokenEncryptionService {
 
     if (key.byteLength !== TOKEN_KEY_BYTES) {
       throw new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
-        message: 'GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY must decode to 32 bytes.',
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
+        message: 'GOOGLE_TOKEN_ENCRYPTION_KEY must decode to 32 bytes.',
         retryable: false,
-        userMessage: 'Google Calendar is not configured correctly.',
+        userMessage: 'Google is not configured correctly.',
       });
     }
 

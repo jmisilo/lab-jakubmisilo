@@ -1,12 +1,7 @@
 import { z } from 'zod';
 
-export const GOOGLE_CALENDAR_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.freebusy',
-] as const;
+import { GoogleReconnectReasonSchema } from '@/app/features/google/schemas';
 
-export const GOOGLE_CALENDAR_CONNECTION_EXPIRES_IN_MINUTES = 10;
 export const GOOGLE_CALENDAR_EVENT_LIST_MAX_ITEMS = 50;
 
 const ISO_DATE_TIME_WITH_OPTIONAL_OFFSET_PATTERN =
@@ -91,18 +86,6 @@ export const CalendarToolContextSchema = z.object({
   mode: z.enum(['chat', 'scheduled_task']).optional(),
   allowedSideEffects: z.array(z.enum(['calendar.create'])).optional(),
 });
-
-export const ManageGoogleCalendarConnectionToolInputSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('status').describe('Check whether Google Calendar is connected.'),
-  }),
-  z.object({
-    action: z.literal('connect').describe('Create a short-lived Google Calendar connection link.'),
-  }),
-  z.object({
-    action: z.literal('disconnect').describe('Disconnect and revoke Google Calendar access.'),
-  }),
-]);
 
 export const ReadCalendarToolInputSchema = z.discriminatedUnion('action', [
   z.object({
@@ -246,26 +229,12 @@ const CalendarToolEventSchema = z.object({
     .optional(),
 });
 
-export const GoogleCalendarConnectionToolOutputSchema = z.object({
-  ok: z.boolean(),
-  message: z.string(),
-  connected: z.boolean().optional(),
-  connectionUrl: z.string().optional(),
-  expiresAt: z.string().optional(),
-  googleAccountEmail: z.string().optional(),
-  grantedScopes: z.array(z.string()).optional(),
-});
-
-const CalendarReconnectReasonSchema = z
-  .enum(['not_connected', 'access_expired_or_revoked', 'connection_link_expired'])
-  .describe('Safe user-facing reason for creating a fresh Calendar connection link.');
-
 export const ReadCalendarToolOutputSchema = z.object({
   ok: z.boolean(),
   message: z.string(),
   connectionUrl: z.string().optional(),
   expiresAt: z.string().optional(),
-  reconnectReason: CalendarReconnectReasonSchema.optional(),
+  reconnectReason: GoogleReconnectReasonSchema.optional(),
   calendars: z.array(CalendarToolCalendarSchema).optional(),
   events: z.array(CalendarToolEventSchema).optional(),
   event: CalendarToolEventSchema.optional(),
@@ -279,6 +248,6 @@ export const ManageCalendarToolOutputSchema = z.object({
   message: z.string(),
   connectionUrl: z.string().optional(),
   expiresAt: z.string().optional(),
-  reconnectReason: CalendarReconnectReasonSchema.optional(),
+  reconnectReason: GoogleReconnectReasonSchema.optional(),
   event: CalendarToolEventSchema.optional(),
 });

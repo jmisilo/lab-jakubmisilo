@@ -5,137 +5,24 @@ import type { z } from 'zod';
 import { tool } from 'ai';
 import dedent from 'dedent';
 
-import { GoogleCalendarConnectionService } from '@/app/features/google-calendar/connection';
 import { GoogleCalendarEventService } from '@/app/features/google-calendar/events';
 import {
   CalendarToolContextSchema,
-  GoogleCalendarConnectionToolOutputSchema,
   ManageCalendarToolInputSchema,
   ManageCalendarToolOutputSchema,
-  ManageGoogleCalendarConnectionToolInputSchema,
   ReadCalendarToolInputSchema,
   ReadCalendarToolOutputSchema,
 } from '@/app/features/google-calendar/schemas';
+import { GoogleConnectionService } from '@/app/features/google/connection';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const CALENDAR_RECONNECT_MESSAGES = {
   not_connected: 'Google Calendar is not connected yet.',
+  permission_missing: 'The Google connection does not include Calendar access.',
   access_expired_or_revoked: 'Google Calendar access expired or was revoked.',
   connection_link_expired: 'The previous Google Calendar connection link expired.',
 } as const;
-
-export const manageGoogleCalendarConnectionTool: ManageGoogleCalendarConnectionTool = tool({
-  description: dedent`
-    Connect, disconnect, or check Google Calendar access for the current user.
-
-    # When To Use
-    - The user asks to connect Google Calendar, calendar, or Google account access.
-    - The user asks whether Calendar is connected.
-    - The user asks to disconnect or revoke Calendar access.
-
-    # When Not To Use
-    - Reading events or availability; use read-calendar.
-    - Creating, updating, or deleting events; use manage-calendar.
-
-    # Usage
-    - For connect, send the returned connectionUrl to the user and mention that it expires soon.
-    - Do not say Calendar is connected until this tool or the OAuth callback confirms it.
-    - For disconnect, say access was removed only after ok=true.
-  `,
-  inputSchema: ManageGoogleCalendarConnectionToolInputSchema,
-  outputSchema: GoogleCalendarConnectionToolOutputSchema,
-  contextSchema: CalendarToolContextSchema,
-  execute: async (input, { context }) => {
-    try {
-      if (input.action === 'status') {
-        const status = await GoogleCalendarConnectionService.getConnectionStatus({
-          identityId: context.identityId,
-        });
-
-        return {
-          ok: true,
-          message: status.connected
-            ? 'Google Calendar is connected.'
-            : 'Google Calendar is not connected.',
-          connected: status.connected,
-          googleAccountEmail: status.googleAccountEmail,
-          grantedScopes: status.grantedScopes,
-        };
-      }
-
-      if (input.action === 'connect') {
-        if (!context.threadId) {
-          return {
-            ok: false,
-            message: 'Calendar connection links require a chat thread.',
-          };
-        }
-
-        const request = await GoogleCalendarConnectionService.createConnectionRequest({
-          identityId: context.identityId,
-          threadId: context.threadId,
-          sourceMessageId: context.sourceMessageId,
-        });
-
-        logger.info(
-          {
-            identityId: context.identityId,
-            threadId: context.threadId,
-            expiresAt: request.expiresAt,
-          },
-          '[GOOGLE_CALENDAR]: connection link created',
-        );
-
-        return {
-          ok: true,
-          message: 'Google Calendar connection link created.',
-          connected: false,
-          connectionUrl: request.connectionUrl,
-          expiresAt: request.expiresAt.toISOString(),
-        };
-      }
-
-      const result = await GoogleCalendarConnectionService.disconnect({
-        identityId: context.identityId,
-      });
-
-      logger.info(
-        {
-          identityId: context.identityId,
-          disconnected: result.disconnected,
-          revocationOk: result.revocationOk,
-        },
-        '[GOOGLE_CALENDAR]: disconnected',
-      );
-
-      return {
-        ok: true,
-        message: result.disconnected
-          ? 'Google Calendar is disconnected.'
-          : 'Google Calendar was not connected.',
-        connected: false,
-      };
-    } catch (error) {
-      logger.error(
-        {
-          identityId: context.identityId,
-          action: input.action,
-          error,
-          safeError: ErrorService.toSafeLog(error),
-        },
-        '[GOOGLE_CALENDAR]: connection tool failed',
-      );
-
-      const failure = ErrorService.toUserFacingFailure(error, {
-        fallbackCode: 'GOOGLE_CALENDAR_API_ERROR',
-        fallbackMessage: 'Google Calendar connection request failed.',
-      });
-
-      return { ok: false, message: failure.message };
-    }
-  },
-});
 
 export const readCalendarTool: ReadCalendarTool = tool({
   description: dedent`
@@ -148,7 +35,7 @@ export const readCalendarTool: ReadCalendarTool = tool({
     - You need exact event ids before using manage-calendar for update/delete.
 
     # When Not To Use
-    - The user asks to connect or disconnect Calendar; use manage-google-calendar-connection.
+    - The user asks to connect or disconnect Calendar; use manage-google-connection.
     - The user asks to create, update, or delete an event; use manage-calendar.
 
     # Usage
@@ -263,7 +150,7 @@ export const manageCalendarTool: ManageCalendarTool = tool({
     - Generic reminders or background assistant tasks; use manage-schedule.
     - Reminder-only wording such as "remind me about tennis at 19:00" or "ping me to leave for the dentist"; do not create a calendar event just because the reminder subject sounds event-like.
     - Reading calendar state only; use read-calendar.
-    - Connecting or disconnecting Calendar; use manage-google-calendar-connection.
+    - Connecting or disconnecting Calendar; use manage-google-connection.
     - Free-time statements such as "other than that I am free" or "I'm free after 21:00", unless the user explicitly asks to block that free time.
     - Hypothetical or tentative plans such as "maybe padel tomorrow" unless the user confirms they want it on the calendar.
 
@@ -407,10 +294,11 @@ async function createReconnectableFailureResult({
   }
 
   try {
-    const request = await GoogleCalendarConnectionService.createConnectionRequest({
+    const request = await GoogleConnectionService.createConnectionRequest({
       identityId: context.identityId,
       threadId: context.threadId,
       sourceMessageId: context.sourceMessageId,
+      services: ['calendar'],
     });
 
     logger.info(
@@ -453,26 +341,24 @@ function getReconnectReason(error: unknown): keyof typeof CALENDAR_RECONNECT_MES
     return null;
   }
 
-  if (error.code === AppErrorCode.GOOGLE_CALENDAR_CONNECTION_REQUIRED) {
+  if (error.code === AppErrorCode.GOOGLE_CONNECTION_REQUIRED) {
     return 'not_connected';
   }
 
-  if (error.code === AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID) {
+  if (error.code === AppErrorCode.GOOGLE_PERMISSION_REQUIRED) {
+    return 'permission_missing';
+  }
+
+  if (error.code === AppErrorCode.GOOGLE_TOKEN_INVALID) {
     return 'access_expired_or_revoked';
   }
 
-  if (error.code === AppErrorCode.GOOGLE_CALENDAR_OAUTH_EXPIRED) {
+  if (error.code === AppErrorCode.GOOGLE_OAUTH_EXPIRED) {
     return 'connection_link_expired';
   }
 
   return null;
 }
-
-export type ManageGoogleCalendarConnectionTool = Tool<
-  z.infer<typeof ManageGoogleCalendarConnectionToolInputSchema>,
-  z.infer<typeof GoogleCalendarConnectionToolOutputSchema>,
-  z.infer<typeof CalendarToolContextSchema>
->;
 
 export type ReadCalendarTool = Tool<
   z.infer<typeof ReadCalendarToolInputSchema>,

@@ -1,5 +1,6 @@
 export const agentMemoryDbServiceMock = {
   createMessage: jest.fn(),
+  getRecentMessages: jest.fn(),
   getUncompressedMessages: jest.fn(),
   markMessagesCompressed: jest.fn(),
   createMemoryChunk: jest.fn(),

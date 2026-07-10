@@ -32,9 +32,9 @@ describe('GoogleCalendarApiClient', () => {
     } catch (error) {
       expect(AppError.is(error)).toBe(true);
       expect(error).toMatchObject({
-        code: AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID,
+        code: AppErrorCode.GOOGLE_TOKEN_INVALID,
         retryable: false,
-        userMessage: 'Google Calendar access expired or was revoked. Please reconnect Calendar.',
+        userMessage: 'Google access expired or was revoked. Please reconnect.',
         context: expect.objectContaining({
           status: 401,
           providerMessage: 'Invalid Credentials',

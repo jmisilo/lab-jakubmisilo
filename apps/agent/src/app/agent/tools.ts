@@ -1,8 +1,6 @@
-import type {
-  ManageCalendarTool,
-  ManageGoogleCalendarConnectionTool,
-  ReadCalendarTool,
-} from '@/app/features/google-calendar/tools';
+import type { ManageCalendarTool, ReadCalendarTool } from '@/app/features/google-calendar/tools';
+import type { ReadGmailTool } from '@/app/features/google-gmail/tools';
+import type { ManageGoogleConnectionTool } from '@/app/features/google/tools';
 import type { GetLocalTimeTool, GetWeatherTool } from '@/app/features/weather/tools';
 import type {
   GetWorldCupContextTool,
@@ -15,11 +13,9 @@ import type { LoadSkillTool } from '@/app/skills/tools';
 
 import { openai } from '@ai-sdk/openai';
 
-import {
-  manageCalendarTool,
-  manageGoogleCalendarConnectionTool,
-  readCalendarTool,
-} from '@/app/features/google-calendar/tools';
+import { manageCalendarTool, readCalendarTool } from '@/app/features/google-calendar/tools';
+import { readGmailTool } from '@/app/features/google-gmail/tools';
+import { manageGoogleConnectionTool } from '@/app/features/google/tools';
 import { getLocalTimeTool, getWeatherTool } from '@/app/features/weather/tools';
 import {
   getWorldCupContextTool,
@@ -39,8 +35,9 @@ export const agentTools: AgentTools = {
 
   'read-knowledge': readKnowledgeTool,
   'manage-knowledge': manageKnowledgeTool,
-  'manage-google-calendar-connection': manageGoogleCalendarConnectionTool,
+  'manage-google-connection': manageGoogleConnectionTool,
   'read-calendar': readCalendarTool,
+  'read-gmail': readGmailTool,
   'manage-calendar': manageCalendarTool,
   'manage-schedule': manageScheduleTool,
   'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
@@ -55,8 +52,9 @@ export type AgentTools = {
   webSearch: ReturnType<typeof openai.tools.webSearch>;
   'read-knowledge': ReadKnowledgeTool;
   'manage-knowledge': ManageKnowledgeTool;
-  'manage-google-calendar-connection': ManageGoogleCalendarConnectionTool;
+  'manage-google-connection': ManageGoogleConnectionTool;
   'read-calendar': ReadCalendarTool;
+  'read-gmail': ReadGmailTool;
   'manage-calendar': ManageCalendarTool;
   'manage-schedule': ManageScheduleTool;
   'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;

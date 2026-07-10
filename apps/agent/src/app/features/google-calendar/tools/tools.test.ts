@@ -1,6 +1,6 @@
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
-const mockGoogleCalendarConnectionService = {
+const mockGoogleConnectionService = {
   createConnectionRequest: jest.fn(),
 };
 const mockGoogleCalendarEventService = {
@@ -18,8 +18,8 @@ jest.mock('ai', () => ({
   tool: jest.fn((definition) => definition),
 }));
 
-jest.mock('@/app/features/google-calendar/connection', () => ({
-  GoogleCalendarConnectionService: mockGoogleCalendarConnectionService,
+jest.mock('@/app/features/google/connection', () => ({
+  GoogleConnectionService: mockGoogleConnectionService,
 }));
 
 jest.mock('@/app/features/google-calendar/events', () => ({
@@ -30,72 +30,16 @@ jest.mock('@/infrastructure/logger', () => ({
   logger: mockLogger,
 }));
 
-let manageGoogleCalendarConnectionTool: typeof import('.').manageGoogleCalendarConnectionTool;
 let readCalendarTool: typeof import('.').readCalendarTool;
 let manageCalendarTool: typeof import('.').manageCalendarTool;
 
 beforeAll(async () => {
-  ({ manageGoogleCalendarConnectionTool, readCalendarTool, manageCalendarTool } =
-    await import('.'));
+  ({ readCalendarTool, manageCalendarTool } = await import('.'));
 });
 
 describe('google calendar tools', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('creates connection links with runtime identity and thread context', async () => {
-    mockGoogleCalendarConnectionService.createConnectionRequest.mockResolvedValue({
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-1',
-      expiresAt: new Date('2026-07-07T12:10:00.000Z'),
-    });
-
-    const execute = manageGoogleCalendarConnectionTool.execute!;
-    const result = await execute({ action: 'connect' }, {
-      context: {
-        identityId: 'identity-1',
-        threadId: 'telegram:1',
-        sourceMessageId: 'message-1',
-      },
-    } as Parameters<typeof execute>[1]);
-
-    expect(mockGoogleCalendarConnectionService.createConnectionRequest).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      threadId: 'telegram:1',
-      sourceMessageId: 'message-1',
-    });
-    expect(result).toEqual({
-      ok: true,
-      message: 'Google Calendar connection link created.',
-      connected: false,
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-1',
-      expiresAt: '2026-07-07T12:10:00.000Z',
-    });
-  });
-
-  it('does not create a connection link when Calendar server config is invalid', async () => {
-    mockGoogleCalendarConnectionService.createConnectionRequest.mockRejectedValue(
-      new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
-        message: 'GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY must decode to 32 bytes.',
-        retryable: false,
-        userMessage: 'Google Calendar is not configured correctly.',
-      }),
-    );
-
-    const execute = manageGoogleCalendarConnectionTool.execute!;
-    const result = await execute({ action: 'connect' }, {
-      context: {
-        identityId: 'identity-1',
-        threadId: 'telegram:1',
-        sourceMessageId: 'message-1',
-      },
-    } as Parameters<typeof execute>[1]);
-
-    expect(result).toEqual({
-      ok: false,
-      message: 'Google Calendar is not configured correctly.',
-    });
   });
 
   it('blocks scheduled tasks from updating calendar events', async () => {
@@ -248,13 +192,13 @@ describe('google calendar tools', () => {
   it('returns a fresh connection link when reading requires Calendar connection', async () => {
     mockGoogleCalendarEventService.listCalendars.mockRejectedValue(
       new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONNECTION_REQUIRED,
+        code: AppErrorCode.GOOGLE_CONNECTION_REQUIRED,
         message: 'Google Calendar connection is required.',
         retryable: false,
         userMessage: 'Google Calendar is not connected yet.',
       }),
     );
-    mockGoogleCalendarConnectionService.createConnectionRequest.mockResolvedValue({
+    mockGoogleConnectionService.createConnectionRequest.mockResolvedValue({
       connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-2',
       expiresAt: new Date('2026-07-07T12:10:00.000Z'),
     });
@@ -268,10 +212,11 @@ describe('google calendar tools', () => {
       },
     } as Parameters<typeof execute>[1]);
 
-    expect(mockGoogleCalendarConnectionService.createConnectionRequest).toHaveBeenCalledWith({
+    expect(mockGoogleConnectionService.createConnectionRequest).toHaveBeenCalledWith({
       identityId: 'identity-1',
       threadId: 'telegram:1',
       sourceMessageId: 'message-1',
+      services: ['calendar'],
     });
     expect(result).toEqual({
       ok: false,
@@ -286,13 +231,13 @@ describe('google calendar tools', () => {
   it('returns a fresh connection link when Calendar access expired or was revoked', async () => {
     mockGoogleCalendarEventService.createEvent.mockRejectedValue(
       new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_TOKEN_INVALID,
+        code: AppErrorCode.GOOGLE_TOKEN_INVALID,
         message: 'Google OAuth token request failed.',
         retryable: false,
         userMessage: 'Google Calendar access expired or was revoked. Please reconnect Calendar.',
       }),
     );
-    mockGoogleCalendarConnectionService.createConnectionRequest.mockResolvedValue({
+    mockGoogleConnectionService.createConnectionRequest.mockResolvedValue({
       connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-3',
       expiresAt: new Date('2026-07-07T12:20:00.000Z'),
     });
@@ -324,10 +269,11 @@ describe('google calendar tools', () => {
       } as Parameters<typeof execute>[1],
     );
 
-    expect(mockGoogleCalendarConnectionService.createConnectionRequest).toHaveBeenCalledWith({
+    expect(mockGoogleConnectionService.createConnectionRequest).toHaveBeenCalledWith({
       identityId: 'identity-1',
       threadId: 'telegram:1',
       sourceMessageId: 'message-1',
+      services: ['calendar'],
     });
     expect(result).toEqual({
       ok: false,
@@ -342,8 +288,8 @@ describe('google calendar tools', () => {
   it('does not return reconnect links for Calendar server configuration failures', async () => {
     mockGoogleCalendarEventService.createEvent.mockRejectedValue(
       new AppError({
-        code: AppErrorCode.GOOGLE_CALENDAR_CONFIGURATION_INVALID,
-        message: 'GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY must decode to 32 bytes.',
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
+        message: 'GOOGLE_TOKEN_ENCRYPTION_KEY must decode to 32 bytes.',
         retryable: false,
         userMessage: 'Google Calendar is not configured correctly.',
       }),
@@ -376,7 +322,7 @@ describe('google calendar tools', () => {
       } as Parameters<typeof execute>[1],
     );
 
-    expect(mockGoogleCalendarConnectionService.createConnectionRequest).not.toHaveBeenCalled();
+    expect(mockGoogleConnectionService.createConnectionRequest).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
       message: 'Google Calendar is not configured correctly.',
