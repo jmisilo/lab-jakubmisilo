@@ -199,7 +199,7 @@ describe('google calendar tools', () => {
       }),
     );
     mockGoogleConnectionService.createConnectionRequest.mockResolvedValue({
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-2',
+      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google/connect/request-2',
       expiresAt: new Date('2026-07-07T12:10:00.000Z'),
     });
 
@@ -221,8 +221,8 @@ describe('google calendar tools', () => {
     expect(result).toEqual({
       ok: false,
       message:
-        'Google Calendar is not connected yet. Use this link to reconnect: https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-2',
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-2',
+        'Google Calendar is not connected yet. Use this link to reconnect: https://agent.lab.jakubmisilo.com/links/google/connect/request-2',
+      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google/connect/request-2',
       expiresAt: '2026-07-07T12:10:00.000Z',
       reconnectReason: 'not_connected',
     });
@@ -238,7 +238,7 @@ describe('google calendar tools', () => {
       }),
     );
     mockGoogleConnectionService.createConnectionRequest.mockResolvedValue({
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-3',
+      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google/connect/request-3',
       expiresAt: new Date('2026-07-07T12:20:00.000Z'),
     });
 
@@ -278,8 +278,8 @@ describe('google calendar tools', () => {
     expect(result).toEqual({
       ok: false,
       message:
-        'Google Calendar access expired or was revoked. Use this link to reconnect: https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-3',
-      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google-calendar/connect/request-3',
+        'Google Calendar access expired or was revoked. Use this link to reconnect: https://agent.lab.jakubmisilo.com/links/google/connect/request-3',
+      connectionUrl: 'https://agent.lab.jakubmisilo.com/links/google/connect/request-3',
       expiresAt: '2026-07-07T12:20:00.000Z',
       reconnectReason: 'access_expired_or_revoked',
     });

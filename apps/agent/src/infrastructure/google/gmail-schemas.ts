@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const GoogleGmailMessageReferenceSchema = z.object({
+const GoogleGmailMessageReferenceSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
 });
@@ -28,7 +28,7 @@ export type GoogleGmailMessagePart = {
   parts?: GoogleGmailMessagePart[];
 };
 
-export const GoogleGmailMessagePartSchema: z.ZodType<GoogleGmailMessagePart> = z.lazy(() =>
+const GoogleGmailMessagePartSchema: z.ZodType<GoogleGmailMessagePart> = z.lazy(() =>
   z.object({
     mimeType: z.string().optional(),
     filename: z.string().optional(),

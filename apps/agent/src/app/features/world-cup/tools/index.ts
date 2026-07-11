@@ -1,4 +1,3 @@
-import type { WorldCupEventType, WorldCupTrackingMode } from '@/app/features/world-cup/types';
 import type { Tool } from 'ai';
 import type { z } from 'zod';
 
@@ -19,7 +18,7 @@ import {
 import { WorldCupContextService } from '@/app/features/world-cup/tracking/context';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
 import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
-import { ErrorService } from '@/infrastructure/errors';
+import { AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = tool({
@@ -59,55 +58,73 @@ export const manageWorldCupSubscriptionTool: ManageWorldCupSubscriptionTool = to
   outputSchema: ManageWorldCupSubscriptionToolOutputSchema,
   contextSchema: ManageWorldCupSubscriptionToolContextSchema,
   execute: async ({ action, trackingMode = 'all_teams', teamCodes, eventTypes }, { context }) => {
-    const resolvedTrackingMode = trackingMode as WorldCupTrackingMode;
+    try {
+      const resolvedTrackingMode = trackingMode;
 
-    if (action === 'unsubscribe') {
-      const result = await WorldCupSubscriptionService.unsubscribe({
+      if (action === 'unsubscribe') {
+        const result = await WorldCupSubscriptionService.unsubscribe({
+          identityId: context.identityId,
+          threadId: context.threadId,
+          trackingMode: resolvedTrackingMode,
+          teamCodes,
+        });
+
+        return {
+          ok: result.ok,
+          message: result.ok
+            ? `Removed ${result.deactivatedCount} World Cup subscription(s).`
+            : result.message,
+          deactivatedCount: result.ok ? result.deactivatedCount : undefined,
+        };
+      }
+
+      const resolvedEventTypes = eventTypes ?? [...WORLD_CUP_EVENT_TYPES];
+      const result = await WorldCupSubscriptionService.subscribe({
         identityId: context.identityId,
         threadId: context.threadId,
-        trackingMode: resolvedTrackingMode,
-        teamCodes,
-      });
-
-      return {
-        ok: result.ok,
-        message: result.ok
-          ? `Removed ${result.deactivatedCount} World Cup subscription(s).`
-          : result.message,
-        deactivatedCount: result.ok ? result.deactivatedCount : undefined,
-      };
-    }
-
-    const resolvedEventTypes = (eventTypes ?? [...WORLD_CUP_EVENT_TYPES]) as WorldCupEventType[];
-    const result = await WorldCupSubscriptionService.subscribe({
-      identityId: context.identityId,
-      threadId: context.threadId,
-      sourceMessageId: context.sourceMessageId,
-      trackingMode: resolvedTrackingMode,
-      teamCodes,
-      eventTypes: resolvedEventTypes,
-    });
-
-    logger.info(
-      {
-        identityId: context.identityId,
-        threadId: context.threadId,
+        sourceMessageId: context.sourceMessageId,
         trackingMode: resolvedTrackingMode,
         teamCodes,
         eventTypes: resolvedEventTypes,
-        ok: result.ok,
-      },
-      '[WORLD_CUP]: subscription tool executed',
-    );
+      });
 
-    return {
-      ok: result.ok,
-      message: result.message,
-      subscriptionId: result.ok ? (result.subscriptions.at(0)?.id ?? null) : null,
-      subscriptionIds: result.ok
-        ? result.subscriptions.map((subscription) => subscription.id)
-        : undefined,
-    };
+      logger.info(
+        {
+          identityId: context.identityId,
+          threadId: context.threadId,
+          trackingMode: resolvedTrackingMode,
+          teamCodes,
+          eventTypes: resolvedEventTypes,
+          ok: result.ok,
+        },
+        '[WORLD_CUP]: subscription tool executed',
+      );
+
+      return {
+        ok: result.ok,
+        message: result.message,
+        subscriptionId: result.ok ? (result.subscriptions.at(0)?.id ?? null) : null,
+        subscriptionIds: result.ok
+          ? result.subscriptions.map((subscription) => subscription.id)
+          : undefined,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          identityId: context.identityId,
+          threadId: context.threadId,
+          action,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[WORLD_CUP]: subscription tool failed',
+      );
+      const failure = ErrorService.toUserFacingFailure(error, {
+        fallbackCode: AppErrorCode.WORLD_CUP_SUBSCRIPTION_FAILED,
+        fallbackMessage: 'World Cup subscriptions are temporarily unavailable.',
+      });
+
+      return { ok: false, message: failure.message };
+    }
   },
 });
 
@@ -175,10 +192,15 @@ export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
         '[WORLD_CUP]: tracking tool failed',
       );
 
+      const failure = ErrorService.toUserFacingFailure(error, {
+        fallbackCode: AppErrorCode.WORLD_CUP_SUBSCRIPTION_FAILED,
+        fallbackMessage: 'World Cup tracking status is temporarily unavailable.',
+      });
+
       return {
         ok: false,
-        message: 'World Cup tracking status is temporarily unavailable.',
-        summaryMarkdown: 'World Cup tracking status is temporarily unavailable.',
+        message: failure.message,
+        summaryMarkdown: failure.message,
         subscriptions: [],
       };
     }
@@ -304,9 +326,14 @@ export const getWorldCupContextTool: GetWorldCupContextTool = tool({
         '[WORLD_CUP]: context tool failed',
       );
 
+      const failure = ErrorService.toUserFacingFailure(error, {
+        fallbackCode: AppErrorCode.WORLD_CUP_API_ERROR,
+        fallbackMessage: 'World Cup context is temporarily unavailable.',
+      });
+
       return {
         ok: false,
-        message: 'World Cup context is temporarily unavailable.',
+        message: failure.message,
       };
     }
   },

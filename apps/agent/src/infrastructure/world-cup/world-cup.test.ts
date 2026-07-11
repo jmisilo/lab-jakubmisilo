@@ -20,11 +20,27 @@ describe('WorldCupApiClient', () => {
       code: AppErrorCode.WORLD_CUP_API_ERROR,
       message: 'World Cup API request failed.',
       context: expect.objectContaining({
-        operation: 'world_cup.fetch',
+        operation: 'world_cup.games',
         providerStatus: 503,
         providerMessage: 'maintenance',
       }),
       retryable: true,
+    } satisfies Partial<AppError>);
+  });
+
+  it('wraps invalid provider payloads in a stable response error', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ games: [{ invalid: true }] }),
+    });
+
+    await expect(WorldCupApiClient.getGames()).rejects.toMatchObject({
+      code: AppErrorCode.WORLD_CUP_RESPONSE_INVALID,
+      message: 'World Cup API response failed schema validation.',
+      context: expect.objectContaining({
+        operation: 'world_cup.games',
+      }),
+      retryable: false,
     } satisfies Partial<AppError>);
   });
 });

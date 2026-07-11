@@ -271,7 +271,7 @@ export class GoogleCalendarApiClient {
         code: this.#getFailureCode(response.status),
         message: 'Google Calendar API request failed.',
         context: { status: response.status, path, method, providerMessage },
-        retryable: response.status >= 500,
+        retryable: response.status === 429 || response.status >= 500,
         userMessage: this.#getFailureUserMessage(response.status),
       });
     }
@@ -292,11 +292,20 @@ export class GoogleCalendarApiClient {
     try {
       return await fetch(url, { ...init, signal: controller.signal });
     } catch (error) {
-      throw AppError.timeout({
-        code: AppErrorCode.GOOGLE_CALENDAR_API_TIMEOUT,
-        message: 'Google Calendar API request timed out.',
+      if (controller.signal.aborted) {
+        throw AppError.timeout({
+          code: AppErrorCode.GOOGLE_CALENDAR_API_TIMEOUT,
+          message: 'Google Calendar API request timed out.',
+          cause: error,
+          timeoutMs: GOOGLE_CALENDAR_TIMEOUT_MS,
+          userMessage: 'Google Calendar is temporarily unavailable. Please try again.',
+        });
+      }
+
+      throw new AppError({
+        code: AppErrorCode.GOOGLE_CALENDAR_API_ERROR,
+        message: 'Google Calendar API request failed before receiving a response.',
         cause: error,
-        timeoutMs: GOOGLE_CALENDAR_TIMEOUT_MS,
         retryable: true,
         userMessage: 'Google Calendar is temporarily unavailable. Please try again.',
       });

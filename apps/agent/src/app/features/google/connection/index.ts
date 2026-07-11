@@ -8,7 +8,7 @@ import {
   GOOGLE_CONNECTION_EXPIRES_IN_MINUTES,
   GOOGLE_SERVICE_SCOPES,
 } from '@/app/features/google/schemas';
-import { GoogleCalendarDbService } from '@/infrastructure/db/services/google-calendar';
+import { GoogleConnectionDbService } from '@/infrastructure/db/services/google';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { GoogleOAuthService } from '@/infrastructure/google/oauth';
 import { GoogleTokenEncryptionService } from '@/infrastructure/google/token-crypto';
@@ -28,10 +28,10 @@ export class GoogleConnectionService {
 
     const requestId = this.#createOpaqueToken();
     const expiresAt = new Date(now.getTime() + GOOGLE_CONNECTION_EXPIRES_IN_MINUTES * 60 * 1000);
-    const existingConnection = await GoogleCalendarDbService.getActiveConnection({ identityId });
+    const existingConnection = await GoogleConnectionDbService.getActiveConnection({ identityId });
     const requestedScopes = this.#getRequiredScopes(services);
     const scopes = [...new Set([...(existingConnection?.grantedScopes ?? []), ...requestedScopes])];
-    const state = await GoogleCalendarDbService.createOauthState({
+    const state = await GoogleConnectionDbService.createOauthState({
       requestId,
       stateHash: this.#hashState(requestId),
       identityId,
@@ -59,7 +59,7 @@ export class GoogleConnectionService {
   }
 
   static async getConnectionStatus({ identityId }: { identityId: string }) {
-    const connection = await GoogleCalendarDbService.getActiveConnection({ identityId });
+    const connection = await GoogleConnectionDbService.getActiveConnection({ identityId });
 
     return {
       connected: Boolean(connection),
@@ -75,7 +75,7 @@ export class GoogleConnectionService {
     requestId,
     now = new Date(),
   }: CreateAuthorizationUrlInput) {
-    const state = await GoogleCalendarDbService.getPendingOauthStateByRequestId({
+    const state = await GoogleConnectionDbService.getPendingOauthStateByRequestId({
       requestId,
       now,
     });
@@ -100,7 +100,7 @@ export class GoogleConnectionService {
     requestId,
     now = new Date(),
   }: CreateReplacementConnectionRequestInput) {
-    const expiredState = await GoogleCalendarDbService.consumeExpiredOauthStateByRequestId({
+    const expiredState = await GoogleConnectionDbService.consumeExpiredOauthStateByRequestId({
       requestId,
       now,
     });
@@ -128,7 +128,7 @@ export class GoogleConnectionService {
   static async completeConnection({ code, state, now = new Date() }: CompleteConnectionInput) {
     this.#assertConfigured();
 
-    const oauthState = await GoogleCalendarDbService.consumeOauthStateByHash({
+    const oauthState = await GoogleConnectionDbService.consumeOauthStateByHash({
       stateHash: this.#hashState(state),
       now,
     });
@@ -161,7 +161,7 @@ export class GoogleConnectionService {
     });
 
     const encryptedToken = GoogleTokenEncryptionService.encryptToken(token.refreshToken);
-    const connection = await GoogleCalendarDbService.replaceActiveConnection({
+    const connection = await GoogleConnectionDbService.replaceActiveConnection({
       identityId: oauthState.identityId,
       status: 'active',
       encryptedRefreshToken: encryptedToken.encryptedRefreshToken,
@@ -194,7 +194,7 @@ export class GoogleConnectionService {
   }
 
   static async disconnect({ identityId }: { identityId: string }) {
-    const connection = await GoogleCalendarDbService.getActiveConnection({ identityId });
+    const connection = await GoogleConnectionDbService.getActiveConnection({ identityId });
 
     if (!connection) {
       return { disconnected: false, revocationOk: true };
@@ -217,7 +217,7 @@ export class GoogleConnectionService {
       );
     }
 
-    await GoogleCalendarDbService.markConnectionRevoked({
+    await GoogleConnectionDbService.markConnectionRevoked({
       identityId,
       connectionId: connection.id,
     });
@@ -226,7 +226,7 @@ export class GoogleConnectionService {
   }
 
   static async getAccessToken({ identityId, service }: GetAccessTokenInput) {
-    const connection = await GoogleCalendarDbService.getActiveConnection({ identityId });
+    const connection = await GoogleConnectionDbService.getActiveConnection({ identityId });
 
     if (!connection) {
       throw new AppError({
@@ -248,7 +248,7 @@ export class GoogleConnectionService {
       const refreshToken = GoogleTokenEncryptionService.decryptToken(connection);
       const accessToken = await GoogleOAuthService.refreshAccessToken({ refreshToken });
 
-      await GoogleCalendarDbService.touchConnectionLastUsed({
+      await GoogleConnectionDbService.touchConnectionLastUsed({
         identityId,
         connectionId: connection.id,
       });
@@ -260,7 +260,7 @@ export class GoogleConnectionService {
         !error.retryable &&
         error.code === AppErrorCode.GOOGLE_TOKEN_INVALID
       ) {
-        await GoogleCalendarDbService.markConnectionInvalid({
+        await GoogleConnectionDbService.markConnectionInvalid({
           identityId,
           connectionId: connection.id,
         });

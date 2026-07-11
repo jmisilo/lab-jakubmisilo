@@ -14,7 +14,7 @@ import {
 } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
 
-export class GoogleCalendarDbService extends DbService {
+export class GoogleConnectionDbService extends DbService {
   static async createOauthState(input: NewGoogleCalendarOauthState) {
     const [state] = await this.client
       .insert(agentGoogleCalendarOauthStates)
@@ -171,8 +171,10 @@ export class GoogleCalendarDbService extends DbService {
         ),
       );
   }
+}
 
-  static async createActionAudit(input: NewGoogleCalendarActionAudit) {
+export class GoogleCalendarAuditDbService extends DbService {
+  static async recordAction(input: NewGoogleCalendarActionAudit) {
     const [audit] = await this.client
       .insert(agentGoogleCalendarActionAudit)
       .values(input)

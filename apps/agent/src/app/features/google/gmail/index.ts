@@ -1,8 +1,3 @@
-import type {
-  GoogleGmailMessage,
-  GoogleGmailMessageSummary,
-} from '@/app/features/google/gmail/types';
-
 import { GoogleConnectionService } from '@/app/features/google/connection';
 import {
   GOOGLE_GMAIL_MESSAGE_BODY_MAX_CHARACTERS,
@@ -109,3 +104,18 @@ type ReadThreadInput = {
 };
 
 type GoogleApiMessage = Awaited<ReturnType<typeof GoogleGmailApiClient.getMessage>>;
+
+type GoogleGmailMessageSummary = {
+  id: string;
+  threadId: string;
+  subject: string;
+  from?: string;
+  to?: string;
+  date?: string;
+  snippet: string;
+  labelIds: string[];
+};
+
+type GoogleGmailMessage = GoogleGmailMessageSummary & {
+  body: string;
+};

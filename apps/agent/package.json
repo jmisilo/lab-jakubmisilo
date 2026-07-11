@@ -23,7 +23,6 @@
     "@fontsource/inter": "^5.2.8",
     "@labjm/utilities": "workspace:*",
     "@message-ui/components": "^0.1.0",
-    "@neondatabase/serverless": "^1.1.0",
     "@resvg/resvg-js": "^2.6.2",
     "@upstash/qstash": "^2.11.1",
     "@vercel/functions": "3.7.1",

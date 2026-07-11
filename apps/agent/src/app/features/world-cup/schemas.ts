@@ -5,14 +5,9 @@ import { z } from 'zod';
 import { WORLD_CUP_TEAM_FIFA_CODES, WorldCupTeamRegistry } from '@/app/features/world-cup/teams';
 
 export const WORLD_CUP_EVENT_TYPES = ['kickoff', 'goal', 'game-end'] as const;
-export const WORLD_CUP_DETECTED_EVENT_TYPES = [
-  'kickoff',
-  'goal',
-  'game-end',
-  'kickoff-reminder',
-] as const;
-export const WORLD_CUP_TRACKING_MODES = ['all_teams', 'teams', 'team'] as const;
-export const WORLD_CUP_CONTEXT_FOCUSES = [
+const WORLD_CUP_DETECTED_EVENT_TYPES = ['kickoff', 'goal', 'game-end', 'kickoff-reminder'] as const;
+const WORLD_CUP_TRACKING_MODES = ['all_teams', 'teams', 'team'] as const;
+const WORLD_CUP_CONTEXT_FOCUSES = [
   'all',
   'schedule',
   'team',
@@ -22,7 +17,7 @@ export const WORLD_CUP_CONTEXT_FOCUSES = [
 ] as const;
 
 export const WorldCupEventTypeSchema = z.enum(WORLD_CUP_EVENT_TYPES);
-export const WorldCupDetectedEventTypeSchema = z.enum(WORLD_CUP_DETECTED_EVENT_TYPES);
+const WorldCupDetectedEventTypeSchema = z.enum(WORLD_CUP_DETECTED_EVENT_TYPES);
 export const WorldCupTrackingModeSchema = z.enum(WORLD_CUP_TRACKING_MODES);
 
 const ApiBooleanSchema = z.string().transform((value) => value.trim().toLowerCase() === 'true');
