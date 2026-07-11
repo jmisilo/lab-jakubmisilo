@@ -7,6 +7,8 @@ import type {
 } from '@/app/schedules/types';
 import type { AgentScheduledTask, AgentScheduledTaskRun } from '@/types';
 
+import { randomUUID } from 'node:crypto';
+
 import dedent from 'dedent';
 
 import { AgentService } from '@/app/agent';
@@ -18,6 +20,8 @@ import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const EARLY_DELIVERY_TOLERANCE_MS = 60_000;
+const MAX_TASK_GENERATION_ATTEMPTS = 3;
+const MAX_TASK_RECONCILIATION_ATTEMPTS = 3;
 
 export class AgentScheduleRunner {
   static async executeTask({
@@ -83,6 +87,7 @@ export class AgentScheduleRunner {
     }
 
     const scheduledFor = payloadScheduledFor ?? task.nextRunAt;
+    const triggerVersion = payloadTriggerVersion ?? this.#getTaskTriggerVersion(task) ?? 'legacy';
 
     if (payloadScheduledFor && !this.#isSameInstant(payloadScheduledFor, task.nextRunAt)) {
       logger.info(
@@ -129,37 +134,80 @@ export class AgentScheduleRunner {
 
     await bot.initialize();
 
+    const claimToken = randomUUID();
     const run = await AgentScheduleDbService.createTaskRun({
       taskId: task.id,
       scheduledFor,
+      triggerVersion,
+      claimToken,
     });
 
     if (!run) {
-      return this.#handleAlreadyClaimedRun({ task, scheduledFor, now });
+      return this.#handleAlreadyClaimedRun({ task, scheduledFor, triggerVersion, now });
     }
 
+    let deliveryTask = task;
     let output: string;
 
     try {
-      output = await this.#generateTaskMessage({ bot, task });
-      await bot.thread(task.threadId).post({ markdown: output });
+      const delivery = await this.#prepareTaskDelivery({
+        bot,
+        task,
+        runId: run.id,
+        claimToken,
+        scheduledFor,
+      });
+
+      if (delivery.status === 'skipped') {
+        await AgentScheduleDbService.markTaskRunSkipped({
+          runId: run.id,
+          claimToken,
+          reason: 'task_changed_before_delivery',
+        });
+
+        logger.info(
+          {
+            taskId: task.id,
+            runId: run.id,
+            currentStatus: delivery.currentTask?.status,
+          },
+          '[AGENT_SCHEDULE]: changed task skipped before delivery',
+        );
+
+        return {
+          taskId: task.id,
+          status: 'skipped',
+          reason: 'task_changed_before_delivery',
+        };
+      }
+
+      deliveryTask = delivery.task;
+      output = delivery.output;
+
+      await bot.thread(deliveryTask.threadId).post({ markdown: output });
     } catch (error) {
       logger.error(
         {
           taskId: task.id,
           runId: run.id,
-          identityId: task.identityId,
-          threadId: task.threadId,
-          error,
+          identityId: deliveryTask.identityId,
+          threadId: deliveryTask.threadId,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: task execution failed',
       );
 
-      await this.#markRunFailedForRetry({ task, runId: run.id, error });
+      if (!this.#isLostRunClaim(error)) {
+        await this.#markRunFailedForRetry({
+          task: deliveryTask,
+          runId: run.id,
+          claimToken,
+          error,
+        });
+      }
 
-      if (!this.#usesQStashFailureCallback(task)) {
-        await this.#advanceTaskAfterFailure({ task, ranAt: now });
+      if (!this.#requiresRetryWithoutAdvancing(error) && !this.#usesQStashFailureCallback(task)) {
+        await this.#advanceTaskAfterFailure({ task: deliveryTask, ranAt: now });
 
         return { taskId, status: 'failed', reason: 'legacy_failure_callback_unavailable' };
       }
@@ -171,17 +219,42 @@ export class AgentScheduleRunner {
         context: {
           taskId: task.id,
           runId: run.id,
-          identityId: task.identityId,
-          threadId: task.threadId,
+          identityId: deliveryTask.identityId,
+          threadId: deliveryTask.threadId,
         },
         retryable: true,
       });
     }
 
-    await this.#recordPostedTaskMessage({ bot, task, output });
+    await this.#recordPostedTaskMessage({ bot, task: deliveryTask, output });
 
     try {
-      await this.#markRunSentAndAdvanceTask({ task, runId: run.id, output, ranAt: now });
+      const taskUpdated = await this.#finishSuccessfulTaskRun({
+        task: deliveryTask,
+        runId: run.id,
+        claimToken,
+        output,
+        ranAt: now,
+      });
+
+      if (!taskUpdated) {
+        const occurrenceAdvanced = await this.#reconcileDeliveredOccurrence({
+          task: deliveryTask,
+          scheduledFor,
+          ranAt: now,
+        });
+
+        logger.info(
+          { taskId: task.id, runId: run.id, occurrenceAdvanced },
+          '[AGENT_SCHEDULE]: delivered task revision reconciled after posting',
+        );
+
+        return {
+          taskId: task.id,
+          status: 'sent',
+          reason: 'task_changed_after_delivery',
+        };
+      }
     } catch (error) {
       logger.error(
         {
@@ -189,13 +262,12 @@ export class AgentScheduleRunner {
           runId: run.id,
           identityId: task.identityId,
           threadId: task.threadId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: posted task bookkeeping failed after delivery',
       );
 
-      if (!this.#usesQStashFailureCallback(task)) {
+      if (!this.#requiresRetryWithoutAdvancing(error) && !this.#usesQStashFailureCallback(task)) {
         return { taskId, status: 'failed', reason: 'legacy_failure_callback_unavailable' };
       }
 
@@ -300,15 +372,18 @@ export class AgentScheduleRunner {
   static async #handleAlreadyClaimedRun({
     task,
     scheduledFor,
+    triggerVersion,
     now,
   }: {
     task: AgentScheduledTask;
     scheduledFor: Date;
+    triggerVersion: string;
     now: Date;
   }): Promise<ExecuteScheduleTaskResult> {
     const existingRun = await AgentScheduleDbService.getTaskRunByScheduledFor({
       taskId: task.id,
       scheduledFor,
+      triggerVersion,
     });
 
     if (!existingRun) {
@@ -329,6 +404,14 @@ export class AgentScheduleRunner {
 
     if (existingRun.status === 'satisfied') {
       return this.#advanceSatisfiedOccurrence({ task, run: existingRun, scheduledFor, now });
+    }
+
+    if (existingRun.status === 'skipped') {
+      return {
+        taskId: task.id,
+        status: 'skipped',
+        reason: 'task_changed_before_delivery',
+      };
     }
 
     throw new AppError({
@@ -378,7 +461,7 @@ export class AgentScheduleRunner {
       '[AGENT_SCHEDULE]: recovering task advancement for already-sent run',
     );
 
-    await this.#advanceTaskAfterSuccess({ task, ranAt: now });
+    await this.#reconcileDeliveredOccurrence({ task, scheduledFor, ranAt: now });
 
     return { taskId: task.id, status: 'sent', reason: 'already_sent_recovered' };
   }
@@ -403,17 +486,7 @@ export class AgentScheduleRunner {
       '[AGENT_SCHEDULE]: satisfied occurrence skipped before delivery',
     );
 
-    if (task.scheduleKind === 'one_time') {
-      await AgentScheduleDbService.completeTask({ taskId: task.id, ranAt: now });
-    } else {
-      const nextRunAt = AgentScheduleService.getNextRunAtForTask({ task, now });
-
-      if (nextRunAt) {
-        await AgentScheduleDbService.rescheduleTask({ taskId: task.id, ranAt: now, nextRunAt });
-      } else {
-        await AgentScheduleDbService.failTask({ taskId: task.id, ranAt: now });
-      }
-    }
+    await this.#advanceTaskAfterSuccess({ task, ranAt: now });
 
     return { taskId: task.id, status: 'skipped', reason: 'already_satisfied' };
   }
@@ -437,7 +510,6 @@ export class AgentScheduleRunner {
           taskId: task.id,
           identityId: task.identityId,
           threadId: task.threadId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: transcript context unavailable',
@@ -465,7 +537,6 @@ export class AgentScheduleRunner {
             taskId: task.id,
             identityId: task.identityId,
             threadId: task.threadId,
-            error: fallbackError,
             safeError: ErrorService.toSafeLog(fallbackError),
           },
           '[AGENT_SCHEDULE]: application transcript fallback unavailable',
@@ -580,7 +651,6 @@ export class AgentScheduleRunner {
           taskId: task.id,
           identityId: task.identityId,
           threadId: task.threadId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: posted task message recording failed',
@@ -588,22 +658,30 @@ export class AgentScheduleRunner {
     }
   }
 
-  static async #markRunSentAndAdvanceTask({
+  static async #finishSuccessfulTaskRun({
     task,
     runId,
+    claimToken,
     output,
     ranAt,
   }: {
     task: AgentScheduledTask;
     runId: string;
+    claimToken: string;
     output: string;
     ranAt: Date;
   }) {
-    await AgentScheduleDbService.markTaskRunSent({
+    const nextRunAt = this.#getNextRunAtAfterRun({ task, ranAt });
+    const result = await AgentScheduleDbService.finishSuccessfulTaskRun({
+      task,
       runId,
+      claimToken,
       output,
+      ranAt,
+      nextRunAt,
     });
-    await this.#advanceTaskAfterSuccess({ task, ranAt });
+
+    return result.taskUpdated;
   }
 
   static async #advanceTaskAfterSuccess({
@@ -613,19 +691,14 @@ export class AgentScheduleRunner {
     task: AgentScheduledTask;
     ranAt: Date;
   }) {
-    if (task.scheduleKind === 'one_time') {
-      await AgentScheduleDbService.completeTask({ taskId: task.id, ranAt });
-      return;
-    }
+    const nextRunAt = this.#getNextRunAtAfterRun({ task, ranAt });
 
-    const nextRunAt = AgentScheduleService.getNextRunAtForTask({ task, now: ranAt });
-
-    if (!nextRunAt) {
-      await AgentScheduleDbService.failTask({ taskId: task.id, ranAt });
-      return;
-    }
-
-    await AgentScheduleDbService.rescheduleTask({ taskId: task.id, ranAt, nextRunAt });
+    return AgentScheduleDbService.advanceTaskAfterRun({
+      task,
+      outcome: 'success',
+      ranAt,
+      nextRunAt,
+    });
   }
 
   static async #advanceTaskAfterFailure({
@@ -635,18 +708,14 @@ export class AgentScheduleRunner {
     task: AgentScheduledTask;
     ranAt: Date;
   }) {
-    if (task.scheduleKind === 'one_time') {
-      await AgentScheduleDbService.failTask({ taskId: task.id, ranAt });
-      return;
-    }
+    const nextRunAt = this.#getNextRunAtAfterRun({ task, ranAt });
 
-    const nextRunAt = AgentScheduleService.getNextRunAtForTask({ task, now: ranAt });
-
-    if (nextRunAt) {
-      await AgentScheduleDbService.rescheduleTask({ taskId: task.id, ranAt, nextRunAt });
-    } else {
-      await AgentScheduleDbService.failTask({ taskId: task.id, ranAt });
-    }
+    return AgentScheduleDbService.advanceTaskAfterRun({
+      task,
+      outcome: 'failure',
+      ranAt,
+      nextRunAt,
+    });
   }
 
   static #usesQStashFailureCallback(task: AgentScheduledTask) {
@@ -684,15 +753,18 @@ export class AgentScheduleRunner {
   static async #markRunFailedForRetry({
     task,
     runId,
+    claimToken,
     error,
   }: {
     task: AgentScheduledTask;
     runId: string;
+    claimToken: string;
     error: unknown;
   }) {
     try {
       await AgentScheduleDbService.markTaskRunFailed({
         runId,
+        claimToken,
         error,
       });
     } catch (error) {
@@ -702,7 +774,6 @@ export class AgentScheduleRunner {
           runId,
           identityId: task.identityId,
           threadId: task.threadId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: task run failure recording failed',
@@ -732,5 +803,189 @@ export class AgentScheduleRunner {
 
   static #isSameInstant(left: Date, right: Date) {
     return left.getTime() === right.getTime();
+  }
+
+  static #getNextRunAtAfterRun({ task, ranAt }: { task: AgentScheduledTask; ranAt: Date }) {
+    return task.scheduleKind === 'recurring'
+      ? (AgentScheduleService.getNextRunAtForTask({ task, now: ranAt }) ?? undefined)
+      : undefined;
+  }
+
+  static async #prepareTaskDelivery({
+    bot,
+    task,
+    runId,
+    claimToken,
+    scheduledFor,
+  }: Pick<ExecuteScheduleTaskInput, 'bot'> & {
+    task: AgentScheduledTask;
+    runId: string;
+    claimToken: string;
+    scheduledFor: Date;
+  }): Promise<
+    | { status: 'ready'; task: AgentScheduledTask; output: string }
+    | { status: 'skipped'; currentTask: AgentScheduledTask | null }
+  > {
+    let deliveryTask = task;
+
+    for (let attempt = 1; attempt <= MAX_TASK_GENERATION_ATTEMPTS; attempt += 1) {
+      const output = await this.#generateTaskMessage({ bot, task: deliveryTask });
+      const currentTask = await AgentScheduleDbService.getTaskById({ taskId: task.id });
+
+      if (!currentTask || !this.#isCurrentOccurrence({ task, currentTask, scheduledFor })) {
+        return { status: 'skipped', currentTask };
+      }
+
+      if (currentTask.revision !== deliveryTask.revision) {
+        logger.info(
+          {
+            taskId: task.id,
+            runId,
+            previousRevision: deliveryTask.revision,
+            currentRevision: currentTask.revision,
+            attempt,
+          },
+          '[AGENT_SCHEDULE]: task changed during generation; regenerating',
+        );
+        deliveryTask = currentTask;
+        continue;
+      }
+
+      const leaseRenewed = await AgentScheduleDbService.renewTaskRunLease({
+        runId,
+        taskId: task.id,
+        claimToken,
+        taskRevision: currentTask.revision,
+        scheduledFor,
+      });
+
+      if (leaseRenewed) {
+        return { status: 'ready', task: currentTask, output };
+      }
+
+      const latestTask = await AgentScheduleDbService.getTaskById({ taskId: task.id });
+
+      if (
+        !latestTask ||
+        !this.#isCurrentOccurrence({ task, currentTask: latestTask, scheduledFor })
+      ) {
+        return { status: 'skipped', currentTask: latestTask };
+      }
+
+      if (latestTask.revision !== currentTask.revision) {
+        deliveryTask = latestTask;
+        continue;
+      }
+
+      throw this.#retryableScheduleExecutionError({
+        message: 'Scheduled task run claim was lost before delivery.',
+        taskId: task.id,
+        runId,
+        retryReason: 'claim_lost',
+      });
+    }
+
+    throw this.#retryableScheduleExecutionError({
+      message: 'Scheduled task kept changing while its message was generated.',
+      taskId: task.id,
+      runId,
+      retryReason: 'task_revision_churn',
+    });
+  }
+
+  static async #reconcileDeliveredOccurrence({
+    task,
+    scheduledFor,
+    ranAt,
+  }: {
+    task: AgentScheduledTask;
+    scheduledFor: Date;
+    ranAt: Date;
+  }) {
+    for (let attempt = 1; attempt <= MAX_TASK_RECONCILIATION_ATTEMPTS; attempt += 1) {
+      const currentTask = await AgentScheduleDbService.getTaskById({ taskId: task.id });
+
+      if (!currentTask || !this.#isCurrentOccurrence({ task, currentTask, scheduledFor })) {
+        return false;
+      }
+
+      const result = await this.#advanceTaskAfterSuccess({ task: currentTask, ranAt });
+
+      if (result.taskUpdated) {
+        return true;
+      }
+
+      logger.info(
+        { taskId: task.id, currentRevision: currentTask.revision, attempt },
+        '[AGENT_SCHEDULE]: delivered task changed during reconciliation; retrying',
+      );
+    }
+
+    throw this.#retryableScheduleExecutionError({
+      message: 'Delivered scheduled task kept changing during state reconciliation.',
+      taskId: task.id,
+      retryReason: 'task_reconciliation_churn',
+      delivered: true,
+    });
+  }
+
+  static #isCurrentOccurrence({
+    task,
+    currentTask,
+    scheduledFor,
+  }: {
+    task: AgentScheduledTask;
+    currentTask: AgentScheduledTask;
+    scheduledFor: Date;
+  }) {
+    return (
+      currentTask.status === 'active' &&
+      currentTask.scheduleKind === task.scheduleKind &&
+      this.#getTaskTriggerVersion(currentTask) === this.#getTaskTriggerVersion(task) &&
+      this.#isSameInstant(currentTask.nextRunAt, scheduledFor)
+    );
+  }
+
+  static #retryableScheduleExecutionError({
+    message,
+    taskId,
+    runId,
+    retryReason,
+    delivered = false,
+  }: {
+    message: string;
+    taskId: string;
+    runId?: string;
+    retryReason: 'claim_lost' | 'task_reconciliation_churn' | 'task_revision_churn';
+    delivered?: boolean;
+  }) {
+    return new AppError({
+      code: AppErrorCode.SCHEDULE_TASK_EXECUTION_FAILED,
+      message,
+      context: {
+        taskId,
+        runId,
+        retryReason,
+        retryWithoutAdvancing: true,
+        delivered,
+      },
+      retryable: true,
+    });
+  }
+
+  static #isLostRunClaim(error: unknown) {
+    return (
+      AppError.is(error) &&
+      (error.code === AppErrorCode.SCHEDULE_TASK_RUN_NOT_FOUND ||
+        error.context.retryReason === 'claim_lost')
+    );
+  }
+
+  static #requiresRetryWithoutAdvancing(error: unknown) {
+    return (
+      AppError.is(error) &&
+      (error.code === AppErrorCode.SCHEDULE_TASK_RUN_NOT_FOUND ||
+        error.context.retryWithoutAdvancing === true)
+    );
   }
 }

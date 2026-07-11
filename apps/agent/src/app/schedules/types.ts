@@ -106,10 +106,22 @@ export type ScheduledTaskRecurrence = {
 
 export type ScheduleExecutionStatus = 'sent' | 'failed' | 'skipped';
 
+export type ScheduleExecutionReason =
+  | 'already_satisfied'
+  | 'already_sent'
+  | 'already_sent_recovered'
+  | 'legacy_failure_callback_unavailable'
+  | 'retries_exhausted'
+  | 'stale_payload'
+  | 'task_changed_after_delivery'
+  | 'task_changed_before_delivery'
+  | 'task_not_active'
+  | 'task_not_found';
+
 export type ExecuteScheduleTaskResult = {
   taskId: string;
   status: ScheduleExecutionStatus;
-  reason?: string;
+  reason?: ScheduleExecutionReason;
 };
 
 export type AgentScheduledTaskWithRecurrence = AgentScheduledTask & {

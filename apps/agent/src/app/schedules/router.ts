@@ -1,6 +1,3 @@
-import type { Context } from 'hono';
-
-import { Receiver, SignatureError } from '@upstash/qstash';
 import { Hono } from 'hono';
 
 import { bot } from '@/app/bot';
@@ -11,16 +8,25 @@ import {
 } from '@/app/schedules/schemas';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { QStashService } from '@/infrastructure/qstash';
 
 export const ScheduleRouter = new Hono()
   .post('/jobs/schedules/execute', async (c) => {
-    const verification = await readVerifiedQStashBody(c);
+    const verification = await QStashService.verifySignedRequest(c.req.raw);
 
     if (!verification.ok) {
-      return verification.response;
+      if (verification.reason === 'missing_configuration') {
+        logger.error('[AGENT_SCHEDULE]: QStash signing keys are not configured');
+
+        return c.json({ ok: false, error: 'QStash signing keys are not configured' }, 500);
+      }
+
+      logger.warn('[AGENT_SCHEDULE]: execution request unauthorized');
+
+      return c.json({ ok: false, error: 'Unauthorized' }, 401);
     }
 
-    logger.info({ url: c.req.url }, '[AGENT_SCHEDULE]: execution request verified');
+    logger.info('[AGENT_SCHEDULE]: execution request verified');
 
     try {
       const parsedPayload = ScheduleExecutionPayloadSchema.safeParse(
@@ -29,7 +35,7 @@ export const ScheduleRouter = new Hono()
 
       if (!parsedPayload.success) {
         logger.warn(
-          { issues: parsedPayload.error.issues },
+          { issueCount: parsedPayload.error.issues.length },
           '[AGENT_SCHEDULE]: execution request payload invalid',
         );
 
@@ -47,7 +53,7 @@ export const ScheduleRouter = new Hono()
       return c.json({ ok: true, result });
     } catch (error) {
       logger.error(
-        { error, safeError: ErrorService.toSafeLog(error), url: c.req.url },
+        { safeError: ErrorService.toSafeLog(error) },
         '[AGENT_SCHEDULE]: execution request failed',
       );
 
@@ -55,20 +61,28 @@ export const ScheduleRouter = new Hono()
     }
   })
   .post('/jobs/schedules/failure', async (c) => {
-    const verification = await readVerifiedQStashBody(c);
+    const verification = await QStashService.verifySignedRequest(c.req.raw);
 
     if (!verification.ok) {
-      return verification.response;
+      if (verification.reason === 'missing_configuration') {
+        logger.error('[AGENT_SCHEDULE]: QStash signing keys are not configured');
+
+        return c.json({ ok: false, error: 'QStash signing keys are not configured' }, 500);
+      }
+
+      logger.warn('[AGENT_SCHEDULE]: failure callback unauthorized');
+
+      return c.json({ ok: false, error: 'Unauthorized' }, 401);
     }
 
-    logger.info({ url: c.req.url }, '[AGENT_SCHEDULE]: failure callback verified');
+    logger.info('[AGENT_SCHEDULE]: failure callback verified');
 
     try {
       const parsedFailure = parseFailureCallbackBody(verification.body);
 
       if (!parsedFailure.ok) {
         logger.warn(
-          { issues: parsedFailure.issues },
+          { issueCount: parsedFailure.issueCount },
           '[AGENT_SCHEDULE]: failure callback payload invalid',
         );
 
@@ -86,86 +100,13 @@ export const ScheduleRouter = new Hono()
       return c.json({ ok: true, result });
     } catch (error) {
       logger.error(
-        { error, safeError: ErrorService.toSafeLog(error), url: c.req.url },
+        { safeError: ErrorService.toSafeLog(error) },
         '[AGENT_SCHEDULE]: failure callback handling failed',
       );
 
       return c.json({ ok: false, error: 'Schedule failure callback failed' }, 500);
     }
   });
-
-async function readVerifiedQStashBody(c: Context) {
-  if (!process.env.QSTASH_CURRENT_SIGNING_KEY || !process.env.QSTASH_NEXT_SIGNING_KEY) {
-    logger.error('[AGENT_SCHEDULE]: QStash signing keys are not configured');
-
-    return {
-      ok: false as const,
-      response: c.json({ ok: false, error: 'QStash signing keys are not configured' }, 500),
-    };
-  }
-
-  const signature = c.req.header('upstash-signature');
-
-  if (!signature) {
-    logger.warn({ url: c.req.url }, '[AGENT_SCHEDULE]: execution request missing QStash signature');
-
-    return {
-      ok: false as const,
-      response: c.json({ ok: false, error: 'Unauthorized' }, 401),
-    };
-  }
-
-  const body = await c.req.text();
-  const receiver = new Receiver({
-    currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-    nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-    devMode: false,
-  });
-
-  try {
-    const verified = await receiver.verify({
-      signature,
-      body,
-      url: c.req.url,
-      clockTolerance: 30,
-      upstashRegion: c.req.header('upstash-region'),
-    });
-
-    if (!verified) {
-      return {
-        ok: false as const,
-        response: c.json({ ok: false, error: 'Unauthorized' }, 401),
-      };
-    }
-  } catch (error) {
-    if (error instanceof SignatureError) {
-      logger.warn(
-        { error, safeError: ErrorService.toSafeLog(error) },
-        '[AGENT_SCHEDULE]: execution request QStash signature verification failed',
-      );
-
-      return {
-        ok: false as const,
-        response: c.json({ ok: false, error: 'Unauthorized' }, 401),
-      };
-    }
-
-    logger.error(
-      { error, safeError: ErrorService.toSafeLog(error) },
-      '[AGENT_SCHEDULE]: execution request QStash signature verification errored',
-    );
-
-    return {
-      ok: false as const,
-      response: c.json({ ok: false, error: 'Unauthorized' }, 401),
-    };
-  }
-
-  return {
-    ok: true as const,
-    body,
-  };
-}
 
 function parseFailureCallbackBody(body: string):
   | {
@@ -182,11 +123,11 @@ function parseFailureCallbackBody(body: string):
         sourceMessageId?: string;
       };
     }
-  | { ok: false; issues: unknown } {
+  | { ok: false; issueCount: number } {
   const parsedCallback = ScheduleFailureCallbackPayloadSchema.safeParse(parseJsonBody(body));
 
   if (!parsedCallback.success) {
-    return { ok: false, issues: parsedCallback.error.issues };
+    return { ok: false, issueCount: parsedCallback.error.issues.length };
   }
 
   const parsedSourceBody = ScheduleExecutionPayloadSchema.safeParse(
@@ -194,7 +135,7 @@ function parseFailureCallbackBody(body: string):
   );
 
   if (!parsedSourceBody.success) {
-    return { ok: false, issues: parsedSourceBody.error.issues };
+    return { ok: false, issueCount: parsedSourceBody.error.issues.length };
   }
 
   return {

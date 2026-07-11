@@ -64,7 +64,6 @@ export const readNutritionTool: ReadNutritionTool = tool({
         {
           identityId: context.identityId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[NUTRITION]: read tool failed',
@@ -173,7 +172,6 @@ export const manageNutritionTool: ManageNutritionTool = tool({
         {
           identityId: context.identityId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[NUTRITION]: manage tool failed',

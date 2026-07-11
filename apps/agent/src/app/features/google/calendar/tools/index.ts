@@ -113,7 +113,6 @@ export const readCalendarTool: ReadCalendarTool = tool({
         {
           identityId: context.identityId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE_CALENDAR]: read tool failed',
@@ -238,7 +237,6 @@ export const manageCalendarTool: ManageCalendarTool = tool({
           identityId: context.identityId,
           threadId: context.threadId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE_CALENDAR]: manage tool failed',
@@ -326,7 +324,6 @@ async function createReconnectableFailureResult({
         threadId: context.threadId,
         operation,
         reconnectReason,
-        error: reconnectError,
         safeError: ErrorService.toSafeLog(reconnectError),
       },
       '[GOOGLE_CALENDAR]: reconnect link creation failed after tool failure',

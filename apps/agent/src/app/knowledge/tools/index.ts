@@ -19,12 +19,10 @@ import {
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
-const KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT = 1_000;
+const KNOWLEDGE_TOOL_EXPLORE_CONTENT_PREVIEW_CHARACTER_LIMIT = 1_000;
 const KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_CHARACTER_LIMIT = 2_000;
 const KNOWLEDGE_TOOL_READ_CONTENT_PREVIEW_TRUNCATION_MARKER =
   '[preview truncated: read with contentMode="full" to get the rest of the content]';
-const SHOULD_LOG_KNOWLEDGE_TOOL_CONTENT_PREVIEW =
-  process.env.AGENT_LOG_KNOWLEDGE_TOOL_CONTENT === '1';
 
 export const readKnowledgeTool: ReadKnowledgeTool = tool({
   description: dedent`
@@ -80,7 +78,6 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            parentPath: input.parentPath,
             nodeCount: nodes.length,
             input: inputLog,
           },
@@ -111,7 +108,6 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            path: node.path,
             nodeId: node.id,
             input: inputLog,
           },
@@ -155,8 +151,6 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
           operationId,
           identityId: context.identityId,
           sourceMessageId: context.sourceMessageId,
-          startPath: input.startPath,
-          query: input.query,
           direction: input.direction,
           nodeCount: result.nodes.length,
           truncated: result.truncated,
@@ -186,7 +180,6 @@ export const readKnowledgeTool: ReadKnowledgeTool = tool({
       logger.error(
         {
           operationId,
-          error,
           safeError: ErrorService.toSafeLog(error),
           identityId: context.identityId,
           sourceMessageId: context.sourceMessageId,
@@ -232,7 +225,7 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
     - Use update when the same active fact or note should be edited. Update content must be complete standalone markdown, not a diff.
     - Use deactivate for forget/archive/no-longer-remember requests when no replacement is needed. This preserves inactive history instead of deleting.
     - Use move to rename a path, move a note under another parent, or retitle a note while preserving children.
-    - Use supersede when an old fact is inactive but historically useful.
+    - Use supersede when an old fact is inactive but historically useful. Provide either a replacement node or supersededByPath, never both.
     - Use read-knowledge first when you need to locate or inspect the current note before mutating it.
     - Missing parent groups in parentPath are auto-created.
     - Use slash-separated paths such as profile/location, work/current-role, work/history/company-x, projects/lab-agent/knowledge-system, ideas/telegram-agent-scheduling, or journal/2026/07/06.
@@ -268,24 +261,21 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
     );
 
     try {
-      if (input.action === 'create') {
-        const createdNode = await AgentKnowledgeService.createNode({
-          identityId: context.identityId,
-          parentPath: input.node.parentPath,
-          slug: input.node.slug,
-          title: input.node.title,
-          content: input.node.content,
-          source: 'explicit',
-          sourceMessageId: context.sourceMessageId,
-        });
+      const outcome = await AgentKnowledgeService.applyExplicitMutation({
+        ...input,
+        identityId: context.identityId,
+        sourceMessageId: context.sourceMessageId,
+      });
+
+      if (outcome.action === 'create') {
+        const createdNode = outcome.node;
 
         logger.info(
           {
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            path: createdNode?.path,
-            nodeId: createdNode?.id,
+            nodeId: createdNode.id,
             input: inputLog,
           },
           '[AGENT_KNOWLEDGE]: manage tool created node',
@@ -293,26 +283,20 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
 
         return {
           ok: true,
-          message: `Saved knowledge note ${createdNode?.path ?? input.node.title}.`,
+          message: `Saved knowledge note ${createdNode.path}.`,
           operationId,
-          node: createdNode ? toToolNode(createdNode) : undefined,
+          node: toToolNode(createdNode),
         };
       }
 
-      if (input.action === 'update') {
-        const updatedNode = await AgentKnowledgeService.updateNodeByPath({
-          identityId: context.identityId,
-          path: input.path,
-          title: input.update.title,
-          content: input.update.content,
-        });
+      if (outcome.action === 'update') {
+        const updatedNode = outcome.node;
 
         logger.info(
           {
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            path: updatedNode.path,
             nodeId: updatedNode.id,
             input: inputLog,
           },
@@ -327,18 +311,14 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
         };
       }
 
-      if (input.action === 'deactivate') {
-        const deactivatedNode = await AgentKnowledgeService.deactivateNodeByPath({
-          identityId: context.identityId,
-          path: input.path,
-        });
+      if (outcome.action === 'deactivate') {
+        const deactivatedNode = outcome.node;
 
         logger.info(
           {
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            path: deactivatedNode.path,
             nodeId: deactivatedNode.id,
             input: inputLog,
           },
@@ -353,22 +333,14 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
         };
       }
 
-      if (input.action === 'move') {
-        const movedNode = await AgentKnowledgeService.moveNodeByPath({
-          identityId: context.identityId,
-          path: input.path,
-          newParentPath: input.move.parentPath,
-          newSlug: input.move.slug,
-          title: input.move.title,
-        });
+      if (outcome.action === 'move') {
+        const movedNode = outcome.node;
 
         logger.info(
           {
             operationId,
             identityId: context.identityId,
             sourceMessageId: context.sourceMessageId,
-            previousPath: input.path,
-            path: movedNode.path,
             nodeId: movedNode.id,
             input: inputLog,
           },
@@ -377,36 +349,20 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
 
         return {
           ok: true,
-          message: `Moved knowledge note ${input.path} to ${movedNode.path}.`,
+          message: `Moved knowledge note ${outcome.previousPath} to ${movedNode.path}.`,
           operationId,
           node: toToolNode(movedNode),
         };
       }
 
-      const replacementNode = input.node
-        ? await AgentKnowledgeService.createNode({
-            identityId: context.identityId,
-            parentPath: input.node.parentPath,
-            slug: input.node.slug,
-            title: input.node.title,
-            content: input.node.content,
-            source: 'explicit',
-            sourceMessageId: context.sourceMessageId,
-          })
-        : null;
-      const supersededNode = await AgentKnowledgeService.supersedeNodeByPath({
-        identityId: context.identityId,
-        path: input.path,
-        supersededByPath: replacementNode?.path ?? input.supersededByPath,
-      });
+      const replacementNode = outcome.node;
+      const supersededNode = outcome.supersededNode;
 
       logger.info(
         {
           operationId,
           identityId: context.identityId,
           sourceMessageId: context.sourceMessageId,
-          path: input.path,
-          supersededByPath: replacementNode?.path ?? input.supersededByPath,
           replacementNodeId: replacementNode?.id,
           supersededNodeId: supersededNode.id,
           input: inputLog,
@@ -425,7 +381,6 @@ export const manageKnowledgeTool: ManageKnowledgeTool = tool({
       logger.error(
         {
           operationId,
-          error,
           safeError: ErrorService.toSafeLog(error),
           identityId: context.identityId,
           sourceMessageId: context.sourceMessageId,
@@ -447,7 +402,7 @@ function createReadKnowledgeToolInputLog(input: z.infer<typeof ReadKnowledgeTool
   if (input.action === 'list') {
     return {
       action: input.action,
-      parentPath: input.parentPath,
+      parentPath: createOptionalTextLog(input.parentPath),
       includeInactive: input.includeInactive,
       limit: input.limit,
     };
@@ -456,7 +411,7 @@ function createReadKnowledgeToolInputLog(input: z.infer<typeof ReadKnowledgeTool
   if (input.action === 'read') {
     return {
       action: input.action,
-      path: input.path,
+      path: createTextLog(input.path),
       contentMode: input.contentMode,
       includeInactive: input.includeInactive,
     };
@@ -464,8 +419,8 @@ function createReadKnowledgeToolInputLog(input: z.infer<typeof ReadKnowledgeTool
 
   return {
     action: input.action,
-    startPath: input.startPath,
-    query: input.query,
+    startPath: createOptionalTextLog(input.startPath),
+    query: createOptionalTextLog(input.query),
     direction: input.direction,
     maxDepth: input.maxDepth,
     includeInactive: input.includeInactive,
@@ -485,9 +440,9 @@ function createManageKnowledgeToolInputLog(input: z.infer<typeof ManageKnowledge
   if (input.action === 'update') {
     return {
       action: input.action,
-      path: input.path,
+      path: createTextLog(input.path),
       update: {
-        title: input.update.title,
+        title: createOptionalTextLog(input.update.title),
         content: createTextLog(input.update.content),
       },
     };
@@ -496,22 +451,26 @@ function createManageKnowledgeToolInputLog(input: z.infer<typeof ManageKnowledge
   if (input.action === 'deactivate') {
     return {
       action: input.action,
-      path: input.path,
+      path: createTextLog(input.path),
     };
   }
 
   if (input.action === 'move') {
     return {
       action: input.action,
-      path: input.path,
-      move: input.move,
+      path: createTextLog(input.path),
+      move: {
+        parentPath: createOptionalTextLog(input.move.parentPath),
+        slug: createOptionalTextLog(input.move.slug),
+        title: createOptionalTextLog(input.move.title),
+      },
     };
   }
 
   return {
     action: input.action,
-    path: input.path,
-    supersededByPath: input.supersededByPath,
+    path: createTextLog(input.path),
+    supersededByPath: createOptionalTextLog(input.supersededByPath),
     node: input.node ? createNodeDraftLog(input.node) : undefined,
   };
 }
@@ -523,11 +482,15 @@ function createNodeDraftLog(node: {
   content: string;
 }) {
   return {
-    parentPath: node.parentPath,
-    slug: node.slug,
-    title: node.title,
+    parentPath: createOptionalTextLog(node.parentPath),
+    slug: createOptionalTextLog(node.slug),
+    title: createTextLog(node.title),
     content: createTextLog(node.content),
   };
+}
+
+function createOptionalTextLog(value?: string | null) {
+  return value === undefined || value === null ? value : createTextLog(value);
 }
 
 function createTextLog(value: string) {
@@ -536,9 +499,6 @@ function createTextLog(value: string) {
   return {
     characterCount: normalizedValue.length,
     sha256: createHash('sha256').update(normalizedValue).digest('hex'),
-    preview: SHOULD_LOG_KNOWLEDGE_TOOL_CONTENT_PREVIEW
-      ? truncateText(normalizedValue, KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT)
-      : undefined,
   };
 }
 
@@ -596,7 +556,8 @@ function toToolNode(
   if (options.includeContentPreview) {
     toolNode.contentPreview = truncateText(
       node.content,
-      options.contentPreviewCharacterLimit ?? KNOWLEDGE_TOOL_CONTENT_PREVIEW_CHARACTER_LIMIT,
+      options.contentPreviewCharacterLimit ??
+        KNOWLEDGE_TOOL_EXPLORE_CONTENT_PREVIEW_CHARACTER_LIMIT,
       options.contentPreviewTruncationMarker,
     );
   }

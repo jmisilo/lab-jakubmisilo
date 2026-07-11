@@ -1,11 +1,13 @@
-import { Client } from '@upstash/qstash';
+import { Client, Receiver, SignatureError } from '@upstash/qstash';
 
 import { UrlComposer } from '@labjm/utilities/url-composer';
 
-import { AppError, AppErrorCode } from '@/infrastructure/errors';
+import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
+import { logger } from '@/infrastructure/logger';
 
 const QSTASH_EXECUTION_RETRIES = 3;
 const QSTASH_EXECUTION_TIMEOUT_SECONDS = 60;
+const QSTASH_SIGNATURE_CLOCK_TOLERANCE_SECONDS = 30;
 
 const DAY_OF_WEEK_CRON_VALUE: Record<QStashScheduleDayOfWeek, number> = {
   sunday: 0,
@@ -18,6 +20,50 @@ const DAY_OF_WEEK_CRON_VALUE: Record<QStashScheduleDayOfWeek, number> = {
 };
 
 export class QStashService {
+  static async verifySignedRequest(request: Request): Promise<QStashVerificationResult> {
+    const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
+    const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
+
+    if (!currentSigningKey || !nextSigningKey) {
+      return { ok: false, reason: 'missing_configuration' };
+    }
+
+    const signature = request.headers.get('upstash-signature');
+
+    if (!signature) {
+      return { ok: false, reason: 'unauthorized' };
+    }
+
+    const body = await request.text();
+    const receiver = new Receiver({
+      currentSigningKey,
+      nextSigningKey,
+      devMode: false,
+    });
+
+    try {
+      const verified = await receiver.verify({
+        signature,
+        body,
+        url: request.url,
+        clockTolerance: QSTASH_SIGNATURE_CLOCK_TOLERANCE_SECONDS,
+        upstashRegion: request.headers.get('upstash-region') ?? undefined,
+      });
+
+      return verified ? { ok: true, body } : { ok: false, reason: 'unauthorized' };
+    } catch (error) {
+      const safeError = ErrorService.toSafeLog(error);
+
+      if (error instanceof SignatureError) {
+        logger.warn({ safeError }, '[QSTASH]: signed request authentication failed');
+      } else {
+        logger.error({ safeError }, '[QSTASH]: signed request verification errored');
+      }
+
+      return { ok: false, reason: 'unauthorized' };
+    }
+  }
+
   static async scheduleOneTimeTask({
     taskId,
     runAt,
@@ -264,3 +310,7 @@ type CancelScheduledTaskInput = {
   qstashMessageId?: string | null;
   qstashScheduleId?: string | null;
 };
+
+type QStashVerificationResult =
+  | { ok: true; body: string }
+  | { ok: false; reason: 'missing_configuration' | 'unauthorized' };

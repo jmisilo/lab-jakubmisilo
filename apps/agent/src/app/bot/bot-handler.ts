@@ -36,14 +36,6 @@ export class BotHandler {
       thread,
       operation: async () => {
         try {
-          logger.debug(
-            {
-              threadId: thread.id,
-              messageId: message.id,
-            },
-            '[BOT]: agent thinking started',
-          );
-
           const bot = this.#getBot();
           const identityId = this.#resolveIdentityId(message);
 
@@ -73,31 +65,12 @@ export class BotHandler {
             attachments: message.attachments,
           });
 
-          logger.debug(
-            {
-              threadId: thread.id,
-              messageId: message.id,
-              contextMessageCount: messages.length,
-              attachmentCount: message.attachments?.length ?? 0,
-            },
-            '[BOT]: context prepared',
-          );
-
           const result = await AgentService.generate({
             messages,
             identityId,
             threadId: thread.id,
             sourceMessageId: message.id,
           });
-
-          logger.debug(
-            {
-              threadId: thread.id,
-              messageId: message.id,
-              text: result.text,
-            },
-            '[BOT]: model output generated',
-          );
 
           const responseText = this.#resolveResponseText({
             text: result.text,
@@ -154,10 +127,8 @@ export class BotHandler {
             {
               threadId: thread.id,
               sourceMessageId: message.id,
-              error,
               safeError: ErrorService.toSafeLog(error),
               userFacingCode: failure.code,
-              userFacingMessage: failure.message,
               retryable: failure.retryable,
             },
             '[BOT]: message failed',
@@ -234,7 +205,6 @@ export class BotHandler {
           threadId: thread.id,
           sourceMessageId,
           userFacingCode: failure.code,
-          userFacingMessage: failure.message,
           retryable: failure.retryable,
         },
         '[BOT]: failure message sent',
@@ -245,7 +215,6 @@ export class BotHandler {
           threadId: thread.id,
           sourceMessageId,
           originalFailureCode: failure.code,
-          error: postError,
           safeError: ErrorService.toSafeLog(postError),
         },
         '[BOT]: failure message failed',
@@ -287,7 +256,6 @@ export class BotHandler {
       logger.warn(
         {
           threadId: thread.id,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[BOT]: typing indicator failed',

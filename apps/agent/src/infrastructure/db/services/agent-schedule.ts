@@ -1,6 +1,6 @@
 import type { AgentScheduledTask, NewAgentScheduledTask } from '@/types';
 
-import { and, asc, count, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, exists, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { agentScheduledTaskRuns, agentScheduledTasks } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
@@ -83,6 +83,7 @@ export class AgentScheduleDbService extends DbService {
         metadata: metadata
           ? sql`${agentScheduledTasks.metadata} || ${metadata}`
           : agentScheduledTasks.metadata,
+        revision: sql`${agentScheduledTasks.revision} + 1`,
         updatedAt: new Date(),
       })
       .where(
@@ -115,6 +116,7 @@ export class AgentScheduleDbService extends DbService {
         metadata: metadata
           ? sql`${agentScheduledTasks.metadata} || ${metadata}`
           : agentScheduledTasks.metadata,
+        revision: sql`${agentScheduledTasks.revision} + 1`,
         updatedAt: new Date(),
       })
       .where(
@@ -158,6 +160,7 @@ export class AgentScheduleDbService extends DbService {
         metadata: metadata
           ? sql`${agentScheduledTasks.metadata} || ${metadata}`
           : agentScheduledTasks.metadata,
+        revision: sql`${agentScheduledTasks.revision} + 1`,
         updatedAt: new Date(),
       })
       .where(
@@ -191,6 +194,7 @@ export class AgentScheduleDbService extends DbService {
         metadata: metadata
           ? sql`${agentScheduledTasks.metadata} || ${metadata}`
           : agentScheduledTasks.metadata,
+        revision: sql`${agentScheduledTasks.revision} + 1`,
         updatedAt: new Date(),
       })
       .where(
@@ -235,7 +239,12 @@ export class AgentScheduleDbService extends DbService {
     return task ?? null;
   }
 
-  static async createTaskRun({ taskId, scheduledFor }: CreateScheduledTaskRunInput) {
+  static async createTaskRun({
+    taskId,
+    scheduledFor,
+    triggerVersion,
+    claimToken,
+  }: CreateScheduledTaskRunInput) {
     const now = new Date();
     const staleStartedBefore = new Date(now.getTime() - SCHEDULE_TASK_RUNNING_LEASE_MS);
 
@@ -244,12 +253,19 @@ export class AgentScheduleDbService extends DbService {
       .values({
         taskId,
         scheduledFor,
+        triggerVersion,
         status: 'running',
+        claimToken,
       })
       .onConflictDoUpdate({
-        target: [agentScheduledTaskRuns.taskId, agentScheduledTaskRuns.scheduledFor],
+        target: [
+          agentScheduledTaskRuns.taskId,
+          agentScheduledTaskRuns.scheduledFor,
+          agentScheduledTaskRuns.triggerVersion,
+        ],
         set: {
           status: 'running',
+          claimToken,
           output: null,
           error: null,
           startedAt: now,
@@ -266,6 +282,41 @@ export class AgentScheduleDbService extends DbService {
       .returning();
 
     return run ?? null;
+  }
+
+  static async renewTaskRunLease({
+    runId,
+    taskId,
+    claimToken,
+    taskRevision,
+    scheduledFor,
+  }: RenewScheduledTaskRunLeaseInput) {
+    const currentOccurrence = this.client
+      .select({ id: agentScheduledTasks.id })
+      .from(agentScheduledTasks)
+      .where(
+        and(
+          eq(agentScheduledTasks.id, taskId),
+          eq(agentScheduledTasks.status, 'active'),
+          eq(agentScheduledTasks.revision, taskRevision),
+          eq(agentScheduledTasks.nextRunAt, scheduledFor),
+        ),
+      );
+    const [run] = await this.client
+      .update(agentScheduledTaskRuns)
+      .set({ startedAt: new Date() })
+      .where(
+        and(
+          eq(agentScheduledTaskRuns.id, runId),
+          eq(agentScheduledTaskRuns.taskId, taskId),
+          eq(agentScheduledTaskRuns.status, 'running'),
+          eq(agentScheduledTaskRuns.claimToken, claimToken),
+          exists(currentOccurrence),
+        ),
+      )
+      .returning({ id: agentScheduledTaskRuns.id });
+
+    return Boolean(run);
   }
 
   static async satisfyTaskOccurrence({
@@ -304,15 +355,21 @@ export class AgentScheduleDbService extends DbService {
         .values({
           taskId,
           scheduledFor: task.nextRunAt,
+          triggerVersion: this.#getTaskTriggerVersion(task),
           status: 'satisfied',
           sourceMessageId,
           startedAt: satisfiedAt,
           finishedAt: satisfiedAt,
         })
         .onConflictDoUpdate({
-          target: [agentScheduledTaskRuns.taskId, agentScheduledTaskRuns.scheduledFor],
+          target: [
+            agentScheduledTaskRuns.taskId,
+            agentScheduledTaskRuns.scheduledFor,
+            agentScheduledTaskRuns.triggerVersion,
+          ],
           set: {
             status: 'satisfied',
+            claimToken: null,
             sourceMessageId,
             error: null,
             startedAt: satisfiedAt,
@@ -330,6 +387,7 @@ export class AgentScheduleDbService extends DbService {
             and(
               eq(agentScheduledTaskRuns.taskId, taskId),
               eq(agentScheduledTaskRuns.scheduledFor, task.nextRunAt),
+              eq(agentScheduledTaskRuns.triggerVersion, this.#getTaskTriggerVersion(task)),
             ),
           )
           .limit(1);
@@ -371,6 +429,7 @@ export class AgentScheduleDbService extends DbService {
         .update(agentScheduledTasks)
         .set({
           status: 'completed',
+          revision: sql`${agentScheduledTasks.revision} + 1`,
           lastRunAt: satisfiedAt,
           completedAt: satisfiedAt,
           updatedAt: satisfiedAt,
@@ -395,6 +454,7 @@ export class AgentScheduleDbService extends DbService {
   static async getTaskRunByScheduledFor({
     taskId,
     scheduledFor,
+    triggerVersion,
   }: GetScheduledTaskRunByScheduledForInput) {
     const [run] = await this.client
       .select()
@@ -403,6 +463,7 @@ export class AgentScheduleDbService extends DbService {
         and(
           eq(agentScheduledTaskRuns.taskId, taskId),
           eq(agentScheduledTaskRuns.scheduledFor, scheduledFor),
+          eq(agentScheduledTaskRuns.triggerVersion, triggerVersion),
         ),
       )
       .limit(1);
@@ -410,31 +471,111 @@ export class AgentScheduleDbService extends DbService {
     return run ?? null;
   }
 
-  static async markTaskRunSent({ runId, output }: MarkScheduledTaskRunSentInput) {
-    const [run] = await this.client
-      .update(agentScheduledTaskRuns)
-      .set({
-        status: 'sent',
-        output,
-        error: null,
-        finishedAt: new Date(),
-      })
-      .where(eq(agentScheduledTaskRuns.id, runId))
-      .returning();
+  static async finishSuccessfulTaskRun({
+    task,
+    runId,
+    claimToken,
+    output,
+    ranAt,
+    nextRunAt,
+  }: FinishSuccessfulScheduledTaskRunInput) {
+    return this.client.transaction(async (tx) => {
+      const [run] = await tx
+        .update(agentScheduledTaskRuns)
+        .set({
+          status: 'sent',
+          output,
+          error: null,
+          finishedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(agentScheduledTaskRuns.id, runId),
+            eq(agentScheduledTaskRuns.status, 'running'),
+            eq(agentScheduledTaskRuns.claimToken, claimToken),
+          ),
+        )
+        .returning();
 
-    if (!run) {
-      throw new AppError({
-        code: AppErrorCode.SCHEDULE_TASK_RUN_NOT_FOUND,
-        message: 'Scheduled task run was not found for sent update.',
-        context: { runId },
-        retryable: false,
+      if (!run) {
+        throw new AppError({
+          code: AppErrorCode.SCHEDULE_TASK_RUN_NOT_FOUND,
+          message: 'Running scheduled task run was not found for successful completion.',
+          context: { runId, taskId: task.id },
+          retryable: false,
+        });
+      }
+
+      const { status, completedAt, failedAt } = this.#getTaskStateAfterRun({
+        task,
+        outcome: 'success',
+        ranAt,
+        nextRunAt,
       });
-    }
+      const [updatedTask] = await tx
+        .update(agentScheduledTasks)
+        .set({
+          status,
+          nextRunAt,
+          lastRunAt: ranAt,
+          completedAt,
+          failedAt,
+          revision: sql`${agentScheduledTasks.revision} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(agentScheduledTasks.id, task.id),
+            eq(agentScheduledTasks.status, 'active'),
+            eq(agentScheduledTasks.nextRunAt, task.nextRunAt),
+            eq(agentScheduledTasks.revision, task.revision),
+          ),
+        )
+        .returning();
 
-    return run;
+      return {
+        taskUpdated: Boolean(updatedTask),
+      };
+    });
   }
 
-  static async markTaskRunFailed({ runId, error }: MarkScheduledTaskRunFailedInput) {
+  static async advanceTaskAfterRun({
+    task,
+    outcome,
+    ranAt,
+    nextRunAt,
+  }: AdvanceScheduledTaskAfterRunInput) {
+    const { status, completedAt, failedAt } = this.#getTaskStateAfterRun({
+      task,
+      outcome,
+      ranAt,
+      nextRunAt,
+    });
+    const [updatedTask] = await this.client
+      .update(agentScheduledTasks)
+      .set({
+        status,
+        nextRunAt,
+        lastRunAt: ranAt,
+        completedAt,
+        failedAt,
+        revision: sql`${agentScheduledTasks.revision} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(agentScheduledTasks.id, task.id),
+          eq(agentScheduledTasks.status, 'active'),
+          eq(agentScheduledTasks.nextRunAt, task.nextRunAt),
+          eq(agentScheduledTasks.revision, task.revision),
+        ),
+      )
+      .returning();
+
+    return { taskUpdated: Boolean(updatedTask) };
+  }
+
+  static async markTaskRunFailed({ runId, claimToken, error }: MarkScheduledTaskRunFailedInput) {
     const [run] = await this.client
       .update(agentScheduledTaskRuns)
       .set({
@@ -442,7 +583,13 @@ export class AgentScheduleDbService extends DbService {
         error: error instanceof Error ? error.message : String(error),
         finishedAt: new Date(),
       })
-      .where(eq(agentScheduledTaskRuns.id, runId))
+      .where(
+        and(
+          eq(agentScheduledTaskRuns.id, runId),
+          eq(agentScheduledTaskRuns.status, 'running'),
+          eq(agentScheduledTaskRuns.claimToken, claimToken),
+        ),
+      )
       .returning();
 
     if (!run) {
@@ -457,31 +604,33 @@ export class AgentScheduleDbService extends DbService {
     return run;
   }
 
-  static async completeTask({ taskId, ranAt }: CompleteScheduledTaskInput) {
-    return this.#updateTaskAfterRun({
-      taskId,
-      status: 'completed',
-      ranAt,
-      completedAt: ranAt,
-    });
-  }
+  static async markTaskRunSkipped({ runId, claimToken, reason }: MarkScheduledTaskRunSkippedInput) {
+    const [run] = await this.client
+      .update(agentScheduledTaskRuns)
+      .set({
+        status: 'skipped',
+        error: reason,
+        finishedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(agentScheduledTaskRuns.id, runId),
+          eq(agentScheduledTaskRuns.status, 'running'),
+          eq(agentScheduledTaskRuns.claimToken, claimToken),
+        ),
+      )
+      .returning();
 
-  static async failTask({ taskId, ranAt }: FailScheduledTaskInput) {
-    return this.#updateTaskAfterRun({
-      taskId,
-      status: 'failed',
-      ranAt,
-      failedAt: ranAt,
-    });
-  }
+    if (!run) {
+      throw new AppError({
+        code: AppErrorCode.SCHEDULE_TASK_RUN_NOT_FOUND,
+        message: 'Scheduled task run was not found for skipped update.',
+        context: { runId },
+        retryable: false,
+      });
+    }
 
-  static async rescheduleTask({ taskId, ranAt, nextRunAt }: RescheduleScheduledTaskInput) {
-    return this.#updateTaskAfterRun({
-      taskId,
-      status: 'active',
-      ranAt,
-      nextRunAt,
-    });
+    return run;
   }
 
   static #withoutUndefined<T extends Record<string, unknown>>(value: T) {
@@ -490,44 +639,48 @@ export class AgentScheduleDbService extends DbService {
     ) as Partial<T>;
   }
 
-  static async #updateTaskAfterRun({
-    taskId,
-    status,
+  static #getTaskTriggerVersion(task: AgentScheduledTask) {
+    const metadata =
+      task.metadata && typeof task.metadata === 'object' && !Array.isArray(task.metadata)
+        ? (task.metadata as Record<string, unknown>)
+        : {};
+    const triggerVersion = metadata.qstashTriggerVersion;
+
+    return typeof triggerVersion === 'string' && triggerVersion.trim() ? triggerVersion : 'legacy';
+  }
+
+  static #getTaskStateAfterRun({
+    task,
+    outcome,
     ranAt,
     nextRunAt,
-    completedAt,
-    failedAt,
   }: {
-    taskId: string;
-    status: AgentScheduledTask['status'];
+    task: AgentScheduledTask;
+    outcome: 'success' | 'failure';
     ranAt: Date;
     nextRunAt?: Date;
-    completedAt?: Date;
-    failedAt?: Date;
   }) {
-    const [task] = await this.client
-      .update(agentScheduledTasks)
-      .set({
-        status,
-        nextRunAt,
-        lastRunAt: ranAt,
-        completedAt,
-        failedAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(agentScheduledTasks.id, taskId))
-      .returning();
-
-    if (!task) {
-      throw new AppError({
-        code: AppErrorCode.SCHEDULE_TASK_NOT_FOUND,
-        message: 'Scheduled task was not found for run update.',
-        context: { taskId, status },
-        retryable: false,
-      });
+    if (outcome === 'success' && task.scheduleKind === 'one_time') {
+      return {
+        status: 'completed' as const,
+        completedAt: ranAt,
+        failedAt: undefined,
+      };
     }
 
-    return task;
+    if (task.scheduleKind === 'recurring' && nextRunAt) {
+      return {
+        status: 'active' as const,
+        completedAt: undefined,
+        failedAt: undefined,
+      };
+    }
+
+    return {
+      status: 'failed' as const,
+      completedAt: undefined,
+      failedAt: ranAt,
+    };
   }
 }
 
@@ -597,11 +750,22 @@ type GetScheduledTaskInput = {
 type CreateScheduledTaskRunInput = {
   taskId: string;
   scheduledFor: Date;
+  triggerVersion: string;
+  claimToken: string;
+};
+
+type RenewScheduledTaskRunLeaseInput = {
+  runId: string;
+  taskId: string;
+  claimToken: string;
+  taskRevision: number;
+  scheduledFor: Date;
 };
 
 type GetScheduledTaskRunByScheduledForInput = {
   taskId: string;
   scheduledFor: Date;
+  triggerVersion: string;
 };
 
 type SatisfyScheduledTaskOccurrenceInput = {
@@ -612,28 +776,30 @@ type SatisfyScheduledTaskOccurrenceInput = {
   satisfiedAt: Date;
 };
 
-type MarkScheduledTaskRunSentInput = {
+type FinishSuccessfulScheduledTaskRunInput = {
+  task: AgentScheduledTask;
   runId: string;
+  claimToken: string;
   output: string;
+  ranAt: Date;
+  nextRunAt?: Date;
+};
+
+type AdvanceScheduledTaskAfterRunInput = {
+  task: AgentScheduledTask;
+  outcome: 'success' | 'failure';
+  ranAt: Date;
+  nextRunAt?: Date;
 };
 
 type MarkScheduledTaskRunFailedInput = {
   runId: string;
+  claimToken: string;
   error: unknown;
 };
 
-type CompleteScheduledTaskInput = {
-  taskId: string;
-  ranAt: Date;
-};
-
-type FailScheduledTaskInput = {
-  taskId: string;
-  ranAt: Date;
-};
-
-type RescheduleScheduledTaskInput = {
-  taskId: string;
-  ranAt: Date;
-  nextRunAt: Date;
+type MarkScheduledTaskRunSkippedInput = {
+  runId: string;
+  claimToken: string;
+  reason: string;
 };

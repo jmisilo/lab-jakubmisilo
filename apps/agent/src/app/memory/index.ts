@@ -5,6 +5,7 @@ import dedent from 'dedent';
 import { AgentContextService } from '@/app/memory/context';
 import { AIService } from '@/infrastructure/ai';
 import { AgentMemoryDbService } from '@/infrastructure/db/services/agent-memory';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 export class AgentMemoryService {
@@ -209,7 +210,7 @@ export class AgentMemoryService {
         {
           identityId,
           threadId,
-          error,
+          safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_MEMORY]: short-term memory compression failed',
       );

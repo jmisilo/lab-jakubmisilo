@@ -1,63 +1,27 @@
-import { Receiver, SignatureError } from '@upstash/qstash';
 import { Hono } from 'hono';
 
 import { bot } from '@/app/bot';
 import { WorldCupPollingService } from '@/app/features/world-cup/tracking/polling';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { QStashService } from '@/infrastructure/qstash';
 
 export const WorldCupRouter = new Hono().get('/jobs/world-cup/events', async (c) => {
-  if (!process.env.QSTASH_CURRENT_SIGNING_KEY || !process.env.QSTASH_NEXT_SIGNING_KEY) {
-    logger.error('[WORLD_CUP]: QStash signing keys are not configured');
+  const verification = await QStashService.verifySignedRequest(c.req.raw);
 
-    return c.json({ ok: false, error: 'QStash signing keys are not configured' }, 500);
-  }
+  if (!verification.ok) {
+    if (verification.reason === 'missing_configuration') {
+      logger.error('[WORLD_CUP]: QStash signing keys are not configured');
 
-  const signature = c.req.header('upstash-signature');
+      return c.json({ ok: false, error: 'QStash signing keys are not configured' }, 500);
+    }
 
-  if (!signature) {
-    logger.warn({ url: c.req.url }, '[WORLD_CUP]: polling request missing QStash signature');
+    logger.warn('[WORLD_CUP]: polling request unauthorized');
 
     return c.json({ ok: false, error: 'Unauthorized' }, 401);
   }
 
-  const receiver = new Receiver({
-    currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-    nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-    devMode: false,
-  });
-
-  try {
-    const verified = await receiver.verify({
-      signature,
-      body: await c.req.text(),
-      url: c.req.url,
-      clockTolerance: 30,
-      upstashRegion: c.req.header('upstash-region'),
-    });
-
-    if (!verified) {
-      return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    }
-  } catch (error) {
-    if (error instanceof SignatureError) {
-      logger.warn(
-        { error, safeError: ErrorService.toSafeLog(error) },
-        '[WORLD_CUP]: QStash signature verification failed',
-      );
-
-      return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    }
-
-    logger.error(
-      { error, safeError: ErrorService.toSafeLog(error) },
-      '[WORLD_CUP]: QStash signature verification errored',
-    );
-
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  }
-
-  logger.info({ url: c.req.url }, '[WORLD_CUP]: polling request verified');
+  logger.info('[WORLD_CUP]: polling request verified');
 
   try {
     const result = await WorldCupPollingService.pollAndDeliver({ bot });
@@ -65,7 +29,7 @@ export const WorldCupRouter = new Hono().get('/jobs/world-cup/events', async (c)
     return c.json({ ok: true, result });
   } catch (error) {
     logger.error(
-      { error, safeError: ErrorService.toSafeLog(error), url: c.req.url },
+      { safeError: ErrorService.toSafeLog(error) },
       '[WORLD_CUP]: polling request failed',
     );
 

@@ -150,7 +150,6 @@ export class WorldCupPollingService {
             result.notificationsFailed += 1;
             logger.error(
               {
-                error,
                 safeError: ErrorService.toSafeLog(error),
                 pollRunId,
                 deliveryId: delivery.id,

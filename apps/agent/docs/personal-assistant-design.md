@@ -1,6 +1,6 @@
 # Personal Assistant Design
 
-This note captures the agreed direction for evolving `@labjm/agent` from a showcase Telegram bot into a practical personal assistant. Current implementation is useful context, but not sacred; preserve what helps and redesign boundaries where the product needs it.
+This note captures the direction for evolving `@labjm/agent` into a practical personal assistant. It is future-looking; the current architecture is documented in `apps/agent/README.md`.
 
 ## Product Direction
 
@@ -12,12 +12,11 @@ This note captures the agreed direction for evolving `@labjm/agent` from a showc
 ## Ownership And Identity
 
 - Postgres is the operational source of truth for chat state, personal context, profiles, and scheduled items.
-- The app should support multiple separated user accounts, even while product behavior is optimized for the owner first.
-- Use an internal `User` entity as the canonical owner.
-- Link Telegram and future channels through `ExternalIdentity` records. Channel identities must not become the core owner ID.
-- `UserProfile` is required for operational defaults such as timezone, default location, locale, units, and channel preferences.
+- Keep all persisted data scoped by the current Chat SDK identity.
+- Do not add an internal identity layer while Telegram is the only channel and no account-linking behavior exists.
+- When a second channel or account linking becomes real, introduce an internal `User` plus `ExternalIdentity` records and migrate provider identities behind that boundary.
+- Add a `UserProfile` when operational defaults such as timezone, location, locale, units, or channel preferences need independent lifecycle and editing.
 - Onboarding should be progressive. Do not push an upfront setup flow; ask for missing profile fields only when needed.
-- First implementation should route Telegram messages through internal user resolution before expanding assistant capabilities.
 
 ## Knowledge Model
 
@@ -88,13 +87,12 @@ This note captures the agreed direction for evolving `@labjm/agent` from a showc
 - `KnowledgeService` should return structured retrieval results plus metadata. `AgentContextService` formats those results into model context.
 - Store multilingual content as-is. Do not normalize or translate all knowledge into English.
 
-## First Milestone
+## Current Foundation
 
-- The first implementation milestone is identity plus knowledge foundation only, with no reminders yet.
-- Introduce `User`, `ExternalIdentity`, `UserProfile`, `KnowledgeNode`, `KnowledgeLink`, and `KnowledgeEvent`.
-- Replace noted-memory creation/retrieval with knowledge-backed behavior.
-- Keep `AgentContextService` as the context orchestration layer, but swap durable memory internals to knowledge retrieval.
-- Add the explicit `manage-knowledge` tool for user-requested saves and edits.
+- `KnowledgeNode` hierarchy, retrieval, implicit ingestion, and explicit knowledge management are implemented.
+- Rolling conversation summaries remain separate from curated knowledge.
+- One-time and recurring reminders are implemented through QStash and PostgreSQL.
+- Internal users, cross-channel identity linking, knowledge links/events, and a standalone user profile remain deferred until product behavior needs them.
 
 ## Scheduled Items
 

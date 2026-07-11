@@ -1,0 +1,1 @@
+ALTER TABLE "agent_scheduled_tasks" ADD COLUMN "revision" integer DEFAULT 1 NOT NULL;

@@ -105,7 +105,6 @@ export const manageGoogleConnectionTool: ManageGoogleConnectionTool = tool({
         {
           identityId: context.identityId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE]: connection tool failed',

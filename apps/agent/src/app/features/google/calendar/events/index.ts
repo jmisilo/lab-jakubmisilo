@@ -444,7 +444,6 @@ export class GoogleCalendarEventService {
           action: input.action,
           calendarId: input.calendarId,
           eventId: input.eventId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE_CALENDAR]: action audit failed',

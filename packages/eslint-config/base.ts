@@ -2,11 +2,8 @@ import type { Linter } from 'eslint';
 
 import js from '@eslint/js';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import onlyWarn from 'eslint-plugin-only-warn';
 import turboPlugin from 'eslint-plugin-turbo';
 import tseslint from 'typescript-eslint';
-
-onlyWarn.enable();
 
 /**
  * A shared ESLint configuration for the repository.
