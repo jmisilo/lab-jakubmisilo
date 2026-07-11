@@ -4,13 +4,22 @@ import { GoogleTokenEncryptionService } from './token-crypto';
 
 const originalEncryptionKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
 
+function restoreEnvironmentVariable(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
+
 describe('GoogleTokenEncryptionService', () => {
   beforeEach(() => {
     process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   });
 
   afterEach(() => {
-    process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = originalEncryptionKey;
+    restoreEnvironmentVariable('GOOGLE_TOKEN_ENCRYPTION_KEY', originalEncryptionKey);
   });
 
   it('encrypts and decrypts refresh tokens', () => {
@@ -46,6 +55,24 @@ describe('GoogleTokenEncryptionService', () => {
         code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
         retryable: false,
         userMessage: 'Google is not configured correctly.',
+      });
+    }
+  });
+
+  it('preserves configuration errors when decrypting tokens', () => {
+    delete process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+
+    try {
+      GoogleTokenEncryptionService.decryptToken({
+        encryptedRefreshToken: 'encrypted',
+        refreshTokenIv: 'iv',
+        refreshTokenAuthTag: 'auth-tag',
+      });
+      throw new Error('Expected decryptToken to throw.');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: AppErrorCode.GOOGLE_CONFIGURATION_INVALID,
+        retryable: false,
       });
     }
   });

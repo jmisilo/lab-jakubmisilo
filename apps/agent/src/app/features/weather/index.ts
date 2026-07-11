@@ -1,31 +1,23 @@
 import type {
-  CurrentWeather,
-  LocalTime,
   OpenWeatherCurrentResponse,
   OpenWeatherForecastPoint,
   OpenWeatherForecastResponse,
   OpenWeatherGeocodingResult,
-  WeatherForecast,
-  WeatherForecastPoint,
-  WeatherForecastTimeOfDay,
-  WeatherUnits,
-} from '@/app/features/weather/types';
-
-import { UrlComposer } from '@labjm/utilities/url-composer';
+} from '@/infrastructure/openweather';
+import type { z } from 'zod';
 
 import {
-  OpenWeatherCurrentResponseSchema,
-  OpenWeatherForecastResponseSchema,
-  OpenWeatherGeocodingResponseSchema,
+  CurrentWeatherSchema,
+  LocalTimeSchema,
+  WeatherForecastPointSchema,
+  WeatherForecastSchema,
+  WeatherForecastTimeOfDaySchema,
   WeatherUnitsSchema,
 } from '@/app/features/weather/schemas';
-import { AppError, AppErrorCode } from '@/infrastructure/errors';
+import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
+import { OpenWeatherClient } from '@/infrastructure/openweather';
 
 export class WeatherService {
-  static #timeout = 10_000;
-  static #geocodingUrl = new UrlComposer('api.openweathermap.org', 'https');
-  static #weatherUrl = new UrlComposer('api.openweathermap.org', 'https');
-
   static async getCurrentWeather({
     location,
     units = 'metric',
@@ -33,14 +25,6 @@ export class WeatherService {
     location: string;
     units?: WeatherUnits;
   }) {
-    if (!process.env.OPENWEATHER_API_KEY) {
-      return {
-        ok: false as const,
-        reason: 'missing_api_key' as const,
-        message: 'OPENWEATHER_API_KEY is not configured.',
-      };
-    }
-
     const unitSystem = WeatherUnitsSchema.parse(units);
     const geocodingResult = await this.#findLocation({ location });
 
@@ -74,14 +58,6 @@ export class WeatherService {
     hour?: number;
     now?: Date;
   }) {
-    if (!process.env.OPENWEATHER_API_KEY) {
-      return {
-        ok: false as const,
-        reason: 'missing_api_key' as const,
-        message: 'OPENWEATHER_API_KEY is not configured.',
-      };
-    }
-
     const unitSystem = WeatherUnitsSchema.parse(units);
     const geocodingResult = await this.#findLocation({ location });
 
@@ -104,14 +80,6 @@ export class WeatherService {
   }
 
   static async getLocalTime({ location, now = new Date() }: { location: string; now?: Date }) {
-    if (!process.env.OPENWEATHER_API_KEY) {
-      return {
-        ok: false as const,
-        reason: 'missing_api_key' as const,
-        message: 'OPENWEATHER_API_KEY is not configured.',
-      };
-    }
-
     const geocodingResult = await this.#findLocation({ location });
 
     if (!geocodingResult.ok) {
@@ -127,18 +95,7 @@ export class WeatherService {
 
   static async #findLocation({ location }: { location: string }) {
     try {
-      const response = await this.#fetch({
-        operation: 'openweather.geocoding',
-        url: this.#geocodingUrl.compose({
-          pathSegments: ['/geo', '/1.0', '/direct'],
-          queryParams: {
-            q: location.trim(),
-            limit: 1,
-            appid: process.env.OPENWEATHER_API_KEY,
-          },
-        }),
-      });
-      const [matchedLocation] = OpenWeatherGeocodingResponseSchema.parse(response);
+      const matchedLocation = await OpenWeatherClient.findLocation(location);
 
       if (!matchedLocation) {
         return {
@@ -153,19 +110,11 @@ export class WeatherService {
         location: matchedLocation,
       };
     } catch (error) {
-      const providerDetails = this.#getProviderErrorDetails(error);
-
-      return {
-        ok: false as const,
-        reason: 'geocoding_failed' as const,
-        message: this.#createFailureMessage({
-          fallback: `Could not resolve weather location "${location}".`,
-          operation: 'OpenWeather geocoding request',
-          providerDetails,
-        }),
-        providerStatus: providerDetails?.status,
-        providerMessage: providerDetails?.providerMessage,
-      };
+      return this.#createFailureResult({
+        error,
+        reason: 'geocoding_failed',
+        fallbackMessage: `Could not resolve weather location "${location}".`,
+      });
     }
   }
 
@@ -179,20 +128,11 @@ export class WeatherService {
     units: WeatherUnits;
   }) {
     try {
-      const response = await this.#fetch({
-        operation: 'openweather.current_weather',
-        url: this.#weatherUrl.compose({
-          pathSegments: ['/data', '/2.5', '/weather'],
-          queryParams: {
-            lat: resolvedLocation.lat,
-            lon: resolvedLocation.lon,
-            appid: process.env.OPENWEATHER_API_KEY,
-            units,
-            lang: 'en',
-          },
-        }),
+      const weather = await OpenWeatherClient.getCurrentWeather({
+        latitude: resolvedLocation.lat,
+        longitude: resolvedLocation.lon,
+        units,
       });
-      const weather = OpenWeatherCurrentResponseSchema.parse(response);
 
       return {
         ok: true as const,
@@ -204,19 +144,11 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      const providerDetails = this.#getProviderErrorDetails(error);
-
-      return {
-        ok: false as const,
-        reason: 'weather_fetch_failed' as const,
-        message: this.#createFailureMessage({
-          fallback: `Could not fetch current weather for "${location}".`,
-          operation: 'OpenWeather weather request',
-          providerDetails,
-        }),
-        providerStatus: providerDetails?.status,
-        providerMessage: providerDetails?.providerMessage,
-      };
+      return this.#createFailureResult({
+        error,
+        reason: 'weather_fetch_failed',
+        fallbackMessage: `Could not fetch current weather for "${location}".`,
+      });
     }
   }
 
@@ -239,20 +171,11 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.#fetch({
-        operation: 'openweather.forecast',
-        url: this.#weatherUrl.compose({
-          pathSegments: ['/data', '/2.5', '/forecast'],
-          queryParams: {
-            lat: resolvedLocation.lat,
-            lon: resolvedLocation.lon,
-            appid: process.env.OPENWEATHER_API_KEY,
-            units,
-            lang: 'en',
-          },
-        }),
+      const forecast = await OpenWeatherClient.getForecast({
+        latitude: resolvedLocation.lat,
+        longitude: resolvedLocation.lon,
+        units,
       });
-      const forecast = OpenWeatherForecastResponseSchema.parse(response);
 
       return {
         ok: true as const,
@@ -279,19 +202,11 @@ export class WeatherService {
         };
       }
 
-      const providerDetails = this.#getProviderErrorDetails(error);
-
-      return {
-        ok: false as const,
-        reason: 'weather_fetch_failed' as const,
-        message: this.#createFailureMessage({
-          fallback: `Could not fetch weather forecast for "${location}".`,
-          operation: 'OpenWeather forecast request',
-          providerDetails,
-        }),
-        providerStatus: providerDetails?.status,
-        providerMessage: providerDetails?.providerMessage,
-      };
+      return this.#createFailureResult({
+        error,
+        reason: 'weather_fetch_failed',
+        fallbackMessage: `Could not fetch weather forecast for "${location}".`,
+      });
     }
   }
 
@@ -305,18 +220,10 @@ export class WeatherService {
     now: Date;
   }) {
     try {
-      const response = await this.#fetch({
-        operation: 'openweather.local_time',
-        url: this.#weatherUrl.compose({
-          pathSegments: ['/data', '/2.5', '/weather'],
-          queryParams: {
-            lat: resolvedLocation.lat,
-            lon: resolvedLocation.lon,
-            appid: process.env.OPENWEATHER_API_KEY,
-          },
-        }),
+      const weather = await OpenWeatherClient.getCurrentWeather({
+        latitude: resolvedLocation.lat,
+        longitude: resolvedLocation.lon,
       });
-      const weather = OpenWeatherCurrentResponseSchema.parse(response);
 
       return {
         ok: true as const,
@@ -328,61 +235,11 @@ export class WeatherService {
         }),
       };
     } catch (error) {
-      const providerDetails = this.#getProviderErrorDetails(error);
-
-      return {
-        ok: false as const,
-        reason: 'weather_fetch_failed' as const,
-        message: this.#createFailureMessage({
-          fallback: `Could not fetch local time for "${location}".`,
-          operation: 'OpenWeather local time request',
-          providerDetails,
-        }),
-        providerStatus: providerDetails?.status,
-        providerMessage: providerDetails?.providerMessage,
-      };
-    }
-  }
-  /** @todo provide better, typesafe solution for interactions with 3rd party apis */
-  static async #fetch({ operation, url }: { operation: string; url: string }): Promise<unknown> {
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort(
-        AppError.timeout({
-          code: AppErrorCode.WEATHER_API_TIMEOUT,
-          message: 'OpenWeather request timed out.',
-          context: {
-            operation,
-          },
-          timeoutMs: this.#timeout,
-        }),
-      );
-    }, this.#timeout);
-
-    try {
-      const response = await fetch(url, {
-        headers: { accept: 'application/json' },
-        signal: abortController.signal,
+      return this.#createFailureResult({
+        error,
+        reason: 'weather_fetch_failed',
+        fallbackMessage: `Could not fetch local time for "${location}".`,
       });
-
-      if (!response.ok) {
-        const providerMessage = await this.#readProviderErrorMessage(response);
-
-        throw new AppError({
-          code: AppErrorCode.WEATHER_API_ERROR,
-          message: 'OpenWeather request failed.',
-          context: {
-            operation,
-            providerStatus: response.status,
-            providerMessage,
-          },
-          retryable: response.status === 429 || response.status >= 500,
-        });
-      }
-
-      return response.json();
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
@@ -710,41 +567,6 @@ export class WeatherService {
     return [location.name, location.state, location.country].filter(Boolean).join(', ');
   }
 
-  static async #readProviderErrorMessage(response: Response) {
-    const text = await response.text().catch(() => '');
-
-    if (!text) {
-      return undefined;
-    }
-
-    try {
-      const parsed = JSON.parse(text) as { message?: unknown };
-
-      return typeof parsed.message === 'string' && parsed.message.trim()
-        ? parsed.message
-        : text.slice(0, 300);
-    } catch {
-      return text.slice(0, 300);
-    }
-  }
-
-  static #getProviderErrorDetails(error: unknown) {
-    if (this.#isAppErrorCode(error, AppErrorCode.WEATHER_API_ERROR)) {
-      const status = this.#getNumberContext(error, 'providerStatus');
-
-      if (status === undefined) {
-        return undefined;
-      }
-
-      return {
-        status,
-        providerMessage: this.#getStringContext(error, 'providerMessage'),
-      };
-    }
-
-    return undefined;
-  }
-
   static #getForecastTargetUnavailableDetails(error: AppError) {
     return {
       targetLocalDate: this.#getStringContext(error, 'targetLocalDate') ?? 'the requested date',
@@ -763,30 +585,39 @@ export class WeatherService {
     return typeof value === 'string' && value.trim() ? value : undefined;
   }
 
-  static #getNumberContext(error: AppError, field: string) {
-    const value = error.context[field];
-
-    return typeof value === 'number' ? value : undefined;
-  }
-
-  static #createFailureMessage({
-    fallback,
-    operation,
-    providerDetails,
+  static #createFailureResult({
+    error,
+    reason,
+    fallbackMessage,
   }: {
-    fallback: string;
-    operation: string;
-    providerDetails?: { status: number; providerMessage?: string };
+    error: unknown;
+    reason: 'geocoding_failed' | 'weather_fetch_failed';
+    fallbackMessage: string;
   }) {
-    if (!providerDetails) {
-      return fallback;
+    if (this.#isAppErrorCode(error, AppErrorCode.WEATHER_CONFIGURATION_INVALID)) {
+      return {
+        ok: false as const,
+        reason: 'missing_api_key' as const,
+        message: error.message,
+      };
     }
 
-    return [
-      `${operation} failed with status ${providerDetails.status}.`,
-      providerDetails.providerMessage,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const failure = ErrorService.toUserFacingFailure(error, {
+      fallbackCode: AppErrorCode.WEATHER_API_ERROR,
+      fallbackMessage,
+    });
+
+    return {
+      ok: false as const,
+      reason,
+      message: failure.message,
+    };
   }
 }
+
+type WeatherUnits = z.infer<typeof WeatherUnitsSchema>;
+type WeatherForecastTimeOfDay = z.infer<typeof WeatherForecastTimeOfDaySchema>;
+type CurrentWeather = z.infer<typeof CurrentWeatherSchema>;
+type WeatherForecastPoint = z.infer<typeof WeatherForecastPointSchema>;
+type WeatherForecast = z.infer<typeof WeatherForecastSchema>;
+type LocalTime = z.infer<typeof LocalTimeSchema>;

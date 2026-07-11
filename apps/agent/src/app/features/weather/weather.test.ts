@@ -84,13 +84,14 @@ describe('WeatherService', () => {
       expect.stringContaining('/geo/1.0/direct?q=Warsaw&limit=1&appid=test-api-key'),
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining(
-        '/data/2.5/weather?lat=52.2297&lon=21.0122&appid=test-api-key&units=metric&lang=en',
-      ),
-      expect.any(Object),
-    );
+    expect(new URL(fetchMock.mock.calls[1]![0]).pathname).toBe('/data/2.5/weather');
+    expect(Object.fromEntries(new URL(fetchMock.mock.calls[1]![0]).searchParams)).toEqual({
+      lat: '52.2297',
+      lon: '21.0122',
+      units: 'metric',
+      lang: 'en',
+      appid: 'test-api-key',
+    });
   });
 
   it('returns location_not_found when geocoding has no matches', async () => {
@@ -233,13 +234,14 @@ describe('WeatherService', () => {
         ]),
       }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining(
-        '/data/2.5/forecast?lat=40.7128&lon=-74.006&appid=test-api-key&units=metric&lang=en',
-      ),
-      expect.any(Object),
-    );
+    expect(new URL(fetchMock.mock.calls[1]![0]).pathname).toBe('/data/2.5/forecast');
+    expect(Object.fromEntries(new URL(fetchMock.mock.calls[1]![0]).searchParams)).toEqual({
+      lat: '40.7128',
+      lon: '-74.006',
+      units: 'metric',
+      lang: 'en',
+      appid: 'test-api-key',
+    });
   });
 
   it('filters forecast points by explicit target local date when available', async () => {
@@ -344,7 +346,7 @@ describe('WeatherService', () => {
     });
   });
 
-  it('returns provider diagnostics when geocoding request fails', async () => {
+  it('does not expose provider diagnostics when geocoding fails', async () => {
     process.env.OPENWEATHER_API_KEY = 'bad-api-key';
     global.fetch = jest.fn().mockResolvedValueOnce({
       ok: false,
@@ -357,9 +359,34 @@ describe('WeatherService', () => {
     ).resolves.toEqual({
       ok: false,
       reason: 'geocoding_failed',
-      message: 'OpenWeather geocoding request failed with status 401. Invalid API key',
-      providerStatus: 401,
-      providerMessage: 'Invalid API key',
+      message: 'Weather is temporarily unavailable. Please try again.',
+    });
+  });
+
+  it('returns a safe failure when OpenWeather returns an invalid payload', async () => {
+    process.env.OPENWEATHER_API_KEY = 'test-api-key';
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            name: 'Warsaw',
+            lat: 52.2297,
+            lon: 21.0122,
+            country: 'PL',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ unexpected: true }),
+      });
+
+    await expect(WeatherService.getCurrentWeather({ location: 'Warsaw' })).resolves.toEqual({
+      ok: false,
+      reason: 'weather_fetch_failed',
+      message: 'Weather is temporarily unavailable. Please try again.',
     });
   });
 

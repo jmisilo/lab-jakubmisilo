@@ -5,8 +5,8 @@ const mockGoogleCalendarApiClient = {
   listCalendars: jest.fn(),
   createEvent: jest.fn(),
 };
-const mockGoogleCalendarDbService = {
-  createActionAudit: jest.fn(),
+const mockGoogleCalendarAuditDbService = {
+  recordAction: jest.fn(),
 };
 
 jest.mock('@/app/features/google/connection', () => ({
@@ -17,8 +17,8 @@ jest.mock('@/infrastructure/google/calendar', () => ({
   GoogleCalendarApiClient: mockGoogleCalendarApiClient,
 }));
 
-jest.mock('@/infrastructure/db/services/google-calendar', () => ({
-  GoogleCalendarDbService: mockGoogleCalendarDbService,
+jest.mock('@/infrastructure/db/services/google', () => ({
+  GoogleCalendarAuditDbService: mockGoogleCalendarAuditDbService,
 }));
 
 let GoogleCalendarEventService: typeof import('.').GoogleCalendarEventService;
@@ -31,7 +31,7 @@ describe('GoogleCalendarEventService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGoogleCalendarConnectionService.getAccessToken.mockResolvedValue('access-token-1');
-    mockGoogleCalendarDbService.createActionAudit.mockResolvedValue({});
+    mockGoogleCalendarAuditDbService.recordAction.mockResolvedValue({});
   });
 
   it('creates events with attendees and Google Meet conference data', async () => {
@@ -93,7 +93,7 @@ describe('GoogleCalendarEventService', () => {
         },
       }),
     });
-    expect(mockGoogleCalendarDbService.createActionAudit).toHaveBeenCalledWith({
+    expect(mockGoogleCalendarAuditDbService.recordAction).toHaveBeenCalledWith({
       identityId: 'identity-1',
       threadId: 'telegram:1',
       sourceMessageId: 'message-1',

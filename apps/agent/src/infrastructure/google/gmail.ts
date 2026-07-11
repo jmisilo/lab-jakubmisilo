@@ -99,12 +99,22 @@ export class GoogleGmailApiClient {
         signal: controller.signal,
       });
     } catch (error) {
-      throw AppError.timeout({
-        code: AppErrorCode.GOOGLE_API_TIMEOUT,
-        message: 'Gmail API request timed out.',
+      if (controller.signal.aborted) {
+        throw AppError.timeout({
+          code: AppErrorCode.GOOGLE_API_TIMEOUT,
+          message: 'Gmail API request timed out.',
+          cause: error,
+          context: { path },
+          timeoutMs: GOOGLE_GMAIL_TIMEOUT_MS,
+          userMessage: 'Gmail is temporarily unavailable. Please try again.',
+        });
+      }
+
+      throw new AppError({
+        code: AppErrorCode.GOOGLE_API_ERROR,
+        message: 'Gmail API request failed before receiving a response.',
         cause: error,
         context: { path },
-        timeoutMs: GOOGLE_GMAIL_TIMEOUT_MS,
         retryable: true,
         userMessage: 'Gmail is temporarily unavailable. Please try again.',
       });

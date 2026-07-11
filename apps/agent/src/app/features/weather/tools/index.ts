@@ -13,15 +13,6 @@ import {
 } from '@/app/features/weather/schemas';
 import { logger } from '@/infrastructure/logger';
 
-const _getProviderStatus = (result: object) =>
-  'providerStatus' in result && typeof result.providerStatus === 'number'
-    ? result.providerStatus
-    : undefined;
-const _getProviderMessage = (result: object) =>
-  'providerMessage' in result && typeof result.providerMessage === 'string'
-    ? result.providerMessage
-    : undefined;
-
 export const getWeatherTool: GetWeatherTool = tool({
   description: dedent`
     Get current weather or a 5-day / 3-hour forecast for a resolved city using OpenWeather.
@@ -47,7 +38,7 @@ export const getWeatherTool: GetWeatherTool = tool({
     - Use metric units by default unless the user asks for Fahrenheit/imperial.
     - For relative dates, pass daysFromNow. For broad times, pass timeOfDay. For exact local hours, pass hour.
     - After ok=true, answer from weather/forecast fields directly. Do not say only that weather was loaded.
-    - After ok=false, give a short useful failure. Do not expose providerStatus or providerMessage unless the user is explicitly debugging the integration.
+    - After ok=false, give the returned safe failure briefly.
 
     # Examples
     - "Weather in Warsaw?" -> current, location Warsaw.
@@ -73,7 +64,6 @@ export const getWeatherTool: GetWeatherTool = tool({
           requestType,
           ok: result.ok,
           reason: result.ok ? undefined : result.reason,
-          providerStatus: result.ok ? undefined : _getProviderStatus(result),
         },
         '[WEATHER]: tool executed',
       );
@@ -84,8 +74,6 @@ export const getWeatherTool: GetWeatherTool = tool({
           requestType,
           message: result.message,
           reason: result.reason,
-          providerStatus: _getProviderStatus(result),
-          providerMessage: _getProviderMessage(result),
         };
       }
 
@@ -105,7 +93,6 @@ export const getWeatherTool: GetWeatherTool = tool({
         requestType,
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
-        providerStatus: result.ok ? undefined : _getProviderStatus(result),
       },
       '[WEATHER]: tool executed',
     );
@@ -116,8 +103,6 @@ export const getWeatherTool: GetWeatherTool = tool({
         requestType,
         message: result.message,
         reason: result.reason,
-        providerStatus: _getProviderStatus(result),
-        providerMessage: _getProviderMessage(result),
       };
     }
 
@@ -162,7 +147,7 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
     - Pass an explicit city/place or a remembered default/native location.
     - If the user provides a one-off city, use it only for this request.
     - After ok=true, answer with the resolved local date/time and UTC offset when useful.
-    - After ok=false, ask for a clearer city/place or state the safe limitation. Do not expose providerStatus or providerMessage unless the user is explicitly debugging the integration.
+    - After ok=false, ask for a clearer city/place or state the returned safe limitation.
 
     # Examples
     - "What time is it in Tokyo?" -> location Tokyo.
@@ -178,7 +163,6 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
       {
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
-        providerStatus: result.ok ? undefined : _getProviderStatus(result),
       },
       '[LOCAL_TIME]: tool executed',
     );
@@ -188,8 +172,6 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
         ok: false,
         message: result.message,
         reason: result.reason,
-        providerStatus: _getProviderStatus(result),
-        providerMessage: _getProviderMessage(result),
       };
     }
 

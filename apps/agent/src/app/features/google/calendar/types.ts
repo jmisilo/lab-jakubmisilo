@@ -1,4 +1,4 @@
-export type GoogleCalendarAccessRole =
+type GoogleCalendarAccessRole =
   | 'freeBusyReader'
   | 'reader'
   | 'writer'

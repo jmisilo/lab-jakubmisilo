@@ -1,14 +1,10 @@
 import type {
-  ConfirmNutritionDraftInput,
-  CorrectNutritionMealInput,
-  CreateNutritionDraftInput,
-  DeleteNutritionMealInput,
-  GetNutritionStatusInput,
-  NutritionConfidence,
-  NutritionMealEstimate,
-  NutritionMealItem,
-  SetNutritionGoalsInput,
-} from '@/app/features/nutrition/types';
+  NutritionConfidenceSchema,
+  NutritionGoalUpdateSchema,
+  NutritionMealEstimateSchema,
+  NutritionMealItemSchema,
+} from '@/app/features/nutrition/schemas';
+import type { z } from 'zod';
 
 import { randomUUID } from 'node:crypto';
 
@@ -350,3 +346,53 @@ export class AgentNutritionService {
     });
   }
 }
+
+type NutritionConfidence = z.infer<typeof NutritionConfidenceSchema>;
+type NutritionGoalUpdate = z.infer<typeof NutritionGoalUpdateSchema>;
+type NutritionMealEstimate = z.infer<typeof NutritionMealEstimateSchema>;
+type NutritionMealItem = z.infer<typeof NutritionMealItemSchema>;
+
+type SetNutritionGoalsInput = {
+  identityId: string;
+  goals: NutritionGoalUpdate;
+  sourceMessageId?: string;
+};
+
+type CreateNutritionDraftInput = {
+  identityId: string;
+  threadId: string;
+  estimate: NutritionMealEstimate;
+  timeZone: string;
+  sourceMessageId?: string;
+  now?: Date;
+};
+
+type GetNutritionStatusInput = {
+  identityId: string;
+  timeZone: string;
+  localDate?: string;
+  now?: Date;
+};
+
+type NutritionThreadInput = {
+  identityId: string;
+  threadId: string;
+};
+
+type ConfirmNutritionDraftInput = NutritionThreadInput & {
+  timeZone: string;
+  now?: Date;
+};
+
+type CorrectNutritionMealInput = NutritionThreadInput & {
+  mealId?: string;
+  estimate: NutritionMealEstimate;
+  timeZone: string;
+  now?: Date;
+};
+
+type DeleteNutritionMealInput = {
+  identityId: string;
+  mealId: string;
+  now?: Date;
+};

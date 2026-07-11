@@ -14,7 +14,7 @@ import type { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
 import { GoogleConnectionService } from '@/app/features/google/connection';
-import { GoogleCalendarDbService } from '@/infrastructure/db/services/google-calendar';
+import { GoogleCalendarAuditDbService } from '@/infrastructure/db/services/google';
 import { AppError, ErrorService } from '@/infrastructure/errors';
 import { GoogleCalendarApiClient } from '@/infrastructure/google/calendar';
 import { logger } from '@/infrastructure/logger';
@@ -436,7 +436,7 @@ export class GoogleCalendarEventService {
 
   static async #recordAudit(input: RecordAuditInput) {
     try {
-      await GoogleCalendarDbService.createActionAudit(input);
+      await GoogleCalendarAuditDbService.recordAction(input);
     } catch (error) {
       logger.warn(
         {

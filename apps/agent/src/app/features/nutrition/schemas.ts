@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const NutritionConfidenceSchema = z.enum(['high', 'medium', 'low']);
-export const NutritionMealSourceSchema = z.enum(['photo', 'text', 'manual']);
+const NutritionMealSourceSchema = z.enum(['photo', 'text', 'manual']);
 
 export const NutritionMealItemSchema = z.object({
   name: z.string().min(1).max(120),
@@ -29,7 +29,7 @@ export const NutritionMealEstimateSchema = z.object({
     .describe('When the meal was eaten as ISO datetime with Z or a numeric offset.'),
 });
 
-export const NutritionGoalsSchema = z.object({
+const NutritionGoalsSchema = z.object({
   dailyCaloriesGoal: z.number().int().min(500).max(10_000),
   dailyProteinGoalGrams: z.number().min(0).max(1_000).nullable(),
   dailyCarbsGoalGrams: z.number().min(0).max(2_000).nullable(),

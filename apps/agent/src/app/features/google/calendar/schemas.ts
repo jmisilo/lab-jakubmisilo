@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { GoogleReconnectReasonSchema } from '@/app/features/google/schemas';
 
-export const GOOGLE_CALENDAR_EVENT_LIST_MAX_ITEMS = 50;
+const GOOGLE_CALENDAR_EVENT_LIST_MAX_ITEMS = 50;
 
 const ISO_DATE_TIME_WITH_OPTIONAL_OFFSET_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/;
@@ -30,12 +30,12 @@ const CalendarDateTimeValueSchema = z.object({
     .describe('IANA timezone for the date-time, usually the runtime user timezone.'),
 });
 
-export const CalendarEventTimeSchema = z.discriminatedUnion('type', [
+const CalendarEventTimeSchema = z.discriminatedUnion('type', [
   CalendarDateValueSchema,
   CalendarDateTimeValueSchema,
 ]);
 
-export const CalendarAttendeeInputSchema = z.object({
+const CalendarAttendeeInputSchema = z.object({
   email: z.string().email().describe('Attendee email address.'),
   displayName: z.string().min(1).optional().describe('Optional attendee display name.'),
   optional: z.boolean().optional().describe('Whether the attendee is optional.'),
