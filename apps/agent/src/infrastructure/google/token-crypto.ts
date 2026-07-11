@@ -47,6 +47,10 @@ export class GoogleTokenEncryptionService {
         decipher.final(),
       ]).toString('utf8');
     } catch (error) {
+      if (AppError.is(error) && error.code === AppErrorCode.GOOGLE_CONFIGURATION_INVALID) {
+        throw error;
+      }
+
       throw new AppError({
         code: AppErrorCode.GOOGLE_TOKEN_INVALID,
         message: 'Google refresh token could not be decrypted.',
@@ -58,8 +62,7 @@ export class GoogleTokenEncryptionService {
   }
 
   static #getKey() {
-    const encodedKey =
-      process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? process.env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY;
+    const encodedKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
 
     if (!encodedKey) {
       throw new AppError({

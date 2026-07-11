@@ -1,26 +1,18 @@
-import type { UserFacingFailure } from '@/infrastructure/errors';
 import type { Tool } from 'ai';
 import type { z } from 'zod';
 
 import { tool } from 'ai';
 import dedent from 'dedent';
 
-import { GoogleConnectionService } from '@/app/features/google/connection';
 import { GoogleGmailService } from '@/app/features/google/gmail';
 import {
   GmailToolContextSchema,
   ReadGmailToolInputSchema,
   ReadGmailToolOutputSchema,
 } from '@/app/features/google/gmail/schemas';
-import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
+import { GoogleConnectionRecoveryService } from '@/app/features/google/recovery';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
-
-const GMAIL_RECONNECT_MESSAGES = {
-  not_connected: 'Gmail is not connected yet.',
-  permission_missing: 'The Google connection does not include Gmail read access.',
-  access_expired_or_revoked: 'Google access expired or was revoked.',
-  connection_link_expired: 'The previous Google connection link expired.',
-} as const;
 
 export const readGmailTool: ReadGmailTool = tool({
   description: dedent`
@@ -93,82 +85,19 @@ export const readGmailTool: ReadGmailTool = tool({
         },
         '[GOOGLE_GMAIL]: read tool failed',
       );
-      const failure = ErrorService.toUserFacingFailure(error, {
+      return GoogleConnectionRecoveryService.createToolFailure({
+        error,
         fallbackCode: 'GOOGLE_API_ERROR',
         fallbackMessage: 'Gmail read request failed.',
+        identityId: context.identityId,
+        threadId: context.threadId,
+        sourceMessageId: context.sourceMessageId,
+        service: 'gmail',
+        operation: 'read',
       });
-
-      return createReconnectableFailureResult({ error, failure, context });
     }
   },
 });
-
-async function createReconnectableFailureResult({
-  error,
-  failure,
-  context,
-}: {
-  error: unknown;
-  failure: UserFacingFailure;
-  context: z.infer<typeof GmailToolContextSchema>;
-}) {
-  const reconnectReason = getReconnectReason(error);
-
-  if (!reconnectReason || !context.threadId) {
-    return { ok: false as const, message: failure.message };
-  }
-
-  try {
-    const request = await GoogleConnectionService.createConnectionRequest({
-      identityId: context.identityId,
-      threadId: context.threadId,
-      sourceMessageId: context.sourceMessageId,
-      services: ['gmail'],
-    });
-
-    return {
-      ok: false as const,
-      message: `${GMAIL_RECONNECT_MESSAGES[reconnectReason]} Use this link to reconnect: ${request.connectionUrl}`,
-      connectionUrl: request.connectionUrl,
-      expiresAt: request.expiresAt.toISOString(),
-      reconnectReason,
-    };
-  } catch (reconnectError) {
-    logger.error(
-      {
-        identityId: context.identityId,
-        safeError: ErrorService.toSafeLog(reconnectError),
-      },
-      '[GOOGLE_GMAIL]: reconnect link creation failed',
-    );
-
-    return { ok: false as const, message: failure.message };
-  }
-}
-
-function getReconnectReason(error: unknown): keyof typeof GMAIL_RECONNECT_MESSAGES | null {
-  if (!AppError.is(error) || error.retryable) {
-    return null;
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_CONNECTION_REQUIRED) {
-    return 'not_connected';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_PERMISSION_REQUIRED) {
-    return 'permission_missing';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_TOKEN_INVALID) {
-    return 'access_expired_or_revoked';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_OAUTH_EXPIRED) {
-    return 'connection_link_expired';
-  }
-
-  return null;
-}
 
 export type ReadGmailTool = Tool<
   z.infer<typeof ReadGmailToolInputSchema>,

@@ -9,13 +9,9 @@ import { logger } from '@/infrastructure/logger';
 
 export const GoogleRouter = new Hono()
   .get('/links/google/connect/:requestId', handleGoogleConnect)
-  .get('/links/google-calendar/connect/:requestId', handleGoogleConnect)
   .get('/links/google/callback', handleGoogleCallback)
-  .get('/links/google-calendar/callback', handleGoogleCallback)
   .get('/links/google/done', renderGoogleConnected)
-  .get('/links/google-calendar/done', renderGoogleConnected)
-  .get('/links/google/error', renderGoogleConnectionError)
-  .get('/links/google-calendar/error', renderGoogleConnectionError);
+  .get('/links/google/error', renderGoogleConnectionError);
 
 async function handleGoogleConnect(c: Context) {
   const requestId = c.req.param('requestId');

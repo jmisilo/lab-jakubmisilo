@@ -1,7 +1,7 @@
 import { GOOGLE_SERVICE_SCOPES } from '@/app/features/google/schemas';
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
-const mockGoogleCalendarDbService = {
+const mockGoogleConnectionDbService = {
   createOauthState: jest.fn(),
   getActiveConnection: jest.fn(),
   markConnectionInvalid: jest.fn(),
@@ -16,8 +16,8 @@ const mockGoogleTokenEncryptionService = {
   decryptToken: jest.fn(),
 };
 
-jest.mock('@/infrastructure/db/services/google-calendar', () => ({
-  GoogleCalendarDbService: mockGoogleCalendarDbService,
+jest.mock('@/infrastructure/db/services/google', () => ({
+  GoogleConnectionDbService: mockGoogleConnectionDbService,
 }));
 jest.mock('@/infrastructure/google/oauth', () => ({
   GoogleOAuthService: mockGoogleOAuthService,
@@ -46,10 +46,10 @@ afterAll(() => {
 });
 
 it('adds Gmail scope to an existing Calendar connection request', async () => {
-  mockGoogleCalendarDbService.getActiveConnection.mockResolvedValue({
+  mockGoogleConnectionDbService.getActiveConnection.mockResolvedValue({
     grantedScopes: [...GOOGLE_SERVICE_SCOPES.calendar],
   });
-  mockGoogleCalendarDbService.createOauthState.mockImplementation(async (input) => input);
+  mockGoogleConnectionDbService.createOauthState.mockImplementation(async (input) => input);
 
   const result = await GoogleConnectionService.createConnectionRequest({
     identityId: 'identity-1',
@@ -57,7 +57,7 @@ it('adds Gmail scope to an existing Calendar connection request', async () => {
     services: ['gmail'],
   });
 
-  expect(mockGoogleCalendarDbService.createOauthState).toHaveBeenCalledWith(
+  expect(mockGoogleConnectionDbService.createOauthState).toHaveBeenCalledWith(
     expect.objectContaining({
       identityId: 'identity-1',
       scopes: [...GOOGLE_SERVICE_SCOPES.calendar, ...GOOGLE_SERVICE_SCOPES.gmail],
@@ -69,7 +69,7 @@ it('adds Gmail scope to an existing Calendar connection request', async () => {
 });
 
 it('rejects Gmail access when the shared connection lacks Gmail scope', async () => {
-  mockGoogleCalendarDbService.getActiveConnection.mockResolvedValue({
+  mockGoogleConnectionDbService.getActiveConnection.mockResolvedValue({
     id: 'connection-1',
     grantedScopes: [...GOOGLE_SERVICE_SCOPES.calendar],
   });
@@ -84,7 +84,7 @@ it('rejects Gmail access when the shared connection lacks Gmail scope', async ()
 });
 
 it('invalidates the connection when refresh access is revoked', async () => {
-  mockGoogleCalendarDbService.getActiveConnection.mockResolvedValue({
+  mockGoogleConnectionDbService.getActiveConnection.mockResolvedValue({
     id: 'connection-1',
     grantedScopes: [...GOOGLE_SERVICE_SCOPES.gmail],
   });
@@ -100,7 +100,7 @@ it('invalidates the connection when refresh access is revoked', async () => {
   await expect(
     GoogleConnectionService.getAccessToken({ identityId: 'identity-1', service: 'gmail' }),
   ).rejects.toMatchObject({ code: AppErrorCode.GOOGLE_TOKEN_INVALID });
-  expect(mockGoogleCalendarDbService.markConnectionInvalid).toHaveBeenCalledWith({
+  expect(mockGoogleConnectionDbService.markConnectionInvalid).toHaveBeenCalledWith({
     identityId: 'identity-1',
     connectionId: 'connection-1',
   });
