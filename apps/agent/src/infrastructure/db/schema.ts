@@ -8,7 +8,6 @@ import {
   index,
   integer,
   jsonb,
-  pgSequence,
   pgTable,
   primaryKey,
   real,
@@ -18,14 +17,6 @@ import {
   uuid,
   vector,
 } from 'drizzle-orm/pg-core';
-
-/**
- * Chat SDK owns chat_state_* tables. Drizzle excludes those tables from db:push,
- * but their bigserial backing sequences are still visible in public, so keep the
- * sequences declared to prevent accidental drops.
- */
-export const chatStateListsSeq = pgSequence('chat_state_lists_seq_seq');
-export const chatStateQueuesSeq = pgSequence('chat_state_queues_seq_seq');
 
 export const agentMessages = pgTable(
   'agent_messages',
@@ -161,6 +152,7 @@ export const agentScheduledTasks = pgTable(
     status: text('status', { enum: ['active', 'paused', 'completed', 'cancelled', 'failed'] })
       .notNull()
       .default('active'),
+    revision: integer('revision').notNull().default(1),
     timeZone: text('time_zone').notNull(),
     nextRunAt: timestamp('next_run_at', { withTimezone: true }).notNull(),
     recurrence: jsonb('recurrence').notNull().default({}),
@@ -197,9 +189,11 @@ export const agentScheduledTaskRuns = pgTable(
       .notNull()
       .references(() => agentScheduledTasks.id, { onDelete: 'cascade' }),
     scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
-    status: text('status', { enum: ['running', 'sent', 'failed', 'satisfied'] })
+    triggerVersion: text('trigger_version').notNull().default('legacy'),
+    status: text('status', { enum: ['running', 'sent', 'failed', 'satisfied', 'skipped'] })
       .notNull()
       .default('running'),
+    claimToken: text('claim_token'),
     sourceMessageId: text('source_message_id'),
     output: text('output'),
     error: text('error'),
@@ -210,6 +204,7 @@ export const agentScheduledTaskRuns = pgTable(
     uniqueIndex('agent_scheduled_task_runs_task_scheduled_for_idx').on(
       table.taskId,
       table.scheduledFor,
+      table.triggerVersion,
     ),
     index('agent_scheduled_task_runs_task_idx').on(table.taskId),
     index('agent_scheduled_task_runs_status_idx').on(table.status),

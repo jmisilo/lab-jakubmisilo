@@ -69,15 +69,11 @@ export const getWeatherTool: GetWeatherTool = tool({
 
       logger.info(
         {
-          location,
           units,
           requestType,
-          forecast,
           ok: result.ok,
           reason: result.ok ? undefined : result.reason,
-          message: result.ok ? undefined : result.message,
           providerStatus: result.ok ? undefined : _getProviderStatus(result),
-          providerMessage: result.ok ? undefined : _getProviderMessage(result),
         },
         '[WEATHER]: tool executed',
       );
@@ -105,14 +101,11 @@ export const getWeatherTool: GetWeatherTool = tool({
 
     logger.info(
       {
-        location,
         units,
         requestType,
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
-        message: result.ok ? undefined : result.message,
         providerStatus: result.ok ? undefined : _getProviderStatus(result),
-        providerMessage: result.ok ? undefined : _getProviderMessage(result),
       },
       '[WEATHER]: tool executed',
     );
@@ -183,12 +176,9 @@ export const getLocalTimeTool: GetLocalTimeTool = tool({
 
     logger.info(
       {
-        location,
         ok: result.ok,
         reason: result.ok ? undefined : result.reason,
-        message: result.ok ? undefined : result.message,
         providerStatus: result.ok ? undefined : _getProviderStatus(result),
-        providerMessage: result.ok ? undefined : _getProviderMessage(result),
       },
       '[LOCAL_TIME]: tool executed',
     );

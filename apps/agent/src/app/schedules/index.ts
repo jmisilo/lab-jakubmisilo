@@ -20,7 +20,7 @@ import {
   SCHEDULE_TASK_TITLE_MAX_CHARACTERS,
 } from '@/app/schedules/schemas';
 import { AgentScheduleDbService } from '@/infrastructure/db/services/agent-schedule';
-import { AppError, AppErrorCode } from '@/infrastructure/errors';
+import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 import { QStashService } from '@/infrastructure/qstash';
 
@@ -119,7 +119,7 @@ export class AgentScheduleService {
         logger.error(
           {
             taskId,
-            error: cancelError,
+            safeError: ErrorService.toSafeLog(cancelError),
           },
           '[AGENT_SCHEDULE]: external trigger cleanup failed',
         );
@@ -657,7 +657,7 @@ export class AgentScheduleService {
       logger.error(
         {
           taskId,
-          error,
+          safeError: ErrorService.toSafeLog(error),
         },
         logMessage,
       );

@@ -89,7 +89,6 @@ export const readGmailTool: ReadGmailTool = tool({
         {
           identityId: context.identityId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE_GMAIL]: read tool failed',
@@ -138,7 +137,6 @@ async function createReconnectableFailureResult({
     logger.error(
       {
         identityId: context.identityId,
-        error: reconnectError,
         safeError: ErrorService.toSafeLog(reconnectError),
       },
       '[GOOGLE_GMAIL]: reconnect link creation failed',

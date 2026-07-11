@@ -1,21 +1,22 @@
 import { AgentNutritionService } from '@/app/features/nutrition';
-
-const mockNutritionDbService = {
-  upsertProfile: jest.fn(),
-  getProfile: jest.fn(),
-  createDraft: jest.fn(),
-  getPendingDraft: jest.fn(),
-  confirmPendingDraft: jest.fn(),
-  updateMeal: jest.fn(),
-  deleteMeal: jest.fn(),
-  getMeal: jest.fn(),
-  listConfirmedMealsForDate: jest.fn(),
-  getConfirmedTotalsForDate: jest.fn(),
-};
+import { AgentNutritionDbService } from '@/infrastructure/db/services/agent-nutrition';
 
 jest.mock('@/infrastructure/db/services/agent-nutrition', () => ({
-  AgentNutritionDbService: mockNutritionDbService,
+  AgentNutritionDbService: {
+    upsertProfile: jest.fn(),
+    getProfile: jest.fn(),
+    createDraft: jest.fn(),
+    getPendingDraft: jest.fn(),
+    confirmPendingDraft: jest.fn(),
+    updateMeal: jest.fn(),
+    deleteMeal: jest.fn(),
+    getMeal: jest.fn(),
+    listConfirmedMealsForDate: jest.fn(),
+    getConfirmedTotalsForDate: jest.fn(),
+  },
 }));
+
+const mockNutritionDbService = jest.mocked(AgentNutritionDbService);
 
 const NOW = new Date('2026-07-10T22:30:00.000Z');
 
@@ -26,7 +27,7 @@ beforeEach(() => {
 describe('AgentNutritionService', () => {
   it('creates a complete profile from an initial calorie goal', async () => {
     mockNutritionDbService.getProfile.mockResolvedValue(null);
-    mockNutritionDbService.upsertProfile.mockImplementation((input) => input);
+    mockNutritionDbService.upsertProfile.mockResolvedValue(createProfile());
 
     const profile = await AgentNutritionService.setGoals({
       identityId: 'identity-1',
@@ -59,7 +60,7 @@ describe('AgentNutritionService', () => {
 
   it('preserves omitted goals and clears explicitly null macro goals', async () => {
     mockNutritionDbService.getProfile.mockResolvedValue(createProfile());
-    mockNutritionDbService.upsertProfile.mockImplementation((input) => input);
+    mockNutritionDbService.upsertProfile.mockResolvedValue(createProfile());
 
     await AgentNutritionService.setGoals({
       identityId: 'identity-1',
@@ -82,10 +83,10 @@ describe('AgentNutritionService', () => {
   });
 
   it('aggregates item nutrition and creates a local-date draft', async () => {
-    mockNutritionDbService.createDraft.mockImplementation((input) => ({
-      meal: createMeal(input),
+    mockNutritionDbService.createDraft.mockResolvedValue({
+      meal: createMeal(),
       created: true,
-    }));
+    });
 
     const result = await AgentNutritionService.createMealDraft({
       identityId: 'identity-1',
@@ -180,7 +181,9 @@ describe('AgentNutritionService', () => {
 
   it('corrects the pending draft using recalculated item totals', async () => {
     mockNutritionDbService.getPendingDraft.mockResolvedValue(createMeal());
-    mockNutritionDbService.updateMeal.mockImplementation(({ update }) => createMeal({ ...update }));
+    mockNutritionDbService.updateMeal.mockResolvedValue(
+      createMeal({ calories: 300, proteinGrams: 25 }),
+    );
 
     const meal = await AgentNutritionService.correctMeal({
       identityId: 'identity-1',
@@ -206,6 +209,59 @@ describe('AgentNutritionService', () => {
       }),
     );
     expect(meal.calories).toBe(300);
+  });
+
+  it("preserves a meal's timestamp and local date when correction omits eatenAt", async () => {
+    const eatenAt = new Date('2026-07-09T18:00:00.000Z');
+    mockNutritionDbService.getPendingDraft.mockResolvedValue(
+      createMeal({ eatenAt, localDate: '2026-07-09' }),
+    );
+    mockNutritionDbService.updateMeal.mockResolvedValue(createMeal());
+
+    await AgentNutritionService.correctMeal({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      timeZone: 'Europe/Warsaw',
+      now: NOW,
+      estimate: createEstimate(),
+    });
+
+    expect(mockNutritionDbService.updateMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          eatenAt,
+          localDate: '2026-07-09',
+        }),
+      }),
+    );
+  });
+
+  it("updates a meal's timestamp and local date when correction provides eatenAt", async () => {
+    const eatenAt = '2026-07-10T22:30:00.000Z';
+    mockNutritionDbService.getPendingDraft.mockResolvedValue(
+      createMeal({
+        eatenAt: new Date('2026-07-09T18:00:00.000Z'),
+        localDate: '2026-07-09',
+      }),
+    );
+    mockNutritionDbService.updateMeal.mockResolvedValue(createMeal());
+
+    await AgentNutritionService.correctMeal({
+      identityId: 'identity-1',
+      threadId: 'telegram:1',
+      timeZone: 'Europe/Warsaw',
+      now: NOW,
+      estimate: createEstimate({ eatenAt }),
+    });
+
+    expect(mockNutritionDbService.updateMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          eatenAt: new Date(eatenAt),
+          localDate: '2026-07-11',
+        }),
+      }),
+    );
   });
 });
 

@@ -4,7 +4,7 @@ import type {
   KnowledgeExploreDirectionSchema,
 } from '@/app/knowledge/schemas';
 import type { ShortTermMemory } from '@/app/memory/types';
-import type { AgentKnowledgeSource } from '@/types';
+import type { AgentKnowledgeNode, AgentKnowledgeSource } from '@/types';
 import type { z } from 'zod';
 
 export type CreateKnowledgeNodeInput = {
@@ -56,6 +56,80 @@ export type MoveKnowledgeNodeByPathInput = {
   title?: string;
 };
 
+export type ExplicitKnowledgeNodeDraft = {
+  parentPath?: string;
+  slug?: string;
+  title: string;
+  content: string;
+};
+
+export type ApplyExplicitKnowledgeMutationInput = {
+  identityId: string;
+  sourceMessageId?: string;
+} & (
+  | {
+      action: 'create';
+      node: ExplicitKnowledgeNodeDraft;
+    }
+  | {
+      action: 'update';
+      path: string;
+      update: {
+        title?: string;
+        content: string;
+      };
+    }
+  | {
+      action: 'deactivate';
+      path: string;
+    }
+  | {
+      action: 'move';
+      path: string;
+      move: {
+        parentPath?: string | null;
+        slug?: string;
+        title?: string;
+      };
+    }
+  | {
+      action: 'supersede';
+      path: string;
+      node: ExplicitKnowledgeNodeDraft;
+      supersededByPath?: never;
+    }
+  | {
+      action: 'supersede';
+      path: string;
+      node?: never;
+      supersededByPath: string;
+    }
+);
+
+export type ExplicitKnowledgeMutationOutcome =
+  | {
+      action: 'create';
+      node: AgentKnowledgeNode;
+    }
+  | {
+      action: 'update';
+      node: AgentKnowledgeNode;
+    }
+  | {
+      action: 'deactivate';
+      node: AgentKnowledgeNode;
+    }
+  | {
+      action: 'move';
+      previousPath: string;
+      node: AgentKnowledgeNode;
+    }
+  | {
+      action: 'supersede';
+      node: AgentKnowledgeNode | null;
+      supersededNode: AgentKnowledgeNode;
+    };
+
 export type ExploreKnowledgeNodesInput = {
   identityId: string;
   startPath?: string;
@@ -67,16 +141,10 @@ export type ExploreKnowledgeNodesInput = {
   limit?: number;
 };
 
-export type SupersedeKnowledgeNodeInput = {
-  identityId: string;
-  nodeId: string;
-  supersededById?: string;
-};
-
 export type SupersedeKnowledgeNodeByPathInput = {
   identityId: string;
   path: string;
-  supersededByPath?: string;
+  supersededByPath: string;
 };
 
 export type GetContextItemsInput = {

@@ -45,6 +45,29 @@ const KnowledgeNodeDraftSchema = z.object({
     ),
 });
 
+const SupersedeKnowledgeNodeInputSchema = z.union([
+  z.object({
+    action: z
+      .literal('supersede')
+      .describe('Mark an old active note inactive while preserving it as history.'),
+    path: KnowledgeNodePathSchema.describe("Existing active node path for 'supersede'."),
+    node: KnowledgeNodeDraftSchema.describe(
+      'Replacement node draft when a new active fact should replace the old one.',
+    ),
+    supersededByPath: z.never().optional(),
+  }),
+  z.object({
+    action: z
+      .literal('supersede')
+      .describe('Mark an old active note inactive while preserving it as history.'),
+    path: KnowledgeNodePathSchema.describe("Existing active node path for 'supersede'."),
+    node: z.never().optional(),
+    supersededByPath: KnowledgeNodePathSchema.describe(
+      "Existing active replacement path for 'supersede'. Use this instead of node when the replacement already exists.",
+    ),
+  }),
+]);
+
 export const KnowledgeExploreDirectionSchema = z.enum([
   'auto',
   'children',
@@ -130,76 +153,67 @@ export const ReadKnowledgeToolInputSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-export const ManageKnowledgeToolInputSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('create').describe('Create a new durable note.'),
-    node: KnowledgeNodeDraftSchema.describe("Node draft for 'create'."),
-  }),
-  z.object({
-    action: z.literal('update').describe('Update an existing active note.'),
-    path: KnowledgeNodePathSchema.describe("Existing active node path for 'update'."),
-    update: z
-      .object({
-        title: z
-          .string()
-          .min(1)
-          .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
-          .optional()
-          .describe('Optional updated title. Keep it specific and concise.'),
-        content: z
-          .string()
-          .min(1)
-          .max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS)
-          .describe(
-            `Updated complete standalone markdown note content. Maximum ${KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS} characters.`,
-          ),
-      })
-      .describe("Updated note data for 'update'."),
-  }),
-  z.object({
-    action: z
-      .literal('supersede')
-      .describe('Mark an old active note inactive while preserving it as history.'),
-    path: KnowledgeNodePathSchema.describe("Existing active node path for 'supersede'."),
-    node: KnowledgeNodeDraftSchema.optional().describe(
-      'Optional replacement node draft when a new active fact should replace the old one.',
-    ),
-    supersededByPath: KnowledgeNodePathSchema.optional().describe(
-      "Optional existing active replacement path for 'supersede'. Use this instead of node when the replacement already exists.",
-    ),
-  }),
-  z.object({
-    action: z
-      .literal('deactivate')
-      .describe(
-        'Mark an active note inactive without deleting it. Use for forget/archive requests.',
-      ),
-    path: KnowledgeNodePathSchema.describe("Existing active node path for 'deactivate'."),
-  }),
-  z.object({
-    action: z
-      .literal('move')
-      .describe('Move and/or rename an active note path while preserving its subtree.'),
-    path: KnowledgeNodePathSchema.describe("Existing active node path for 'move'."),
-    move: z
-      .object({
-        parentPath: KnowledgeNodePathSchema.nullable()
-          .optional()
-          .describe('New parent path. Use null to move to root. Omit to keep the same parent.'),
-        slug: z
-          .string()
-          .min(1)
-          .optional()
-          .describe('Optional new path slug. Omit to keep the current slug.'),
-        title: z
-          .string()
-          .min(1)
-          .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
-          .optional()
-          .describe('Optional updated note title. Omit to keep the current title.'),
-      })
-      .describe("Move/rename data for 'move'."),
-  }),
+export const ManageKnowledgeToolInputSchema = z.union([
+  z.discriminatedUnion('action', [
+    z.object({
+      action: z.literal('create').describe('Create a new durable note.'),
+      node: KnowledgeNodeDraftSchema.describe("Node draft for 'create'."),
+    }),
+    z.object({
+      action: z.literal('update').describe('Update an existing active note.'),
+      path: KnowledgeNodePathSchema.describe("Existing active node path for 'update'."),
+      update: z
+        .object({
+          title: z
+            .string()
+            .min(1)
+            .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+            .optional()
+            .describe('Optional updated title. Keep it specific and concise.'),
+          content: z
+            .string()
+            .min(1)
+            .max(KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS)
+            .describe(
+              `Updated complete standalone markdown note content. Maximum ${KNOWLEDGE_NODE_CONTENT_MAX_CHARACTERS} characters.`,
+            ),
+        })
+        .describe("Updated note data for 'update'."),
+    }),
+    z.object({
+      action: z
+        .literal('deactivate')
+        .describe(
+          'Mark an active note inactive without deleting it. Use for forget/archive requests.',
+        ),
+      path: KnowledgeNodePathSchema.describe("Existing active node path for 'deactivate'."),
+    }),
+    z.object({
+      action: z
+        .literal('move')
+        .describe('Move and/or rename an active note path while preserving its subtree.'),
+      path: KnowledgeNodePathSchema.describe("Existing active node path for 'move'."),
+      move: z
+        .object({
+          parentPath: KnowledgeNodePathSchema.nullable()
+            .optional()
+            .describe('New parent path. Use null to move to root. Omit to keep the same parent.'),
+          slug: z
+            .string()
+            .min(1)
+            .optional()
+            .describe('Optional new path slug. Omit to keep the current slug.'),
+          title: z
+            .string()
+            .min(1)
+            .max(KNOWLEDGE_NODE_TITLE_MAX_CHARACTERS)
+            .optional()
+            .describe('Optional updated note title. Omit to keep the current title.'),
+        })
+        .describe("Move/rename data for 'move'."),
+    }),
+  ]),
+  SupersedeKnowledgeNodeInputSchema,
 ]);
 
 const KnowledgeToolNodeSchema = z.object({

@@ -289,7 +289,6 @@ export const manageScheduleTool: ManageScheduleTool = tool({
           threadId: context.threadId,
           sourceMessageId: context.sourceMessageId,
           action: input.action,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_SCHEDULE]: manage tool failed',

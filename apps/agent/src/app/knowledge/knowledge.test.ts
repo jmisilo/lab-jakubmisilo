@@ -14,6 +14,7 @@ const mockAgentKnowledgeDbService = {
   getNodeByPath: jest.fn(),
   listNodes: jest.fn(),
   createNode: jest.fn(),
+  replaceNode: jest.fn(),
   updateNodeContent: jest.fn(),
   supersedeNode: jest.fn(),
   moveNode: jest.fn(),
@@ -61,7 +62,7 @@ beforeEach(() => {
 });
 
 describe('AgentKnowledgeService', () => {
-  it('embeds node content before creating a durable knowledge node', async () => {
+  it('applies an explicit create mutation through one public outcome', async () => {
     const node = createKnowledgeContextNode({
       title: 'Default location',
       content: 'Warsaw is the user default location.',
@@ -70,14 +71,20 @@ describe('AgentKnowledgeService', () => {
     mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
     mockAgentKnowledgeDbService.createNode.mockResolvedValue(node);
 
-    await AgentKnowledgeService.createNode({
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'create',
       identityId: 'identity-1',
-      title: ' Default location ',
-      content: ' Warsaw is the user default location. ',
-      source: 'explicit',
       sourceMessageId: 'message-1',
+      node: {
+        title: ' Default location ',
+        content: ' Warsaw is the user default location. ',
+      },
     });
 
+    expect(outcome).toEqual({
+      action: 'create',
+      node,
+    });
     expect(mockAIService.embed).toHaveBeenCalledWith(
       expect.stringContaining('Title: Default location'),
     );
@@ -95,6 +102,301 @@ describe('AgentKnowledgeService', () => {
     );
   });
 
+  it('rejects an explicit create when persistence returns no node', async () => {
+    mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
+    mockAgentKnowledgeDbService.createNode.mockResolvedValue(null);
+
+    await expect(
+      AgentKnowledgeService.applyExplicitMutation({
+        action: 'create',
+        identityId: 'identity-1',
+        sourceMessageId: 'message-1',
+        node: {
+          title: 'Default location',
+          content: 'Warsaw is the user default location.',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+    });
+  });
+
+  it('prepares and applies an explicit replacement as one persistence outcome', async () => {
+    const supersededNode = {
+      ...createKnowledgeContextNode({
+        id: 'company-x-node',
+        path: 'work/company-x',
+        title: 'Company X',
+        content: 'The user currently works at Company X.',
+      }),
+      active: false,
+    };
+    const replacementNode = createKnowledgeContextNode({
+      id: 'company-y-node',
+      path: 'work/company-y',
+      title: 'Company Y',
+      content: 'The user currently works at Company Y.',
+    });
+
+    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(
+      createKnowledgeContextNode({
+        id: 'company-x-node',
+        path: 'work/company-x',
+        title: 'Company X',
+        content: 'The user currently works at Company X.',
+      }),
+    );
+    mockAgentKnowledgeDbService.findActiveNodeByPath.mockResolvedValue(
+      createKnowledgeContextNode({
+        id: 'work-node',
+        path: 'work',
+        title: 'Work',
+        content: 'Knowledge group for work.',
+      }),
+    );
+    mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
+    mockAgentKnowledgeDbService.replaceNode.mockResolvedValue({
+      replacementNode,
+      supersededNode,
+    });
+
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'supersede',
+      identityId: 'identity-1',
+      sourceMessageId: 'message-1',
+      path: '/work/company-x/',
+      node: {
+        parentPath: '/work/',
+        slug: 'company-y',
+        title: ' Company Y ',
+        content: ' The user currently works at Company Y. ',
+      },
+    });
+
+    expect(outcome).toEqual({
+      action: 'supersede',
+      node: replacementNode,
+      supersededNode,
+    });
+    expect(mockAgentKnowledgeDbService.replaceNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        nodeId: 'company-x-node',
+        replacement: expect.objectContaining({
+          parentId: 'work-node',
+          slug: 'company-y',
+          title: 'Company Y',
+          content: 'The user currently works at Company Y.',
+          source: 'explicit',
+          sourceMessageId: 'message-1',
+          embedding: [0.1, 0.2, 0.3],
+          embeddingModel: 'text-embedding-3-small',
+          embeddingContentHash: expect.any(String),
+        }),
+      }),
+    );
+    expect(mockAgentKnowledgeDbService.createNode).not.toHaveBeenCalled();
+    expect(mockAgentKnowledgeDbService.supersedeNode).not.toHaveBeenCalled();
+  });
+
+  it('applies an explicit update mutation by normalized path', async () => {
+    const currentNode = createKnowledgeContextNode({
+      id: 'preference-node',
+      path: 'preferences/communication',
+      title: 'Communication preference',
+      content: 'The user prefers detailed answers.',
+    });
+    const updatedNode = {
+      ...currentNode,
+      content: 'The user prefers concise answers.',
+    };
+
+    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(currentNode);
+    mockAgentKnowledgeDbService.getNode.mockResolvedValue(currentNode);
+    mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
+    mockAgentKnowledgeDbService.updateNodeContent.mockResolvedValue(updatedNode);
+
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'update',
+      identityId: 'identity-1',
+      path: '/preferences/communication/',
+      update: {
+        content: ' The user prefers concise answers. ',
+      },
+    });
+
+    expect(outcome).toEqual({
+      action: 'update',
+      node: updatedNode,
+    });
+    expect(mockAgentKnowledgeDbService.updateNodeContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        nodeId: 'preference-node',
+        content: 'The user prefers concise answers.',
+        embedding: [0.1, 0.2, 0.3],
+      }),
+    );
+  });
+
+  it('applies an explicit deactivate mutation without deleting history', async () => {
+    const activeNode = createKnowledgeContextNode({
+      id: 'location-node',
+      path: 'profile/location',
+      title: 'Default location',
+      content: 'Warsaw is the user default location.',
+    });
+    const deactivatedNode = {
+      ...activeNode,
+      active: false,
+    };
+
+    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(activeNode);
+    mockAgentKnowledgeDbService.supersedeNode.mockResolvedValue(deactivatedNode);
+
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'deactivate',
+      identityId: 'identity-1',
+      path: '/profile/location/',
+    });
+
+    expect(outcome).toEqual({
+      action: 'deactivate',
+      node: deactivatedNode,
+    });
+    expect(mockAgentKnowledgeDbService.supersedeNode).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      nodeId: 'location-node',
+    });
+  });
+
+  it('applies an explicit move mutation while preserving the previous path in the command', async () => {
+    const currentNode = createKnowledgeContextNode({
+      id: 'scheduling-node',
+      path: 'ideas/agent-scheduling',
+      title: 'Agent scheduling',
+      content: 'Build recurring jobs for the agent.',
+    });
+    const parentNode = createKnowledgeContextNode({
+      id: 'lab-agent-node',
+      path: 'projects/lab-agent',
+      title: 'Lab Agent',
+      content: 'Knowledge group for the lab agent.',
+    });
+    const movedNode = {
+      ...currentNode,
+      parentId: parentNode.id,
+      path: 'projects/lab-agent/scheduling',
+      title: 'Scheduling',
+    };
+
+    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(currentNode);
+    mockAgentKnowledgeDbService.findActiveNodeByPath
+      .mockResolvedValueOnce(
+        createKnowledgeContextNode({
+          id: 'projects-node',
+          path: 'projects',
+          title: 'Projects',
+          content: 'Knowledge group for projects.',
+        }),
+      )
+      .mockResolvedValueOnce(parentNode);
+    mockAIService.embed.mockResolvedValue([0.7, 0.8, 0.9]);
+    mockAgentKnowledgeDbService.moveNode.mockResolvedValue(movedNode);
+
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'move',
+      identityId: 'identity-1',
+      path: '/ideas/agent-scheduling/',
+      move: {
+        parentPath: '/projects/lab-agent/',
+        slug: 'scheduling',
+        title: ' Scheduling ',
+      },
+    });
+
+    expect(outcome).toEqual({
+      action: 'move',
+      previousPath: '/ideas/agent-scheduling/',
+      node: movedNode,
+    });
+    expect(mockAgentKnowledgeDbService.moveNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityId: 'identity-1',
+        nodeId: 'scheduling-node',
+        parentId: 'lab-agent-node',
+        slug: 'scheduling',
+        title: 'Scheduling',
+        embedding: [0.7, 0.8, 0.9],
+        embeddingModel: 'text-embedding-3-small',
+        embeddingContentHash: expect.any(String),
+      }),
+    );
+    expect(mockAIService.embed).toHaveBeenCalledWith(expect.stringContaining('Title: Scheduling'));
+  });
+
+  it('links an explicit supersession to an existing active replacement', async () => {
+    const currentNode = createKnowledgeContextNode({
+      id: 'company-x-node',
+      path: 'work/company-x',
+      title: 'Company X',
+      content: 'The user previously worked at Company X.',
+    });
+    const replacementNode = createKnowledgeContextNode({
+      id: 'company-y-node',
+      path: 'work/company-y',
+      title: 'Company Y',
+      content: 'The user currently works at Company Y.',
+    });
+    const supersededNode = {
+      ...currentNode,
+      active: false,
+      supersededById: replacementNode.id,
+    };
+
+    mockAgentKnowledgeDbService.getActiveNodeByPath
+      .mockResolvedValueOnce(currentNode)
+      .mockResolvedValueOnce(replacementNode);
+    mockAgentKnowledgeDbService.supersedeNode.mockResolvedValue(supersededNode);
+
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'supersede',
+      identityId: 'identity-1',
+      path: '/work/company-x/',
+      supersededByPath: '/work/company-y/',
+    });
+
+    expect(outcome).toEqual({
+      action: 'supersede',
+      node: null,
+      supersededNode,
+    });
+    expect(mockAgentKnowledgeDbService.supersedeNode).toHaveBeenCalledWith({
+      identityId: 'identity-1',
+      nodeId: 'company-x-node',
+      supersededById: 'company-y-node',
+    });
+  });
+
+  it('rejects self-supersession after paths are normalized', async () => {
+    await expect(
+      AgentKnowledgeService.applyExplicitMutation({
+        action: 'supersede',
+        identityId: 'identity-1',
+        path: '/work/current-company/',
+        supersededByPath: 'work/current-company',
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+      context: expect.objectContaining({
+        identityId: 'identity-1',
+      }),
+    });
+
+    expect(mockAgentKnowledgeDbService.getActiveNodeByPath).not.toHaveBeenCalled();
+    expect(mockAgentKnowledgeDbService.supersedeNode).not.toHaveBeenCalled();
+  });
+
   it('creates a durable knowledge node without embedding when embedding generation fails', async () => {
     const error = new Error('embedding provider unavailable');
     const node = createKnowledgeContextNode({
@@ -105,12 +407,14 @@ describe('AgentKnowledgeService', () => {
     mockAIService.embed.mockRejectedValue(error);
     mockAgentKnowledgeDbService.createNode.mockResolvedValue(node);
 
-    await AgentKnowledgeService.createNode({
+    await AgentKnowledgeService.applyExplicitMutation({
+      action: 'create',
       identityId: 'identity-1',
-      title: 'Default location',
-      content: 'Warsaw is the user default location.',
-      source: 'explicit',
       sourceMessageId: 'message-1',
+      node: {
+        title: 'Default location',
+        content: 'Warsaw is the user default location.',
+      },
     });
 
     expect(mockAgentKnowledgeDbService.createNode).toHaveBeenCalledWith(
@@ -129,10 +433,15 @@ describe('AgentKnowledgeService', () => {
       expect.objectContaining({
         identityId: 'identity-1',
         operation: 'knowledge.create',
-        error,
+        safeError: expect.anything(),
       }),
       '[AGENT_KNOWLEDGE]: embedding generation failed',
     );
+    const embeddingWarning = mockLogger.warn.mock.calls.find(
+      ([, message]) => message === '[AGENT_KNOWLEDGE]: embedding generation failed',
+    )?.[0];
+
+    expect(embeddingWarning).not.toHaveProperty('error');
   });
 
   it('persists bounded long notes while embedding only a content excerpt', async () => {
@@ -151,12 +460,14 @@ describe('AgentKnowledgeService', () => {
     mockAIService.embed.mockResolvedValue([0.1, 0.2, 0.3]);
     mockAgentKnowledgeDbService.createNode.mockResolvedValue(node);
 
-    await AgentKnowledgeService.createNode({
+    await AgentKnowledgeService.applyExplicitMutation({
+      action: 'create',
       identityId: 'identity-1',
-      title: 'Long project note',
-      content: longContent,
-      source: 'explicit',
       sourceMessageId: 'message-1',
+      node: {
+        title: 'Long project note',
+        content: longContent,
+      },
     });
 
     const embeddedText = mockAIService.embed.mock.calls[0]?.[0];
@@ -173,11 +484,13 @@ describe('AgentKnowledgeService', () => {
 
   it('rejects knowledge note content beyond the service write limit', async () => {
     await expect(
-      AgentKnowledgeService.createNode({
+      AgentKnowledgeService.applyExplicitMutation({
+        action: 'create',
         identityId: 'identity-1',
-        title: 'Too long note',
-        content: 'a'.repeat(AgentKnowledgeService.nodeContentCharacterLimit + 1),
-        source: 'explicit',
+        node: {
+          title: 'Too long note',
+          content: 'a'.repeat(AgentKnowledgeService.nodeContentCharacterLimit + 1),
+        },
       }),
     ).rejects.toMatchObject({
       code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
@@ -212,17 +525,19 @@ describe('AgentKnowledgeService', () => {
         }),
       );
 
-    const node = await AgentKnowledgeService.createNode({
+    const outcome = await AgentKnowledgeService.applyExplicitMutation({
+      action: 'create',
       identityId: 'identity-1',
-      parentPath: 'profile',
-      slug: 'gender',
-      title: 'User gender',
-      content: 'The user is male.',
-      source: 'explicit',
       sourceMessageId: 'message-1',
+      node: {
+        parentPath: 'profile',
+        slug: 'gender',
+        title: 'User gender',
+        content: 'The user is male.',
+      },
     });
 
-    expect(node?.path).toBe('profile/gender');
+    expect(outcome.node?.path).toBe('profile/gender');
     expect(mockAgentKnowledgeDbService.findActiveNodeByPath).toHaveBeenCalledWith({
       identityId: 'identity-1',
       path: 'profile',
@@ -260,7 +575,6 @@ describe('AgentKnowledgeService', () => {
       expect.objectContaining({
         identityId: 'identity-1',
         sourceMessageId: 'message-1',
-        path: 'profile',
         nodeId: 'profile-node',
       }),
       '[AGENT_KNOWLEDGE]: parent node auto-created',
@@ -513,98 +827,6 @@ describe('AgentKnowledgeService', () => {
     ]);
   });
 
-  it('deactivates an active knowledge node by path without deleting it', async () => {
-    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(
-      createKnowledgeContextNode({
-        id: 'location-node',
-        path: 'profile/location',
-        title: 'Default location',
-        content: 'Warsaw is the user default location.',
-      }),
-    );
-    mockAgentKnowledgeDbService.supersedeNode.mockResolvedValue(
-      createKnowledgeContextNode({
-        id: 'location-node',
-        path: 'profile/location',
-        title: 'Default location',
-        content: 'Warsaw is the user default location.',
-      }),
-    );
-
-    await AgentKnowledgeService.deactivateNodeByPath({
-      identityId: 'identity-1',
-      path: '/profile/location/',
-    });
-
-    expect(mockAgentKnowledgeDbService.getActiveNodeByPath).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      path: 'profile/location',
-    });
-    expect(mockAgentKnowledgeDbService.supersedeNode).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      nodeId: 'location-node',
-    });
-  });
-
-  it('moves and retitles a knowledge node while refreshing its embedding', async () => {
-    mockAgentKnowledgeDbService.getActiveNodeByPath.mockResolvedValue(
-      createKnowledgeContextNode({
-        id: 'note-node',
-        path: 'ideas/agent-scheduling',
-        title: 'Agent scheduling',
-        content: 'Build recurring background jobs for the agent.',
-      }),
-    );
-    mockAgentKnowledgeDbService.findActiveNodeByPath
-      .mockResolvedValueOnce(
-        createKnowledgeContextNode({
-          id: 'projects-node',
-          path: 'projects',
-          title: 'Projects',
-          content: 'Knowledge group for projects.',
-        }),
-      )
-      .mockResolvedValueOnce(
-        createKnowledgeContextNode({
-          id: 'lab-agent-node',
-          path: 'projects/lab-agent',
-          title: 'Lab Agent',
-          content: 'Knowledge group for the lab agent.',
-        }),
-      );
-    mockAIService.embed.mockResolvedValue([0.7, 0.8, 0.9]);
-    mockAgentKnowledgeDbService.moveNode.mockResolvedValue(
-      createKnowledgeContextNode({
-        id: 'note-node',
-        path: 'projects/lab-agent/scheduling',
-        title: 'Scheduling',
-        content: 'Build recurring background jobs for the agent.',
-      }),
-    );
-
-    await AgentKnowledgeService.moveNodeByPath({
-      identityId: 'identity-1',
-      path: 'ideas/agent-scheduling',
-      newParentPath: 'projects/lab-agent',
-      newSlug: 'scheduling',
-      title: 'Scheduling',
-    });
-
-    expect(mockAIService.embed).toHaveBeenCalledWith(expect.stringContaining('Title: Scheduling'));
-    expect(mockAgentKnowledgeDbService.moveNode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        identityId: 'identity-1',
-        nodeId: 'note-node',
-        parentId: 'lab-agent-node',
-        slug: 'scheduling',
-        title: 'Scheduling',
-        embedding: [0.7, 0.8, 0.9],
-        embeddingModel: 'text-embedding-3-small',
-        embeddingContentHash: expect.any(String),
-      }),
-    );
-  });
-
   it('skips retrieval when recent context has no user message', async () => {
     const items = await AgentKnowledgeService.getContextItems({
       identityId: 'identity-1',
@@ -630,7 +852,7 @@ describe('AgentKnowledgeService', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         identityId: 'identity-1',
-        error,
+        safeError: expect.anything(),
       }),
       '[AGENT_KNOWLEDGE]: context retrieval failed',
     );
@@ -811,7 +1033,6 @@ describe('AgentKnowledgeService', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'skip',
-        targetPath: 'profile/age',
         candidateCount: 1,
       }),
       '[AGENT_KNOWLEDGE]: implicit ingestion decision',
@@ -929,22 +1150,27 @@ describe('AgentKnowledgeService', () => {
         similarity: 0.86,
       }),
     ]);
-    mockAgentKnowledgeDbService.createNode.mockResolvedValue(
-      createKnowledgeContextNode({
-        id: 'company-y-node',
-        path: 'current-company',
-        title: 'Current company',
-        content: 'The user currently works at Company Y.',
-      }),
-    );
-    mockAgentKnowledgeDbService.supersedeNode.mockResolvedValue(
-      createKnowledgeContextNode({
+    const replacementNode = createKnowledgeContextNode({
+      id: 'company-y-node',
+      path: 'current-company',
+      title: 'Current company',
+      content: 'The user currently works at Company Y.',
+    });
+    const supersededNode = {
+      ...createKnowledgeContextNode({
         id: 'company-x-node',
         path: 'work/current-company',
         title: 'Current company',
         content: 'The user currently works at Company X.',
       }),
-    );
+      active: false,
+      supersededById: 'company-y-node',
+    };
+
+    mockAgentKnowledgeDbService.replaceNode.mockResolvedValue({
+      replacementNode,
+      supersededNode,
+    });
 
     await AgentKnowledgeService.extractImplicitKnowledge({
       identityId: 'identity-1',
@@ -954,27 +1180,27 @@ describe('AgentKnowledgeService', () => {
       assistantMessage: 'Noted.',
     });
 
-    expect(mockAgentKnowledgeDbService.createNode).toHaveBeenCalledWith(
+    expect(mockAgentKnowledgeDbService.replaceNode).toHaveBeenCalledWith(
       expect.objectContaining({
         identityId: 'identity-1',
-        parentId: null,
-        slug: undefined,
-        title: 'Current company',
-        content: 'The user currently works at Company Y.',
-        source: 'implicit',
-        sourceMessageId: 'message-1',
-        metadata: expect.objectContaining({
-          ingestionAction: 'supersede',
-          targetPath: 'work/current-company',
-          confidence: 0.96,
+        nodeId: 'company-x-node',
+        replacement: expect.objectContaining({
+          parentId: null,
+          slug: undefined,
+          title: 'Current company',
+          content: 'The user currently works at Company Y.',
+          source: 'implicit',
+          sourceMessageId: 'message-1',
+          metadata: expect.objectContaining({
+            ingestionAction: 'supersede',
+            targetPath: 'work/current-company',
+            confidence: 0.96,
+          }),
         }),
       }),
     );
-    expect(mockAgentKnowledgeDbService.supersedeNode).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      nodeId: 'company-x-node',
-      supersededById: 'company-y-node',
-    });
+    expect(mockAgentKnowledgeDbService.createNode).not.toHaveBeenCalled();
+    expect(mockAgentKnowledgeDbService.supersedeNode).not.toHaveBeenCalled();
   });
 
   it('skips low-confidence implicit knowledge extraction items', async () => {

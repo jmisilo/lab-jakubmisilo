@@ -2,11 +2,7 @@ const mockAgentKnowledgeService = {
   listNodes: jest.fn(),
   readNodeByPath: jest.fn(),
   exploreNodes: jest.fn(),
-  createNode: jest.fn(),
-  updateNodeByPath: jest.fn(),
-  deactivateNodeByPath: jest.fn(),
-  moveNodeByPath: jest.fn(),
-  supersedeNodeByPath: jest.fn(),
+  applyExplicitMutation: jest.fn(),
 };
 const mockLogger = {
   info: jest.fn(),
@@ -282,14 +278,17 @@ describe('manageKnowledgeTool', () => {
   });
 
   it('creates explicit knowledge notes with runtime identity context', async () => {
-    mockAgentKnowledgeService.createNode.mockResolvedValue(
-      createNode({
-        id: 'node-1',
-        path: 'profile/location',
-        title: 'Default location',
-        active: true,
-      }),
-    );
+    const node = createNode({
+      id: 'node-1',
+      path: 'profile/location',
+      title: 'Default location',
+      active: true,
+    });
+
+    mockAgentKnowledgeService.applyExplicitMutation.mockResolvedValue({
+      action: 'create',
+      node,
+    });
 
     const result = await executeManageKnowledgeTool({
       action: 'create',
@@ -300,14 +299,15 @@ describe('manageKnowledgeTool', () => {
       },
     });
 
-    expect(mockAgentKnowledgeService.createNode).toHaveBeenCalledWith({
+    expect(mockAgentKnowledgeService.applyExplicitMutation).toHaveBeenCalledWith({
+      action: 'create',
       identityId: 'identity-1',
-      parentPath: 'profile',
-      slug: undefined,
-      title: 'Default location',
-      content: 'Warsaw is the user default location.',
-      source: 'explicit',
       sourceMessageId: 'message-1',
+      node: {
+        parentPath: 'profile',
+        title: 'Default location',
+        content: 'Warsaw is the user default location.',
+      },
     });
     expect(result).toEqual({
       ok: true,
@@ -329,38 +329,61 @@ describe('manageKnowledgeTool', () => {
         input: expect.objectContaining({
           action: 'create',
           node: expect.objectContaining({
-            parentPath: 'profile',
-            title: 'Default location',
+            parentPath: expect.objectContaining({
+              characterCount: 7,
+              sha256: expect.any(String),
+            }),
+            title: expect.objectContaining({
+              characterCount: 16,
+              sha256: expect.any(String),
+            }),
             content: expect.objectContaining({
               characterCount: 36,
               sha256: expect.any(String),
-              preview: undefined,
             }),
           }),
         }),
       }),
       '[AGENT_KNOWLEDGE]: manage tool started',
     );
+    const startedLog = mockLogger.info.mock.calls.find(
+      ([, message]) => message === '[AGENT_KNOWLEDGE]: manage tool started',
+    )?.[0] as {
+      input?: {
+        node?: {
+          content?: Record<string, unknown>;
+        };
+      };
+    };
+
+    expect(startedLog.input?.node?.content).not.toHaveProperty('preview');
+    expect(JSON.stringify(startedLog)).not.toContain('profile');
+    expect(JSON.stringify(startedLog)).not.toContain('Default location');
   });
 
   it('deactivates knowledge notes for forget requests', async () => {
-    mockAgentKnowledgeService.deactivateNodeByPath.mockResolvedValue(
-      createNode({
-        id: 'node-1',
-        path: 'profile/old-location',
-        title: 'Old location',
-        active: false,
-      }),
-    );
+    const node = createNode({
+      id: 'node-1',
+      path: 'profile/old-location',
+      title: 'Old location',
+      active: false,
+    });
+
+    mockAgentKnowledgeService.applyExplicitMutation.mockResolvedValue({
+      action: 'deactivate',
+      node,
+    });
 
     const result = await executeManageKnowledgeTool({
       action: 'deactivate',
       path: 'profile/old-location',
     });
 
-    expect(mockAgentKnowledgeService.deactivateNodeByPath).toHaveBeenCalledWith({
+    expect(mockAgentKnowledgeService.applyExplicitMutation).toHaveBeenCalledWith({
+      action: 'deactivate',
       identityId: 'identity-1',
       path: 'profile/old-location',
+      sourceMessageId: 'message-1',
     });
     expect(result).toEqual({
       ok: true,
@@ -377,14 +400,18 @@ describe('manageKnowledgeTool', () => {
   });
 
   it('moves or renames knowledge notes while preserving runtime identity context', async () => {
-    mockAgentKnowledgeService.moveNodeByPath.mockResolvedValue(
-      createNode({
-        id: 'node-1',
-        path: 'projects/lab-agent/scheduling',
-        title: 'Scheduling',
-        active: true,
-      }),
-    );
+    const node = createNode({
+      id: 'node-1',
+      path: 'projects/lab-agent/scheduling',
+      title: 'Scheduling',
+      active: true,
+    });
+
+    mockAgentKnowledgeService.applyExplicitMutation.mockResolvedValue({
+      action: 'move',
+      previousPath: 'ideas/agent-scheduling',
+      node,
+    });
 
     const result = await executeManageKnowledgeTool({
       action: 'move',
@@ -396,12 +423,16 @@ describe('manageKnowledgeTool', () => {
       },
     });
 
-    expect(mockAgentKnowledgeService.moveNodeByPath).toHaveBeenCalledWith({
+    expect(mockAgentKnowledgeService.applyExplicitMutation).toHaveBeenCalledWith({
+      action: 'move',
       identityId: 'identity-1',
       path: 'ideas/agent-scheduling',
-      newParentPath: 'projects/lab-agent',
-      newSlug: 'scheduling',
-      title: 'Scheduling',
+      sourceMessageId: 'message-1',
+      move: {
+        parentPath: 'projects/lab-agent',
+        slug: 'scheduling',
+        title: 'Scheduling',
+      },
     });
     expect(result).toEqual({
       ok: true,
@@ -418,22 +449,24 @@ describe('manageKnowledgeTool', () => {
   });
 
   it('creates replacement knowledge and supersedes the old active path', async () => {
-    mockAgentKnowledgeService.createNode.mockResolvedValue(
-      createNode({
-        id: 'node-2',
-        path: 'work/company-y',
-        title: 'Company Y',
-        active: true,
-      }),
-    );
-    mockAgentKnowledgeService.supersedeNodeByPath.mockResolvedValue(
-      createNode({
-        id: 'node-1',
-        path: 'work/company-x',
-        title: 'Company X',
-        active: false,
-      }),
-    );
+    const replacementNode = createNode({
+      id: 'node-2',
+      path: 'work/company-y',
+      title: 'Company Y',
+      active: true,
+    });
+    const supersededNode = createNode({
+      id: 'node-1',
+      path: 'work/company-x',
+      title: 'Company X',
+      active: false,
+    });
+
+    mockAgentKnowledgeService.applyExplicitMutation.mockResolvedValue({
+      action: 'supersede',
+      node: replacementNode,
+      supersededNode,
+    });
 
     const result = await executeManageKnowledgeTool({
       action: 'supersede',
@@ -445,18 +478,16 @@ describe('manageKnowledgeTool', () => {
       },
     });
 
-    expect(mockAgentKnowledgeService.createNode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        identityId: 'identity-1',
+    expect(mockAgentKnowledgeService.applyExplicitMutation).toHaveBeenCalledWith({
+      action: 'supersede',
+      identityId: 'identity-1',
+      sourceMessageId: 'message-1',
+      path: 'work/company-x',
+      node: {
         parentPath: 'work',
         title: 'Company Y',
-        source: 'explicit',
-      }),
-    );
-    expect(mockAgentKnowledgeService.supersedeNodeByPath).toHaveBeenCalledWith({
-      identityId: 'identity-1',
-      path: 'work/company-x',
-      supersededByPath: 'work/company-y',
+        content: 'The user currently works at Company Y.',
+      },
     });
     expect(result).toEqual({
       ok: true,
@@ -482,7 +513,7 @@ describe('manageKnowledgeTool', () => {
   it('returns a safe failure and logs attempted input when knowledge updates fail', async () => {
     const error = new Error('database unavailable');
 
-    mockAgentKnowledgeService.createNode.mockRejectedValue(error);
+    mockAgentKnowledgeService.applyExplicitMutation.mockRejectedValue(error);
 
     const result = await executeManageKnowledgeTool({
       action: 'create',
@@ -501,24 +532,34 @@ describe('manageKnowledgeTool', () => {
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         operationId: expect.any(String),
-        error,
+        safeError: expect.anything(),
         identityId: 'identity-1',
         sourceMessageId: 'message-1',
         input: expect.objectContaining({
           action: 'create',
           node: expect.objectContaining({
-            parentPath: 'profile',
-            title: 'Gender',
+            parentPath: expect.objectContaining({
+              characterCount: 7,
+              sha256: expect.any(String),
+            }),
+            title: expect.objectContaining({
+              characterCount: 6,
+              sha256: expect.any(String),
+            }),
             content: expect.objectContaining({
               characterCount: 17,
               sha256: expect.any(String),
-              preview: undefined,
             }),
           }),
         }),
       }),
       '[AGENT_KNOWLEDGE]: manage tool failed',
     );
+    const failureLog = mockLogger.error.mock.calls.find(
+      ([, message]) => message === '[AGENT_KNOWLEDGE]: manage tool failed',
+    )?.[0];
+
+    expect(failureLog).not.toHaveProperty('error');
   });
 });
 

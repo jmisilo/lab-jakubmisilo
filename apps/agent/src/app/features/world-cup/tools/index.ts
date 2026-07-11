@@ -168,7 +168,6 @@ export const getWorldCupTrackingTool: GetWorldCupTrackingTool = tool({
     } catch (error) {
       logger.error(
         {
-          error,
           safeError: ErrorService.toSafeLog(error),
           identityId: context.identityId,
           threadId: context.threadId,
@@ -301,7 +300,7 @@ export const getWorldCupContextTool: GetWorldCupContextTool = tool({
       };
     } catch (error) {
       logger.error(
-        { error, safeError: ErrorService.toSafeLog(error), focus, teamCodes, date },
+        { safeError: ErrorService.toSafeLog(error), focus, teamCodes, date },
         '[WORLD_CUP]: context tool failed',
       );
 
