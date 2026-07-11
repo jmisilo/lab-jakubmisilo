@@ -2,8 +2,8 @@ import type { WorldCupTeamFifaCode } from '@/app/features/world-cup/teams';
 import type { WorldCupGameSnapshot } from '@/app/features/world-cup/types';
 
 import { WORLD_CUP_TEAMS, WorldCupTeamRegistry } from '@/app/features/world-cup/teams';
-import { WorldCupApiClient } from '@/app/features/world-cup/tracking/api';
 import { WorldCupTimeService } from '@/app/features/world-cup/tracking/time';
+import { WorldCupApiClient } from '@/infrastructure/world-cup';
 
 export class WorldCupContextService {
   static async getContext({
@@ -533,7 +533,7 @@ type WorldCupContextInput = {
   date?: string;
 };
 
-export type WorldCupContext = {
+type WorldCupContext = {
   timeZone: string;
   generatedAt: string;
   today: string;

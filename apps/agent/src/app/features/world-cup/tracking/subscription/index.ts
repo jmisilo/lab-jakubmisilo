@@ -1,14 +1,14 @@
-import type { WorldCupSubscription } from '@/app/features/world-cup/db';
 import type { WorldCupTeam } from '@/app/features/world-cup/teams';
 import type {
   WorldCupDetectedEvent,
   WorldCupEventType,
   WorldCupTrackingMode,
 } from '@/app/features/world-cup/types';
+import type { WorldCupSubscription } from '@/infrastructure/db/services/world-cup';
 
-import { WorldCupDbService } from '@/app/features/world-cup/db';
 import { WORLD_CUP_TEAMS, WorldCupTeamRegistry } from '@/app/features/world-cup/teams';
 import { WORLD_CUP_EVENT_TYPES } from '@/app/features/world-cup/types';
+import { WorldCupDbService } from '@/infrastructure/db/services/world-cup';
 
 export class WorldCupSubscriptionService {
   static async subscribe({

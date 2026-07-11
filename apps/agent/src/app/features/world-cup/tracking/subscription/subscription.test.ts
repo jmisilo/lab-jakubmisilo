@@ -1,11 +1,11 @@
-import type { WorldCupSubscription } from '@/app/features/world-cup/db';
 import type { WorldCupDetectedEvent } from '@/app/features/world-cup/types';
+import type { WorldCupSubscription } from '@/infrastructure/db/services/world-cup';
 
-import { WorldCupDbService } from '@/app/features/world-cup/db';
+import { WorldCupDbService } from '@/infrastructure/db/services/world-cup';
 
 import { WorldCupSubscriptionService } from '.';
 
-jest.mock('@/app/features/world-cup/db', () => ({
+jest.mock('@/infrastructure/db/services/world-cup', () => ({
   WorldCupDbService: {
     getActiveSubscriptionsForThread: jest.fn(),
   },

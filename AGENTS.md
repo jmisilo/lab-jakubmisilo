@@ -52,6 +52,7 @@ The Telegram agent is in `apps/agent`.
 - Weather tools: `apps/agent/src/app/features/weather`.
 - World Cup tools, polling, subscription, and notification delivery: `apps/agent/src/app/features/world-cup`.
 - Drizzle schema and DB services: `apps/agent/src/infrastructure/db`.
+- Google, OpenWeather, and World Cup provider clients: `apps/agent/src/infrastructure`.
 
 Keep external systems behind service boundaries. Do not call provider SDKs, Telegram APIs, or database tables directly from unrelated application code.
 

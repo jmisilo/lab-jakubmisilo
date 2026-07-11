@@ -1,4 +1,3 @@
-import type { UserFacingFailure } from '@/infrastructure/errors';
 import type { Tool } from 'ai';
 import type { z } from 'zod';
 
@@ -13,16 +12,9 @@ import {
   ReadCalendarToolInputSchema,
   ReadCalendarToolOutputSchema,
 } from '@/app/features/google/calendar/schemas';
-import { GoogleConnectionService } from '@/app/features/google/connection';
-import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
+import { GoogleConnectionRecoveryService } from '@/app/features/google/recovery';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
-
-const CALENDAR_RECONNECT_MESSAGES = {
-  not_connected: 'Google Calendar is not connected yet.',
-  permission_missing: 'The Google connection does not include Calendar access.',
-  access_expired_or_revoked: 'Google Calendar access expired or was revoked.',
-  connection_link_expired: 'The previous Google Calendar connection link expired.',
-} as const;
 
 export const readCalendarTool: ReadCalendarTool = tool({
   description: dedent`
@@ -118,15 +110,14 @@ export const readCalendarTool: ReadCalendarTool = tool({
         '[GOOGLE_CALENDAR]: read tool failed',
       );
 
-      const failure = ErrorService.toUserFacingFailure(error, {
+      return GoogleConnectionRecoveryService.createToolFailure({
+        error,
         fallbackCode: 'GOOGLE_CALENDAR_API_ERROR',
         fallbackMessage: 'Google Calendar read request failed.',
-      });
-
-      return createReconnectableFailureResult({
-        error,
-        failure,
-        context,
+        identityId: context.identityId,
+        threadId: context.threadId,
+        sourceMessageId: context.sourceMessageId,
+        service: 'calendar',
         operation: 'read',
       });
     }
@@ -242,15 +233,14 @@ export const manageCalendarTool: ManageCalendarTool = tool({
         '[GOOGLE_CALENDAR]: manage tool failed',
       );
 
-      const failure = ErrorService.toUserFacingFailure(error, {
+      return GoogleConnectionRecoveryService.createToolFailure({
+        error,
         fallbackCode: 'GOOGLE_CALENDAR_API_ERROR',
         fallbackMessage: 'Google Calendar change request failed.',
-      });
-
-      return createReconnectableFailureResult({
-        error,
-        failure,
-        context,
+        identityId: context.identityId,
+        threadId: context.threadId,
+        sourceMessageId: context.sourceMessageId,
+        service: 'calendar',
         operation: 'manage',
       });
     }
@@ -272,89 +262,6 @@ function toToolEvent(event: Awaited<ReturnType<typeof GoogleCalendarEventService
     end: event.end,
     attendees: event.attendees,
   };
-}
-
-async function createReconnectableFailureResult({
-  error,
-  failure,
-  context,
-  operation,
-}: {
-  error: unknown;
-  failure: UserFacingFailure;
-  context: z.infer<typeof CalendarToolContextSchema>;
-  operation: 'read' | 'manage';
-}) {
-  const reconnectReason = getReconnectReason(error);
-
-  if (!reconnectReason || !context.threadId) {
-    return { ok: false as const, message: failure.message };
-  }
-
-  try {
-    const request = await GoogleConnectionService.createConnectionRequest({
-      identityId: context.identityId,
-      threadId: context.threadId,
-      sourceMessageId: context.sourceMessageId,
-      services: ['calendar'],
-    });
-
-    logger.info(
-      {
-        identityId: context.identityId,
-        threadId: context.threadId,
-        operation,
-        reconnectReason,
-        expiresAt: request.expiresAt,
-      },
-      '[GOOGLE_CALENDAR]: reconnect link created after tool failure',
-    );
-
-    return {
-      ok: false as const,
-      message: `${CALENDAR_RECONNECT_MESSAGES[reconnectReason]} Use this link to reconnect: ${request.connectionUrl}`,
-      connectionUrl: request.connectionUrl,
-      expiresAt: request.expiresAt.toISOString(),
-      reconnectReason,
-    };
-  } catch (reconnectError) {
-    logger.error(
-      {
-        identityId: context.identityId,
-        threadId: context.threadId,
-        operation,
-        reconnectReason,
-        safeError: ErrorService.toSafeLog(reconnectError),
-      },
-      '[GOOGLE_CALENDAR]: reconnect link creation failed after tool failure',
-    );
-
-    return { ok: false as const, message: failure.message };
-  }
-}
-
-function getReconnectReason(error: unknown): keyof typeof CALENDAR_RECONNECT_MESSAGES | null {
-  if (!AppError.is(error) || error.retryable) {
-    return null;
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_CONNECTION_REQUIRED) {
-    return 'not_connected';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_PERMISSION_REQUIRED) {
-    return 'permission_missing';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_TOKEN_INVALID) {
-    return 'access_expired_or_revoked';
-  }
-
-  if (error.code === AppErrorCode.GOOGLE_OAUTH_EXPIRED) {
-    return 'connection_link_expired';
-  }
-
-  return null;
 }
 
 export type ReadCalendarTool = Tool<

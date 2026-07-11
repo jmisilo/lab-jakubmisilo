@@ -42,4 +42,16 @@ describe('GoogleCalendarApiClient', () => {
       });
     }
   });
+
+  it('classifies network failures separately from timeouts', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('connection refused'));
+
+    await expect(
+      GoogleCalendarApiClient.listCalendars({ accessToken: 'access-token' }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.GOOGLE_CALENDAR_API_ERROR,
+      message: 'Google Calendar API request failed before receiving a response.',
+      retryable: true,
+    } satisfies Partial<AppError>);
+  });
 });

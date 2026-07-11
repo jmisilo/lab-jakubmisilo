@@ -175,11 +175,20 @@ export class GoogleOAuthService {
         signal: controller.signal,
       });
     } catch (error) {
-      throw AppError.timeout({
-        code: AppErrorCode.GOOGLE_API_TIMEOUT,
-        message: 'Google OAuth request timed out.',
+      if (controller.signal.aborted) {
+        throw AppError.timeout({
+          code: AppErrorCode.GOOGLE_API_TIMEOUT,
+          message: 'Google OAuth request timed out.',
+          cause: error,
+          timeoutMs: GOOGLE_OAUTH_TIMEOUT_MS,
+          userMessage: 'Google is temporarily unavailable. Please try again.',
+        });
+      }
+
+      throw new AppError({
+        code: AppErrorCode.GOOGLE_API_ERROR,
+        message: 'Google OAuth request failed before receiving a response.',
         cause: error,
-        timeoutMs: GOOGLE_OAUTH_TIMEOUT_MS,
         retryable: true,
         userMessage: 'Google is temporarily unavailable. Please try again.',
       });

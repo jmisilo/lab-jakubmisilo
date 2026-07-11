@@ -2,13 +2,13 @@ import type { WorldCupNotificationBot } from '@/app/features/world-cup/tracking/
 
 import { randomUUID } from 'node:crypto';
 
-import { WorldCupDbService } from '@/app/features/world-cup/db';
-import { WorldCupApiClient } from '@/app/features/world-cup/tracking/api';
 import { WorldCupEventDetector } from '@/app/features/world-cup/tracking/events';
 import { WorldCupNotificationService } from '@/app/features/world-cup/tracking/notification';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
+import { WorldCupDbService } from '@/infrastructure/db/services/world-cup';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { WorldCupApiClient } from '@/infrastructure/world-cup';
 
 export class WorldCupPollingService {
   static async pollAndDeliver({ bot }: { bot: WorldCupNotificationBot }) {

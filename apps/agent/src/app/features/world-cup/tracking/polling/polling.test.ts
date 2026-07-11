@@ -1,14 +1,14 @@
 import type { WorldCupDetectedEvent, WorldCupGameSnapshot } from '@/app/features/world-cup/types';
 
-import { WorldCupDbService } from '@/app/features/world-cup/db';
-import { WorldCupApiClient } from '@/app/features/world-cup/tracking/api';
 import { WorldCupEventDetector } from '@/app/features/world-cup/tracking/events';
 import { WorldCupNotificationService } from '@/app/features/world-cup/tracking/notification';
 import { WorldCupSubscriptionService } from '@/app/features/world-cup/tracking/subscription';
+import { WorldCupDbService } from '@/infrastructure/db/services/world-cup';
+import { WorldCupApiClient } from '@/infrastructure/world-cup';
 
 import { WorldCupPollingService } from '.';
 
-jest.mock('@/app/features/world-cup/db', () => ({
+jest.mock('@/infrastructure/db/services/world-cup', () => ({
   WorldCupDbService: {
     createDetectedEvent: jest.fn(),
     createPendingDelivery: jest.fn(),
@@ -19,7 +19,7 @@ jest.mock('@/app/features/world-cup/db', () => ({
   },
 }));
 
-jest.mock('@/app/features/world-cup/tracking/api', () => ({
+jest.mock('@/infrastructure/world-cup', () => ({
   WorldCupApiClient: {
     getGames: jest.fn(),
   },
