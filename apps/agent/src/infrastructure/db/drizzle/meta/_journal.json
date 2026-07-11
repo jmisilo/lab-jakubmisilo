@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1783784744821,
+      "tag": "0000_enable-pgvector",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783784757166,
+      "tag": "0001_initial-agent-schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783785810569,
+      "tag": "0002_schedule-task-revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783787643329,
+      "tag": "0003_schedule-run-fencing",
+      "breakpoints": true
+    }
+  ]
+}

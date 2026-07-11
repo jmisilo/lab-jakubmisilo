@@ -42,7 +42,7 @@ export const loadSkillTool: LoadSkillTool = tool({
     logger.info(
       {
         skillName: name,
-        section,
+        sectionRequested: section !== undefined,
         ok: result.ok,
         truncated: result.ok ? result.skill.truncated : undefined,
         characterCount: result.ok ? result.skill.characterCount : undefined,

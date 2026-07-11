@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { AgentPromptService } from '@/app/agent/prompt';
 import { agentTools } from '@/app/agent/tools';
 import { SkillService } from '@/app/skills';
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const AgentRuntimeContextSchema = z.object({
@@ -179,27 +180,6 @@ export class AgentService {
     },
     maxRetries: 1,
     stopWhen: isStepCount(12),
-    onStart: (event) => {
-      logger.info(
-        { model: this.#model, lastMessage: event.messages.at(-1) },
-        '[AI_AGENT]: agent process started',
-      );
-    },
-    onStepStart: (event) => {
-      logger.debug(
-        { provider: event.provider, modelId: event.modelId },
-        '[AI_AGENT]: step started',
-      );
-    },
-    onStepEnd: (event) => {
-      logger.debug(
-        { finishReason: event.finishReason, text: event.text },
-        '[AI_AGENT]: step ended',
-      );
-    },
-    onEnd: (event) => {
-      logger.info({ result: event.text }, '[AI_AGENT]: agent process ended');
-    },
   });
 
   static async generate({
@@ -220,8 +200,6 @@ export class AgentService {
     scheduledTaskSideEffects?: AgentRuntimeContext['scheduledTaskSideEffects'];
   }) {
     try {
-      logger.debug({ model: this.#model }, '[AI_AGENT]: generating response');
-
       const runtimeClock = this.#getRuntimeClock({
         timeZone: timeZone ?? DEFAULT_USER_TIME_ZONE,
       });
@@ -239,7 +217,13 @@ export class AgentService {
 
       logger.info(
         {
+          identityId,
+          threadId,
+          sourceMessageId,
+          mode,
           model: this.#model,
+          finishReason: result.finishReason,
+          stepCount: result.steps.length,
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
           totalTokens: result.usage.totalTokens,
@@ -252,7 +236,17 @@ export class AgentService {
 
       return { text: result.text };
     } catch (error) {
-      logger.error({ error }, '[AI_AGENT]: response generation failed');
+      logger.error(
+        {
+          identityId,
+          threadId,
+          sourceMessageId,
+          mode,
+          model: this.#model,
+          safeError: ErrorService.toSafeLog(error),
+        },
+        '[AI_AGENT]: response generation failed',
+      );
 
       throw error;
     }

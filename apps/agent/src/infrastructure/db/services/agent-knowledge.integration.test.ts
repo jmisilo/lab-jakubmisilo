@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db, dbPool } from '@/infrastructure/db/client';
 import { agentKnowledgeNodeClosure, agentKnowledgeNodes } from '@/infrastructure/db/schema';
 import { AgentKnowledgeDbService } from '@/infrastructure/db/services/agent-knowledge';
+import { AppErrorCode } from '@/infrastructure/errors';
 
 const describeIntegration =
   process.env.AGENT_DB_INTEGRATION_TESTS === '1' ? describe : describe.skip;
@@ -187,6 +188,231 @@ describeIntegration('AgentKnowledgeDbService integration', () => {
       { ancestorId: labAgent.id, depth: 2 },
       { ancestorId: projects.id, depth: 3 },
     ]);
+  });
+
+  it('atomically creates a replacement and supersedes the previous active node', async () => {
+    const previousNode = await AgentKnowledgeDbService.createNode({
+      identityId,
+      slug: 'company-x',
+      title: 'Company X',
+      content: 'The user currently works at Company X.',
+    });
+
+    expect(previousNode).not.toBeNull();
+
+    if (!previousNode) {
+      throw new Error('Expected the previous knowledge node to be created.');
+    }
+
+    const outcome = await AgentKnowledgeDbService.replaceNode({
+      identityId,
+      nodeId: previousNode.id,
+      replacement: {
+        parentId: null,
+        slug: 'company-x',
+        title: 'Company Y',
+        content: 'The user currently works at Company Y.',
+        source: 'explicit',
+      },
+    });
+
+    expect(outcome.replacementNode).toMatchObject({
+      identityId,
+      path: 'company-x',
+      active: true,
+    });
+    expect(outcome.supersededNode).toMatchObject({
+      id: previousNode.id,
+      active: false,
+      supersededById: outcome.replacementNode.id,
+    });
+
+    const persistedPreviousNode = await AgentKnowledgeDbService.getNode({
+      identityId,
+      nodeId: previousNode.id,
+    });
+
+    expect(persistedPreviousNode).toMatchObject({
+      active: false,
+      supersededById: outcome.replacementNode.id,
+    });
+  });
+
+  it('rejects an update when the active node was superseded before the write', async () => {
+    const node = await AgentKnowledgeDbService.createNode({
+      identityId,
+      title: 'Communication preference',
+      content: 'The user prefers detailed answers.',
+    });
+
+    expect(node).not.toBeNull();
+
+    if (!node) {
+      throw new Error('Expected a knowledge node to be created.');
+    }
+
+    await AgentKnowledgeDbService.supersedeNode({
+      identityId,
+      nodeId: node.id,
+    });
+
+    await expect(
+      AgentKnowledgeDbService.updateNodeContent({
+        identityId,
+        nodeId: node.id,
+        content: 'The user prefers concise answers.',
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+    });
+
+    const persistedNode = await AgentKnowledgeDbService.getNode({
+      identityId,
+      nodeId: node.id,
+    });
+
+    expect(persistedNode.content).toBe('The user prefers detailed answers.');
+  });
+
+  it('rejects supersession when another writer already deactivated the node', async () => {
+    const node = await AgentKnowledgeDbService.createNode({
+      identityId,
+      title: 'Previous company',
+      content: 'The user previously worked at Company X.',
+    });
+
+    expect(node).not.toBeNull();
+
+    if (!node) {
+      throw new Error('Expected a knowledge node to be created.');
+    }
+
+    await AgentKnowledgeDbService.supersedeNode({
+      identityId,
+      nodeId: node.id,
+    });
+
+    await expect(
+      AgentKnowledgeDbService.supersedeNode({
+        identityId,
+        nodeId: node.id,
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+    });
+  });
+
+  it('preserves a subtree when its non-leaf root is superseded or replaced', async () => {
+    const root = await AgentKnowledgeDbService.createNode({
+      identityId,
+      title: 'Projects',
+      content: 'Project knowledge.',
+    });
+
+    expect(root).not.toBeNull();
+
+    if (!root) {
+      throw new Error('Expected a root knowledge node to be created.');
+    }
+
+    const child = await AgentKnowledgeDbService.createNode({
+      identityId,
+      parentId: root.id,
+      title: 'Lab Agent',
+      content: 'Personal agent project.',
+    });
+
+    expect(child).not.toBeNull();
+
+    if (!child) {
+      throw new Error('Expected a child knowledge node to be created.');
+    }
+
+    await expect(
+      AgentKnowledgeDbService.supersedeNode({
+        identityId,
+        nodeId: root.id,
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+      retryable: false,
+    });
+    await expect(
+      AgentKnowledgeDbService.replaceNode({
+        identityId,
+        nodeId: root.id,
+        replacement: {
+          title: 'New Projects',
+          content: 'Replacement project knowledge.',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+      retryable: false,
+    });
+
+    await expect(
+      AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId,
+        path: root.path,
+      }),
+    ).resolves.toMatchObject({ id: root.id, active: true });
+    await expect(
+      AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId,
+        path: child.path,
+      }),
+    ).resolves.toMatchObject({ id: child.id, active: true });
+  });
+
+  it('rolls back deactivation when replacement insertion fails', async () => {
+    const originalNode = await AgentKnowledgeDbService.createNode({
+      identityId,
+      slug: 'original-note',
+      title: 'Original note',
+      content: 'This active note must survive a failed replacement.',
+    });
+
+    expect(originalNode).not.toBeNull();
+
+    if (!originalNode) {
+      throw new Error('Expected the original knowledge node to be created.');
+    }
+
+    await expect(
+      AgentKnowledgeDbService.replaceNode({
+        identityId,
+        nodeId: originalNode.id,
+        replacement: {
+          parentId: null,
+          slug: 'failed-replacement',
+          title: 'x'.repeat(181),
+          content: 'This node must not survive a failed supersession.',
+          source: 'explicit',
+        },
+      }),
+    ).rejects.toBeDefined();
+
+    await expect(
+      AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId,
+        path: originalNode.path,
+      }),
+    ).resolves.toMatchObject({
+      id: originalNode.id,
+      active: true,
+      supersededById: null,
+      supersededAt: null,
+    });
+
+    await expect(
+      AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId,
+        path: 'failed-replacement',
+      }),
+    ).rejects.toMatchObject({
+      code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+    });
   });
 });
 

@@ -1,6 +1,8 @@
 import type {
+  ApplyExplicitKnowledgeMutationInput,
   CreateKnowledgeNodeInput,
   DeactivateKnowledgeNodeByPathInput,
+  ExplicitKnowledgeMutationOutcome,
   ExploreKnowledgeNodesInput,
   ExtractImplicitKnowledgeInput,
   GetContextItemsInput,
@@ -12,7 +14,6 @@ import type {
   MoveKnowledgeNodeByPathInput,
   ReadKnowledgeNodeByPathInput,
   SupersedeKnowledgeNodeByPathInput,
-  SupersedeKnowledgeNodeInput,
   UpdateKnowledgeNodeByPathInput,
   UpdateKnowledgeNodeContentInput,
 } from '@/app/knowledge/types';
@@ -66,14 +67,112 @@ export class AgentKnowledgeService {
   static readonly exploreQueryMinSimilarity = 0.35;
   static readonly exploreCandidateFetchLimit = 80;
 
-  static async createNode(input: CreateKnowledgeNodeInput) {
+  static async applyExplicitMutation(
+    input: ApplyExplicitKnowledgeMutationInput,
+  ): Promise<ExplicitKnowledgeMutationOutcome> {
+    if (input.action === 'create') {
+      const node = await this.#createNode({
+        identityId: input.identityId,
+        parentPath: input.node.parentPath,
+        slug: input.node.slug,
+        title: input.node.title,
+        content: input.node.content,
+        source: 'explicit',
+        sourceMessageId: input.sourceMessageId,
+      });
+
+      return {
+        action: input.action,
+        node,
+      };
+    }
+
+    if (input.action === 'update') {
+      const node = await this.#updateNodeByPath({
+        identityId: input.identityId,
+        path: input.path,
+        title: input.update.title,
+        content: input.update.content,
+      });
+
+      return {
+        action: input.action,
+        node,
+      };
+    }
+
+    if (input.action === 'deactivate') {
+      const node = await this.#deactivateNodeByPath({
+        identityId: input.identityId,
+        path: input.path,
+      });
+
+      return {
+        action: input.action,
+        node,
+      };
+    }
+
+    if (input.action === 'move') {
+      const node = await this.#moveNodeByPath({
+        identityId: input.identityId,
+        path: input.path,
+        newParentPath: input.move.parentPath,
+        newSlug: input.move.slug,
+        title: input.move.title,
+      });
+
+      return {
+        action: input.action,
+        previousPath: input.path,
+        node,
+      };
+    }
+
+    if (input.node) {
+      const node = await AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId: input.identityId,
+        path: this.#normalizePath(input.path),
+      });
+      const outcome = await this.#replaceNode({
+        identityId: input.identityId,
+        nodeId: node.id,
+        parentPath: input.node.parentPath,
+        slug: input.node.slug,
+        title: input.node.title,
+        content: input.node.content,
+        source: 'explicit',
+        sourceMessageId: input.sourceMessageId,
+      });
+
+      return {
+        action: input.action,
+        node: outcome.replacementNode,
+        supersededNode: outcome.supersededNode,
+      };
+    }
+
+    const supersededNode = await this.#supersedeNodeByPath({
+      identityId: input.identityId,
+      path: input.path,
+      supersededByPath: input.supersededByPath,
+    });
+
+    return {
+      action: input.action,
+      node: null,
+      supersededNode,
+    };
+  }
+
+  static async #createNode(input: CreateKnowledgeNodeInput) {
     const parentId = await this.#resolveParentId(input);
     const title = this.#normalizeTitle({
       value: input.title,
     });
     const content = input.content ? this.#normalizeContent(input.content) : '';
 
-    return this.#createEmbeddedNode({
+    const node = await this.#createEmbeddedNode({
       identityId: input.identityId,
       parentId,
       slug: input.slug,
@@ -83,15 +182,56 @@ export class AgentKnowledgeService {
       sourceMessageId: input.sourceMessageId,
       metadata: input.metadata,
     });
+
+    if (!node) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+        message: 'Knowledge node was not created.',
+        context: {
+          identityId: input.identityId,
+          sourceMessageId: input.sourceMessageId,
+        },
+        retryable: true,
+      });
+    }
+
+    return node;
   }
 
-  static async updateNodeByPath({ identityId, path, ...input }: UpdateKnowledgeNodeByPathInput) {
+  static async #replaceNode({ nodeId, ...input }: CreateKnowledgeNodeInput & { nodeId: string }) {
+    const parentId = await this.#resolveParentId(input);
+    const title = this.#normalizeTitle({ value: input.title });
+    const content = this.#normalizeContent(input.content ?? '');
+    const embeddingFields = await this.#createEmbeddingFields({
+      identityId: input.identityId,
+      operation: 'knowledge.replace',
+      title,
+      content,
+    });
+
+    return AgentKnowledgeDbService.replaceNode({
+      identityId: input.identityId,
+      nodeId,
+      replacement: {
+        parentId,
+        slug: input.slug,
+        title,
+        content,
+        source: input.source,
+        sourceMessageId: input.sourceMessageId,
+        metadata: input.metadata,
+        ...embeddingFields,
+      },
+    });
+  }
+
+  static async #updateNodeByPath({ identityId, path, ...input }: UpdateKnowledgeNodeByPathInput) {
     const node = await AgentKnowledgeDbService.getActiveNodeByPath({
       identityId,
       path: this.#normalizePath(path),
     });
 
-    return this.updateNodeContent({
+    return this.#updateNodeContent({
       ...input,
       identityId,
       nodeId: node.id,
@@ -193,7 +333,7 @@ export class AgentKnowledgeService {
     };
   }
 
-  static async deactivateNodeByPath({ identityId, path }: DeactivateKnowledgeNodeByPathInput) {
+  static async #deactivateNodeByPath({ identityId, path }: DeactivateKnowledgeNodeByPathInput) {
     const node = await AgentKnowledgeDbService.getActiveNodeByPath({
       identityId,
       path: this.#normalizePath(path),
@@ -205,7 +345,7 @@ export class AgentKnowledgeService {
     });
   }
 
-  static async moveNodeByPath({
+  static async #moveNodeByPath({
     identityId,
     path,
     newParentPath,
@@ -254,7 +394,7 @@ export class AgentKnowledgeService {
     });
   }
 
-  static async updateNodeContent(input: UpdateKnowledgeNodeContentInput) {
+  static async #updateNodeContent(input: UpdateKnowledgeNodeContentInput) {
     const title =
       input.title !== undefined ? this.#normalizeTitle({ value: input.title }) : undefined;
     const content = this.#normalizeContent(input.content);
@@ -284,32 +424,38 @@ export class AgentKnowledgeService {
     });
   }
 
-  static async supersedeNode(input: SupersedeKnowledgeNodeInput) {
-    return AgentKnowledgeDbService.supersedeNode(input);
-  }
-
-  static async supersedeNodeByPath({
+  static async #supersedeNodeByPath({
     identityId,
     path,
     supersededByPath,
   }: SupersedeKnowledgeNodeByPathInput) {
+    const normalizedPath = this.#normalizePath(path);
+    const normalizedSupersededByPath = this.#normalizePath(supersededByPath);
+
+    if (normalizedPath === normalizedSupersededByPath) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+        message: 'A knowledge node cannot supersede itself.',
+        context: { identityId },
+        retryable: false,
+      });
+    }
+
     const [node, supersededByNode] = await Promise.all([
       AgentKnowledgeDbService.getActiveNodeByPath({
         identityId,
-        path: this.#normalizePath(path),
+        path: normalizedPath,
       }),
-      supersededByPath
-        ? AgentKnowledgeDbService.getActiveNodeByPath({
-            identityId,
-            path: this.#normalizePath(supersededByPath),
-          })
-        : Promise.resolve(null),
+      AgentKnowledgeDbService.getActiveNodeByPath({
+        identityId,
+        path: normalizedSupersededByPath,
+      }),
     ]);
 
     return AgentKnowledgeDbService.supersedeNode({
       identityId,
       nodeId: node.id,
-      supersededById: supersededByNode?.id,
+      supersededById: supersededByNode.id,
     });
   }
 
@@ -344,7 +490,6 @@ export class AgentKnowledgeService {
       logger.warn(
         {
           identityId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_KNOWLEDGE]: context retrieval failed',
@@ -424,7 +569,7 @@ export class AgentKnowledgeService {
             identityId,
             threadId,
             sourceMessageId,
-            issues: parsed.error.issues,
+            issueCount: parsed.error.issues.length,
           },
           '[AGENT_KNOWLEDGE]: implicit extraction invalid',
         );
@@ -463,8 +608,6 @@ export class AgentKnowledgeService {
               identityId,
               threadId,
               sourceMessageId,
-              itemTitle: item.title,
-              error: itemError,
               safeError: ErrorService.toSafeLog(itemError),
             },
             '[AGENT_KNOWLEDGE]: implicit item ingestion failed',
@@ -493,7 +636,6 @@ export class AgentKnowledgeService {
           identityId,
           threadId,
           sourceMessageId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_KNOWLEDGE]: implicit extraction failed',
@@ -542,7 +684,6 @@ export class AgentKnowledgeService {
           identityId,
           threadId,
           sourceMessageId,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_KNOWLEDGE]: implicit extraction path hints failed',
@@ -577,10 +718,7 @@ export class AgentKnowledgeService {
         threadId,
         sourceMessageId,
         action: decision.action,
-        targetPath: decision.targetPath,
         candidateCount: candidates.length,
-        candidatePaths: candidates.map((candidate) => candidate.path),
-        reason: decision.reason,
       },
       '[AGENT_KNOWLEDGE]: implicit ingestion decision',
     );
@@ -615,8 +753,6 @@ export class AgentKnowledgeService {
       logger.warn(
         {
           identityId,
-          itemTitle: item.title,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_KNOWLEDGE]: implicit candidate embedding failed',
@@ -725,7 +861,7 @@ export class AgentKnowledgeService {
         context: {
           identityId,
           sourceMessageId,
-          issues: parsed.error.issues,
+          issueCount: parsed.error.issues.length,
         },
         retryable: false,
       });
@@ -763,7 +899,7 @@ export class AgentKnowledgeService {
         identityId,
         sourceMessageId,
       });
-      const updatedNode = await this.updateNodeContent({
+      const updatedNode = await this.#updateNodeContent({
         identityId,
         nodeId: target.id,
         title: decision.title ?? target.title,
@@ -793,8 +929,9 @@ export class AgentKnowledgeService {
         decision,
         includeItemSlug: false,
       });
-      const createdNode = await this.createNode({
+      const replacementOutcome = await this.#replaceNode({
         identityId,
+        nodeId: target.id,
         parentPath: draft.parentPath,
         slug: draft.slug,
         title: draft.title,
@@ -809,21 +946,10 @@ export class AgentKnowledgeService {
           candidateCount: candidates.length,
         }),
       });
-      const replacementNode = this.#requireCreatedNode({
-        node: createdNode,
-        identityId,
-        sourceMessageId,
-      });
-
-      await this.supersedeNode({
-        identityId,
-        nodeId: target.id,
-        supersededById: replacementNode.id,
-      });
 
       return {
         action: 'supersede',
-        path: replacementNode.path,
+        path: replacementOutcome.replacementNode.path,
         targetPath: target.path,
       };
     }
@@ -833,7 +959,7 @@ export class AgentKnowledgeService {
       decision,
       includeItemSlug: true,
     });
-    const createdNode = await this.createNode({
+    const createdNode = await this.#createNode({
       identityId,
       parentPath: draft.parentPath,
       slug: draft.slug,
@@ -848,15 +974,10 @@ export class AgentKnowledgeService {
         candidateCount: candidates.length,
       }),
     });
-    const persistedNode = this.#requireCreatedNode({
-      node: createdNode,
-      identityId,
-      sourceMessageId,
-    });
 
     return {
       action: 'create',
-      path: persistedNode.path,
+      path: createdNode.path,
     };
   }
 
@@ -953,30 +1074,6 @@ export class AgentKnowledgeService {
       targetPath,
       candidateCount,
     };
-  }
-
-  static #requireCreatedNode({
-    node,
-    identityId,
-    sourceMessageId,
-  }: {
-    node: Awaited<ReturnType<typeof AgentKnowledgeService.createNode>>;
-    identityId: string;
-    sourceMessageId: string;
-  }) {
-    if (!node) {
-      throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
-        message: 'Implicit knowledge node was not created.',
-        context: {
-          identityId,
-          sourceMessageId,
-        },
-        retryable: true,
-      });
-    }
-
-    return node;
   }
 
   static #formatImplicitIngestionCandidate(candidate: AgentKnowledgeSimilarNode) {
@@ -1201,7 +1298,6 @@ export class AgentKnowledgeService {
         {
           identityId,
           operation,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[AGENT_KNOWLEDGE]: embedding generation failed',
@@ -1313,7 +1409,6 @@ export class AgentKnowledgeService {
         {
           identityId,
           sourceMessageId,
-          path: createdNode.path,
           nodeId: createdNode.id,
         },
         '[AGENT_KNOWLEDGE]: parent node auto-created',

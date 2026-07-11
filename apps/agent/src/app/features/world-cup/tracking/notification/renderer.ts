@@ -9,6 +9,7 @@ import inter800 from '@fontsource/inter/files/inter-latin-800-normal.woff';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 
+import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
 
 const emojiAssetCache = new Map<string, Promise<string>>();
@@ -96,7 +97,10 @@ const fetchTwemojiAsset = async (codepoints: string) => {
 
     return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
   } catch (error) {
-    logger.warn({ codepoints, error }, '[WORLD_CUP]: emoji asset unavailable');
+    logger.warn(
+      { codepoints, safeError: ErrorService.toSafeLog(error) },
+      '[WORLD_CUP]: emoji asset unavailable',
+    );
 
     return transparentSvgDataUrl;
   }

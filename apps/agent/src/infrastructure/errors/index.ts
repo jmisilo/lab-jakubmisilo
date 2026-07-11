@@ -46,6 +46,22 @@ export const AppErrorCode = {
   WORLD_CUP_API_TIMEOUT: 'WORLD_CUP_API_TIMEOUT',
 } as const;
 
+const SAFE_LOG_CONTEXT_TEXT_FIELDS = new Set([
+  'action',
+  'adapter',
+  'attachmentType',
+  'code',
+  'field',
+  'frequency',
+  'method',
+  'mimeType',
+  'operation',
+  'scheduleKind',
+  'service',
+  'status',
+  'type',
+]);
+
 export class AppError extends Error {
   readonly code: AppErrorCode;
   readonly context: AppErrorContext;
@@ -110,8 +126,7 @@ export class ErrorService {
       return {
         code: error.code,
         name: error.name,
-        message: error.message,
-        context: error.context,
+        context: this.#getSafeContext(error.context),
         retryable: error.retryable,
         cause: this.#getCauseLog(error.cause),
       };
@@ -121,15 +136,36 @@ export class ErrorService {
       return {
         code: this.#getStringField(error, 'code'),
         name: error.name,
-        message: error.message,
         adapter: this.#getStringField(error, 'adapter'),
       };
     }
 
     return {
       name: 'NonErrorThrown',
-      message: String(error),
+      thrownType: typeof error,
     };
+  }
+
+  static #getSafeContext(context: AppErrorContext) {
+    const safeContext: AppErrorContext = {};
+
+    for (const [key, value] of Object.entries(context)) {
+      if (key === 'issues' && Array.isArray(value)) {
+        safeContext.issueCount = value.length;
+      } else if (typeof value === 'boolean' || typeof value === 'number') {
+        safeContext[key] = value;
+      } else if (typeof value === 'string' && this.#isSafeContextTextField(key)) {
+        safeContext[key] = value;
+      } else if (Array.isArray(value)) {
+        if (this.#isSafeContextTextArray(key, value)) {
+          safeContext[key] = value;
+        } else {
+          safeContext[`${key}Count`] = value.length;
+        }
+      }
+    }
+
+    return safeContext;
   }
 
   static #getCauseLog(cause: unknown) {
@@ -141,14 +177,24 @@ export class ErrorService {
       return {
         code: this.#getStringField(cause, 'code'),
         name: cause.name,
-        message: cause.message,
       };
     }
 
     return {
       name: 'NonErrorCause',
-      message: String(cause),
+      causeType: typeof cause,
     };
+  }
+
+  static #isSafeContextTextField(field: string) {
+    return SAFE_LOG_CONTEXT_TEXT_FIELDS.has(field) || field.endsWith('Id') || field.endsWith('Ids');
+  }
+
+  static #isSafeContextTextArray(field: string, value: unknown[]): value is string[] {
+    return (
+      (field === 'services' || field.endsWith('Ids')) &&
+      value.every((item) => typeof item === 'string')
+    );
   }
 
   static #getStringField(value: unknown, field: string) {

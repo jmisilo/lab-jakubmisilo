@@ -1,3 +1,4 @@
+import type { db } from '@/infrastructure/db/client';
 import type { AgentKnowledgeNode, AgentKnowledgeSource, NewAgentKnowledgeNode } from '@/types';
 
 import { randomUUID } from 'node:crypto';
@@ -129,61 +130,94 @@ export class AgentKnowledgeDbService extends DbService {
   }
 
   static async createNode(input: CreateKnowledgeNodeInput) {
-    const id = randomUUID();
-    const parent = await this.#getParentNode({
-      identityId: input.identityId,
-      parentId: input.parentId ?? null,
-    });
-    const slug = input.slug
-      ? this.#normalizeSlug(input.slug)
-      : await this.#resolveAvailableSlug({
-          identityId: input.identityId,
-          parentPath: parent?.path ?? null,
-          title: input.title,
-        });
-    const path = this.#createPath({ parentPath: parent?.path ?? null, slug });
-    const parentClosures = parent
-      ? await this.#getClosureRowsForParent({
-          identityId: input.identityId,
-          parentId: parent.id,
-        })
-      : [];
+    return this.client.transaction((tx) =>
+      this.#insertNode({
+        client: tx,
+        input,
+      }),
+    );
+  }
 
-    const node: NewAgentKnowledgeNode = {
-      id,
-      identityId: input.identityId,
-      parentId: parent?.id ?? null,
-      slug,
-      path,
-      depth: parent ? parent.depth + 1 : 0,
-      title: input.title.trim(),
-      content: input.content?.trim() ?? '',
-      source: input.source ?? 'explicit',
-      sourceMessageId: input.sourceMessageId,
-      metadata: input.metadata ?? {},
-      embedding: input.embedding,
-      embeddingModel: input.embeddingModel,
-      embeddingContentHash: input.embeddingContentHash,
-    };
-    const closureRows = [
-      ...parentClosures.map((closure) => ({
-        identityId: input.identityId,
-        ancestorId: closure.ancestorId,
-        descendantId: id,
-        depth: closure.depth + 1,
-      })),
-      {
-        identityId: input.identityId,
-        ancestorId: id,
-        descendantId: id,
-        depth: 0,
-      },
-    ];
+  static async replaceNode({
+    identityId,
+    nodeId,
+    replacement,
+  }: ReplaceKnowledgeNodeInput): Promise<ReplaceKnowledgeNodeOutcome> {
     return this.client.transaction(async (tx) => {
-      const [createdNode] = await tx.insert(agentKnowledgeNodes).values(node).returning();
-      await tx.insert(agentKnowledgeNodeClosure).values(closureRows);
+      await this.#assertActiveLeafNode({
+        client: tx,
+        identityId,
+        nodeId,
+        operation: 'replacement',
+      });
 
-      return createdNode ?? null;
+      const supersededAt = new Date();
+      const [deactivatedNode] = await tx
+        .update(agentKnowledgeNodes)
+        .set({
+          active: false,
+          supersededAt,
+          updatedAt: supersededAt,
+        })
+        .where(
+          and(
+            eq(agentKnowledgeNodes.identityId, identityId),
+            eq(agentKnowledgeNodes.id, nodeId),
+            eq(agentKnowledgeNodes.active, true),
+          ),
+        )
+        .returning();
+
+      if (!deactivatedNode) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+          message: 'Active knowledge node was not found for replacement.',
+          context: { identityId, nodeId },
+          retryable: false,
+        });
+      }
+
+      const replacementNode = await this.#insertNode({
+        client: tx,
+        input: {
+          identityId,
+          ...replacement,
+        },
+      });
+
+      if (!replacementNode) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+          message: 'Replacement knowledge node was not created.',
+          context: { identityId, nodeId },
+          retryable: true,
+        });
+      }
+
+      const [supersededNode] = await tx
+        .update(agentKnowledgeNodes)
+        .set({
+          supersededById: replacementNode.id,
+          updatedAt: supersededAt,
+        })
+        .where(
+          and(eq(agentKnowledgeNodes.identityId, identityId), eq(agentKnowledgeNodes.id, nodeId)),
+        )
+        .returning();
+
+      if (!supersededNode) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+          message: 'Knowledge node replacement was not linked.',
+          context: { identityId, nodeId, replacementNodeId: replacementNode.id },
+          retryable: true,
+        });
+      }
+
+      return {
+        replacementNode,
+        supersededNode,
+      };
     });
   }
 
@@ -207,7 +241,11 @@ export class AgentKnowledgeDbService extends DbService {
         updatedAt: new Date(),
       })
       .where(
-        and(eq(agentKnowledgeNodes.identityId, identityId), eq(agentKnowledgeNodes.id, nodeId)),
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.id, nodeId),
+          eq(agentKnowledgeNodes.active, true),
+        ),
       )
       .returning();
 
@@ -224,29 +262,60 @@ export class AgentKnowledgeDbService extends DbService {
   }
 
   static async supersedeNode({ identityId, nodeId, supersededById }: SupersedeKnowledgeNodeInput) {
-    const [node] = await this.client
-      .update(agentKnowledgeNodes)
-      .set({
-        active: false,
-        supersededById,
-        supersededAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(agentKnowledgeNodes.identityId, identityId), eq(agentKnowledgeNodes.id, nodeId)),
-      )
-      .returning();
-
-    if (!node) {
+    if (nodeId === supersededById) {
       throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
-        message: 'Knowledge node was not found for supersession.',
-        context: { identityId, nodeId, supersededById },
+        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+        message: 'A knowledge node cannot supersede itself.',
+        context: { identityId, nodeId },
         retryable: false,
       });
     }
 
-    return node;
+    return this.client.transaction(async (tx) => {
+      await this.#assertActiveLeafNode({
+        client: tx,
+        identityId,
+        nodeId,
+        operation: 'supersession',
+      });
+
+      if (supersededById) {
+        await this.#getActiveNodeForMutation({
+          client: tx,
+          identityId,
+          nodeId: supersededById,
+        });
+      }
+
+      const supersededAt = new Date();
+      const [node] = await tx
+        .update(agentKnowledgeNodes)
+        .set({
+          active: false,
+          supersededById,
+          supersededAt,
+          updatedAt: supersededAt,
+        })
+        .where(
+          and(
+            eq(agentKnowledgeNodes.identityId, identityId),
+            eq(agentKnowledgeNodes.id, nodeId),
+            eq(agentKnowledgeNodes.active, true),
+          ),
+        )
+        .returning();
+
+      if (!node) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+          message: 'Active knowledge node was not found for supersession.',
+          context: { identityId, nodeId, supersededById },
+          retryable: false,
+        });
+      }
+
+      return node;
+    });
   }
 
   static async moveNode({
@@ -259,86 +328,83 @@ export class AgentKnowledgeDbService extends DbService {
     embeddingModel,
     embeddingContentHash,
   }: MoveKnowledgeNodeInput) {
-    const node = await this.getNode({ identityId, nodeId });
-
-    if (!node.active) {
-      throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
-        message: 'Inactive knowledge node cannot be moved.',
-        context: { identityId, nodeId },
-        retryable: false,
-      });
-    }
-
-    const parent = await this.#getParentNode({ identityId, parentId });
-    const subtreeRows = await this.#getSubtreeRows({ identityId, nodeId });
-
-    if (parent && subtreeRows.some((subtreeNode) => subtreeNode.id === parent.id)) {
-      throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
-        message: 'Knowledge node cannot be moved below itself or one of its descendants.',
-        context: { identityId, nodeId, parentId },
-        retryable: false,
-      });
-    }
-
-    const nextSlug = slug ? this.#normalizeSlug(slug) : node.slug;
-    const nextPath = this.#createPath({ parentPath: parent?.path ?? null, slug: nextSlug });
-    const pathConflict = await this.findActiveNodeByPath({ identityId, path: nextPath });
-
-    if (pathConflict && pathConflict.id !== node.id) {
-      throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
-        message: 'Knowledge node path already exists.',
-        context: { identityId, nodeId, path: nextPath },
-        retryable: false,
-      });
-    }
-
-    const parentClosures = parent
-      ? await this.#getClosureRowsForParent({ identityId, parentId: parent.id })
-      : [];
-    const subtreeIds = subtreeRows.map((subtreeNode) => subtreeNode.id);
-    const nextDepth = parent ? parent.depth + 1 : 0;
-    const depthDelta = nextDepth - node.depth;
-    const nextPathByNodeId = new Map(
-      subtreeRows.map((subtreeNode) => [
-        subtreeNode.id,
-        subtreeNode.id === node.id
-          ? nextPath
-          : `${nextPath}${subtreeNode.path.slice(node.path.length)}`,
-      ]),
-    );
-    const [subtreePathConflict] = await this.client
-      .select({
-        id: agentKnowledgeNodes.id,
-        path: agentKnowledgeNodes.path,
-      })
-      .from(agentKnowledgeNodes)
-      .where(
-        and(
-          eq(agentKnowledgeNodes.identityId, identityId),
-          eq(agentKnowledgeNodes.active, true),
-          inArray(agentKnowledgeNodes.path, [...nextPathByNodeId.values()]),
-          notInArray(agentKnowledgeNodes.id, subtreeIds),
-        ),
-      )
-      .limit(1);
-
-    if (subtreePathConflict) {
-      throw new AppError({
-        code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
-        message: 'Knowledge subtree move would conflict with an existing active path.',
-        context: {
-          identityId,
-          nodeId,
-          conflictingPath: subtreePathConflict.path,
-        },
-        retryable: false,
-      });
-    }
-
     return this.client.transaction(async (tx) => {
+      const node = await this.#getActiveNodeForMutation({
+        client: tx,
+        identityId,
+        nodeId,
+      });
+      const parent = parentId
+        ? await this.#getActiveNodeForMutation({
+            client: tx,
+            identityId,
+            nodeId: parentId,
+          })
+        : null;
+      const subtreeRows = await this.#getSubtreeRows({
+        client: tx,
+        identityId,
+        nodeId,
+      });
+
+      if (parent && subtreeRows.some((subtreeNode) => subtreeNode.id === parent.id)) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+          message: 'Knowledge node cannot be moved below itself or one of its descendants.',
+          context: { identityId, nodeId, parentId },
+          retryable: false,
+        });
+      }
+
+      const nextSlug = slug ? this.#normalizeSlug(slug) : node.slug;
+      const nextPath = this.#createPath({ parentPath: parent?.path ?? null, slug: nextSlug });
+      const parentClosures = parent
+        ? await this.#getClosureRowsForParent({
+            client: tx,
+            identityId,
+            parentId: parent.id,
+          })
+        : [];
+      const subtreeIds = subtreeRows.map((subtreeNode) => subtreeNode.id);
+      const nextDepth = parent ? parent.depth + 1 : 0;
+      const depthDelta = nextDepth - node.depth;
+      const nextPathByNodeId = new Map(
+        subtreeRows.map((subtreeNode) => [
+          subtreeNode.id,
+          subtreeNode.id === node.id
+            ? nextPath
+            : `${nextPath}${subtreeNode.path.slice(node.path.length)}`,
+        ]),
+      );
+      const [subtreePathConflict] = await tx
+        .select({
+          id: agentKnowledgeNodes.id,
+          path: agentKnowledgeNodes.path,
+        })
+        .from(agentKnowledgeNodes)
+        .where(
+          and(
+            eq(agentKnowledgeNodes.identityId, identityId),
+            eq(agentKnowledgeNodes.active, true),
+            inArray(agentKnowledgeNodes.path, [...nextPathByNodeId.values()]),
+            notInArray(agentKnowledgeNodes.id, subtreeIds),
+          ),
+        )
+        .limit(1);
+
+      if (subtreePathConflict) {
+        throw new AppError({
+          code: AppErrorCode.KNOWLEDGE_NODE_INVALID,
+          message: 'Knowledge subtree move would conflict with an existing active path.',
+          context: {
+            identityId,
+            nodeId,
+            conflictingPath: subtreePathConflict.path,
+          },
+          retryable: false,
+        });
+      }
+
       let movedNode: AgentKnowledgeNode | null = null;
       const updatedAt = new Date();
 
@@ -382,6 +448,7 @@ export class AgentKnowledgeDbService extends DbService {
             and(
               eq(agentKnowledgeNodes.identityId, identityId),
               eq(agentKnowledgeNodes.id, subtreeNode.id),
+              subtreeNode.id === node.id ? eq(agentKnowledgeNodes.active, true) : undefined,
             ),
           )
           .returning();
@@ -602,10 +669,149 @@ export class AgentKnowledgeDbService extends DbService {
     return exploredNodes.sort(this.#compareExploreNodes).slice(0, limit);
   }
 
+  static async #assertActiveLeafNode({
+    client,
+    identityId,
+    nodeId,
+    operation,
+  }: {
+    client: AgentKnowledgeMutationClient;
+    identityId: string;
+    nodeId: string;
+    operation: 'replacement' | 'supersession';
+  }) {
+    await this.#getActiveNodeForMutation({
+      client,
+      identityId,
+      nodeId,
+    });
+    const [child] = await client
+      .select({ id: agentKnowledgeNodes.id })
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.parentId, nodeId),
+        ),
+      )
+      .limit(1);
+
+    if (child) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_TREE_INVARIANT_FAILED,
+        message: `A knowledge node with children cannot be used for ${operation}.`,
+        context: { identityId, nodeId, operation },
+        retryable: false,
+      });
+    }
+  }
+
+  static async #getActiveNodeForMutation({
+    client,
+    identityId,
+    nodeId,
+  }: {
+    client: AgentKnowledgeMutationClient;
+    identityId: string;
+    nodeId: string;
+  }) {
+    const [node] = await client
+      .select()
+      .from(agentKnowledgeNodes)
+      .where(
+        and(
+          eq(agentKnowledgeNodes.identityId, identityId),
+          eq(agentKnowledgeNodes.id, nodeId),
+          eq(agentKnowledgeNodes.active, true),
+        ),
+      )
+      .limit(1)
+      .for('update');
+
+    if (!node) {
+      throw new AppError({
+        code: AppErrorCode.KNOWLEDGE_NODE_NOT_FOUND,
+        message: 'Active knowledge node was not found for mutation.',
+        context: { identityId, nodeId },
+        retryable: false,
+      });
+    }
+
+    return node;
+  }
+
+  static async #insertNode({
+    client,
+    input,
+  }: {
+    client: AgentKnowledgeMutationClient;
+    input: CreateKnowledgeNodeInput;
+  }) {
+    const id = randomUUID();
+    const parent = await this.#getParentNode({
+      client,
+      identityId: input.identityId,
+      parentId: input.parentId ?? null,
+    });
+    const slug = input.slug
+      ? this.#normalizeSlug(input.slug)
+      : await this.#resolveAvailableSlug({
+          client,
+          identityId: input.identityId,
+          parentPath: parent?.path ?? null,
+          title: input.title,
+        });
+    const path = this.#createPath({ parentPath: parent?.path ?? null, slug });
+    const parentClosures = parent
+      ? await this.#getClosureRowsForParent({
+          client,
+          identityId: input.identityId,
+          parentId: parent.id,
+        })
+      : [];
+    const node: NewAgentKnowledgeNode = {
+      id,
+      identityId: input.identityId,
+      parentId: parent?.id ?? null,
+      slug,
+      path,
+      depth: parent ? parent.depth + 1 : 0,
+      title: input.title.trim(),
+      content: input.content?.trim() ?? '',
+      source: input.source ?? 'explicit',
+      sourceMessageId: input.sourceMessageId,
+      metadata: input.metadata ?? {},
+      embedding: input.embedding,
+      embeddingModel: input.embeddingModel,
+      embeddingContentHash: input.embeddingContentHash,
+    };
+    const closureRows = [
+      ...parentClosures.map((closure) => ({
+        identityId: input.identityId,
+        ancestorId: closure.ancestorId,
+        descendantId: id,
+        depth: closure.depth + 1,
+      })),
+      {
+        identityId: input.identityId,
+        ancestorId: id,
+        descendantId: id,
+        depth: 0,
+      },
+    ];
+    const [createdNode] = await client.insert(agentKnowledgeNodes).values(node).returning();
+
+    await client.insert(agentKnowledgeNodeClosure).values(closureRows);
+
+    return createdNode ?? null;
+  }
+
   static async #getParentNode({
+    client = this.client,
     identityId,
     parentId,
   }: {
+    client?: AgentKnowledgeMutationClient;
     identityId: string;
     parentId: string | null;
   }) {
@@ -613,7 +819,7 @@ export class AgentKnowledgeDbService extends DbService {
       return null;
     }
 
-    const [parent] = await this.client
+    const [parent] = await client
       .select()
       .from(agentKnowledgeNodes)
       .where(
@@ -623,7 +829,8 @@ export class AgentKnowledgeDbService extends DbService {
           eq(agentKnowledgeNodes.active, true),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for('key share');
 
     if (!parent) {
       throw new AppError({
@@ -637,8 +844,16 @@ export class AgentKnowledgeDbService extends DbService {
     return parent;
   }
 
-  static async #getSubtreeRows({ identityId, nodeId }: { identityId: string; nodeId: string }) {
-    const rows = await this.client
+  static async #getSubtreeRows({
+    client = this.client,
+    identityId,
+    nodeId,
+  }: {
+    client?: AgentKnowledgeMutationClient;
+    identityId: string;
+    nodeId: string;
+  }) {
+    const rows = await client
       .select({
         ...getTableColumns(agentKnowledgeNodes),
         depthFromMovedNode: agentKnowledgeNodeClosure.depth,
@@ -669,13 +884,15 @@ export class AgentKnowledgeDbService extends DbService {
   }
 
   static async #getClosureRowsForParent({
+    client = this.client,
     identityId,
     parentId,
   }: {
+    client?: AgentKnowledgeMutationClient;
     identityId: string;
     parentId: string;
   }) {
-    const closureRows = await this.client
+    const closureRows = await client
       .select()
       .from(agentKnowledgeNodeClosure)
       .where(
@@ -698,10 +915,12 @@ export class AgentKnowledgeDbService extends DbService {
   }
 
   static async #resolveAvailableSlug({
+    client = this.client,
     identityId,
     parentPath,
     title,
   }: {
+    client?: AgentKnowledgeMutationClient;
     identityId: string;
     parentPath: string | null;
     title: string;
@@ -711,7 +930,7 @@ export class AgentKnowledgeDbService extends DbService {
     for (let suffix = 0; suffix < 20; suffix += 1) {
       const slug = suffix === 0 ? baseSlug : `${baseSlug}-${suffix + 1}`;
       const path = this.#createPath({ parentPath, slug });
-      const [existingNode] = await this.client
+      const [existingNode] = await client
         .select({ id: agentKnowledgeNodes.id })
         .from(agentKnowledgeNodes)
         .where(
@@ -1153,6 +1372,9 @@ export type AgentKnowledgeExploreNode = AgentKnowledgeNode & {
   childCount: number;
 };
 
+type AgentKnowledgeTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type AgentKnowledgeMutationClient = Pick<AgentKnowledgeTransaction, 'insert' | 'select' | 'update'>;
+
 type CreateKnowledgeNodeInput = {
   identityId: string;
   parentId?: string | null;
@@ -1165,6 +1387,17 @@ type CreateKnowledgeNodeInput = {
   embedding?: number[];
   embeddingModel?: string;
   embeddingContentHash?: string;
+};
+
+type ReplaceKnowledgeNodeInput = {
+  identityId: string;
+  nodeId: string;
+  replacement: Omit<CreateKnowledgeNodeInput, 'identityId'>;
+};
+
+type ReplaceKnowledgeNodeOutcome = {
+  replacementNode: AgentKnowledgeNode;
+  supersededNode: AgentKnowledgeNode;
 };
 
 type UpdateKnowledgeNodeContentInput = {

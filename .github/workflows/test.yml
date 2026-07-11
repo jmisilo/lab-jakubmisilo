@@ -1,4 +1,4 @@
-name: Test, link and typecheck
+name: Test, lint and typecheck
 
 on:
   pull_request:
@@ -8,8 +8,25 @@ on:
 
 jobs:
   test:
-    name: Test, link and typecheck
+    name: Test, lint and typecheck
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_test
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: agent_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agent_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -29,8 +46,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate agent database migrations
+        run: pnpm --filter @labjm/agent db:check
+
+      - name: Verify agent schema migration coverage
+        run: |
+          pnpm --filter @labjm/agent db:generate --name ci-schema-drift
+          git diff --exit-code -- apps/agent/src/infrastructure/db/drizzle
+
+      - name: Apply agent database migrations
+        run: pnpm --filter @labjm/agent db:migrate
+
       - name: Run tests
         run: pnpm test
+
+      - name: Run agent database integration tests
+        env:
+          AGENT_DB_INTEGRATION_TESTS: '1'
+        run: >-
+          pnpm --filter @labjm/agent test --runInBand
+          src/infrastructure/db/services/agent-knowledge.integration.test.ts
+          src/infrastructure/db/services/agent-persistence.integration.test.ts
 
       - name: Run typecheck
         run: pnpm typecheck

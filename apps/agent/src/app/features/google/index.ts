@@ -36,7 +36,7 @@ async function handleGoogleConnect(c: Context) {
     return c.redirect(authorizationUrl);
   } catch (error) {
     logger.warn(
-      { requestId, error, safeError: ErrorService.toSafeLog(error) },
+      { requestId, safeError: ErrorService.toSafeLog(error) },
       '[GOOGLE]: connection link failed',
     );
     const recovery = await sendExpiredConnectionRecovery({ requestId, error });
@@ -59,7 +59,14 @@ async function handleGoogleCallback(c: Context) {
   const state = c.req.query('state');
 
   if (errorCode || !code || !state) {
-    logger.warn({ errorCode }, '[GOOGLE]: OAuth callback denied or incomplete');
+    logger.warn(
+      {
+        authorizationDenied: Boolean(errorCode),
+        hasAuthorizationCode: Boolean(code),
+        hasState: Boolean(state),
+      },
+      '[GOOGLE]: OAuth callback denied or incomplete',
+    );
 
     return c.html(
       renderGooglePage({
@@ -75,10 +82,7 @@ async function handleGoogleCallback(c: Context) {
   try {
     result = await GoogleConnectionService.completeConnection({ code, state });
   } catch (error) {
-    logger.error(
-      { error, safeError: ErrorService.toSafeLog(error) },
-      '[GOOGLE]: OAuth callback failed',
-    );
+    logger.error({ safeError: ErrorService.toSafeLog(error) }, '[GOOGLE]: OAuth callback failed');
 
     return c.html(renderConnectionFailurePage(error), 500);
   }
@@ -94,7 +98,6 @@ async function handleGoogleCallback(c: Context) {
         identityId: result.identityId,
         threadId: result.threadId,
         connectionId: result.connection.id,
-        error: notificationError,
         safeError: ErrorService.toSafeLog(notificationError),
       },
       '[GOOGLE]: connection completion notification failed',
@@ -286,7 +289,6 @@ async function sendExpiredConnectionRecovery({
   } catch (recoveryError) {
     logger.error(
       {
-        error: recoveryError,
         safeError: ErrorService.toSafeLog(recoveryError),
       },
       '[GOOGLE]: failed to send replacement connection link after expiry',

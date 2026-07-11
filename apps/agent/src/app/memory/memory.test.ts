@@ -205,7 +205,9 @@ describe('AgentMemoryService', () => {
         {
           identityId: 'identity-1',
           threadId: 'thread-1',
-          error,
+          safeError: {
+            name: 'Error',
+          },
         },
         '[AGENT_MEMORY]: short-term memory compression failed',
       );

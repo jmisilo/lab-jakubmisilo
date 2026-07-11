@@ -211,7 +211,6 @@ export class GoogleConnectionService {
         {
           identityId,
           connectionId: connection.id,
-          error,
           safeError: ErrorService.toSafeLog(error),
         },
         '[GOOGLE]: token revocation failed',

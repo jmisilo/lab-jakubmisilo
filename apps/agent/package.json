@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsup",
+    "db:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
+    "db:migrate": "node scripts/migrate.mjs",
     "dev:server": "vercel dev --listen 2000 --yes",
     "dev": "mkdir -p logs && LOG_LEVEL=info AGENT_LOG_FILE=logs/agent.log tsup --watch --onSuccess \"node dist/app/tui/index.js\"",
     "lint": "eslint .",
