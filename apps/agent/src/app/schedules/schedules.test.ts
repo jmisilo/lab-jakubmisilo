@@ -563,6 +563,7 @@ function createTask({
     prompt: 'Remind the user about shopping.',
     scheduleKind,
     status,
+    revision: 1,
     timeZone: 'Europe/Warsaw',
     nextRunAt,
     recurrence,

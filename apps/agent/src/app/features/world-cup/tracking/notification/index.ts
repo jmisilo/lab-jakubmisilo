@@ -68,7 +68,7 @@ export class WorldCupNotificationService {
       await thread.post({ attachments: [attachment], markdown: '' });
     } catch (error) {
       logger.error(
-        { error, safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey, threadId },
+        { safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey, threadId },
         '[WORLD_CUP]: notification attachment failed',
       );
     }
@@ -94,7 +94,7 @@ export class WorldCupNotificationService {
         })
         .catch((error: unknown) => {
           logger.warn(
-            { error, safeError: ErrorService.toSafeLog(error), identityId, threadId },
+            { safeError: ErrorService.toSafeLog(error), identityId, threadId },
             '[WORLD_CUP]: transcript context unavailable',
           );
           return [];
@@ -141,7 +141,7 @@ export class WorldCupNotificationService {
       return result.text;
     } catch (error) {
       logger.error(
-        { error, safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey },
+        { safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey },
         '[WORLD_CUP]: AI notification failed',
       );
       return this.#createFallbackNotification(event);

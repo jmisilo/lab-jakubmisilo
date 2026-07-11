@@ -4,11 +4,11 @@ const mockAgentScheduleDbService = {
   getTaskById: jest.fn(),
   createTaskRun: jest.fn(),
   getTaskRunByScheduledFor: jest.fn(),
-  markTaskRunSent: jest.fn(),
+  renewTaskRunLease: jest.fn(),
+  markTaskRunSkipped: jest.fn(),
   markTaskRunFailed: jest.fn(),
-  completeTask: jest.fn(),
-  failTask: jest.fn(),
-  rescheduleTask: jest.fn(),
+  finishSuccessfulTaskRun: jest.fn(),
+  advanceTaskAfterRun: jest.fn(),
 };
 const mockAgentService = {
   generate: jest.fn(),
@@ -53,8 +53,11 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
   mockAgentMemoryService.buildContext.mockResolvedValue([]);
+  mockAgentScheduleDbService.renewTaskRunLease.mockResolvedValue(true);
+  mockAgentScheduleDbService.finishSuccessfulTaskRun.mockResolvedValue({ taskUpdated: true });
+  mockAgentScheduleDbService.advanceTaskAfterRun.mockResolvedValue({ taskUpdated: true });
 });
 
 describe('AgentScheduleRunner', () => {
@@ -102,6 +105,20 @@ describe('AgentScheduleRunner', () => {
     expect(mockAgentScheduleDbService.createTaskRun).toHaveBeenCalledWith({
       taskId: 'task-1',
       scheduledFor: new Date('2026-07-06T17:00:00.000Z'),
+      triggerVersion: 'legacy',
+      claimToken: expect.any(String),
+    });
+    const claimToken = mockAgentScheduleDbService.createTaskRun.mock.calls[0][0].claimToken;
+
+    expect(claimToken).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(mockAgentScheduleDbService.renewTaskRunLease).toHaveBeenCalledWith({
+      runId: 'run-1',
+      taskId: task.id,
+      claimToken,
+      taskRevision: task.revision,
+      scheduledFor: task.nextRunAt,
     });
     expect(bot.initialize).toHaveBeenCalledTimes(1);
     expect(bot.initialize.mock.invocationCallOrder[0]!).toBeLessThan(
@@ -159,17 +176,458 @@ describe('AgentScheduleRunner', () => {
       role: 'assistant',
       content: 'Tennis starts at 7pm.',
     });
-    expect(mockAgentScheduleDbService.markTaskRunSent).toHaveBeenCalledWith({
+    expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith({
+      task,
       runId: 'run-1',
+      claimToken,
       output: 'Tennis starts at 7pm.',
-    });
-    expect(mockAgentScheduleDbService.completeTask).toHaveBeenCalledWith({
-      taskId: 'task-1',
       ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
     });
     expect(result).toEqual({
       taskId: 'task-1',
       status: 'sent',
+    });
+  });
+
+  it('does not deliver a task cancelled while its message is being generated', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const cancelledTask = {
+      ...task,
+      status: 'cancelled' as const,
+      revision: task.revision + 1,
+      cancelledAt: new Date('2026-07-06T17:00:15.000Z'),
+      updatedAt: new Date('2026-07-06T17:00:15.000Z'),
+    };
+    const thread = createThread();
+    const bot = createBot({ thread });
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(cancelledTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentService.generate.mockResolvedValue({ text: 'Time for tennis.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: bot as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(thread.post).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.markTaskRunSkipped).toHaveBeenCalledWith({
+      runId: 'run-1',
+      claimToken: expect.any(String),
+      reason: 'task_changed_before_delivery',
+    });
+    expect(result).toEqual({
+      taskId: task.id,
+      status: 'skipped',
+      reason: 'task_changed_before_delivery',
+    });
+  });
+
+  it('regenerates a one-time task when its content changes before delivery', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const revisedTask = {
+      ...task,
+      title: 'Updated tennis reminder',
+      prompt: 'Remind the user to bring a fresh grip to tennis.',
+      revision: task.revision + 1,
+      updatedAt: new Date('2026-07-06T17:00:15.000Z'),
+    };
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(revisedTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentService.generate
+      .mockResolvedValueOnce({ text: 'Old reminder.' })
+      .mockResolvedValue({ text: 'Bring a fresh grip to tennis.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot({ thread }) as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).toHaveBeenCalledTimes(2);
+    expect(mockAgentService.generate.mock.calls[1][0].messages.at(-1)?.content).toContain(
+      revisedTask.prompt,
+    );
+    expect(thread.post).toHaveBeenCalledTimes(1);
+    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Bring a fresh grip to tennis.' });
+    expect(mockAgentScheduleDbService.markTaskRunSkipped).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: revisedTask,
+        output: 'Bring a fresh grip to tennis.',
+      }),
+    );
+    expect(result).toEqual({ taskId: task.id, status: 'sent' });
+  });
+
+  it('regenerates a recurring task when its allowed side effects change before delivery', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'recurring',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      recurrence: {
+        frequency: 'daily',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        timeOfDay: '19:00',
+      },
+    });
+    const revisedTask = {
+      ...task,
+      metadata: {
+        ...task.metadata,
+        allowedSideEffects: ['calendar.create'],
+      },
+      revision: task.revision + 1,
+      updatedAt: new Date('2026-07-06T17:00:15.000Z'),
+    };
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(revisedTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentService.generate
+      .mockResolvedValueOnce({ text: 'Old recurring reminder.' })
+      .mockResolvedValue({ text: 'Calendar event created.' });
+
+    await AgentScheduleRunner.executeTask({
+      bot: createBot({ thread }) as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).toHaveBeenCalledTimes(2);
+    expect(mockAgentService.generate.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ scheduledTaskSideEffects: ['calendar.create'] }),
+    );
+    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Calendar event created.' });
+    expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: revisedTask,
+        nextRunAt: new Date('2026-07-07T17:00:00.000Z'),
+      }),
+    );
+  });
+
+  it('regenerates when the revision changes at the pre-post lease fence', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const revisedTask = {
+      ...task,
+      prompt: 'Use the revision committed immediately before posting.',
+      revision: task.revision + 1,
+    };
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(revisedTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.renewTaskRunLease
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    mockAgentService.generate
+      .mockResolvedValueOnce({ text: 'Output from the old revision.' })
+      .mockResolvedValue({ text: 'Output from the fenced revision.' });
+
+    await AgentScheduleRunner.executeTask({
+      bot: createBot({ thread }) as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentService.generate).toHaveBeenCalledTimes(2);
+    expect(mockAgentScheduleDbService.renewTaskRunLease).toHaveBeenCalledTimes(2);
+    expect(thread.post).toHaveBeenCalledTimes(1);
+    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Output from the fenced revision.' });
+  });
+
+  it('retries when task revisions keep changing during bounded regeneration', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      metadata: { qstashFailureCallback: true },
+    });
+    const revision2 = { ...task, prompt: 'Revision 2', revision: 2 };
+    const revision3 = { ...task, prompt: 'Revision 3', revision: 3 };
+    const revision4 = { ...task, prompt: 'Revision 4', revision: 4 };
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(revision2)
+      .mockResolvedValueOnce(revision3)
+      .mockResolvedValue(revision4);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentService.generate.mockResolvedValue({ text: 'Changing output.' });
+
+    await expect(
+      AgentScheduleRunner.executeTask({
+        bot: createBot({ thread }) as never,
+        taskId: task.id,
+        now: new Date('2026-07-06T17:00:30.000Z'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_TASK_EXECUTION_FAILED',
+      retryable: true,
+    });
+
+    expect(mockAgentService.generate).toHaveBeenCalledTimes(3);
+    expect(thread.post).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.markTaskRunSkipped).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.markTaskRunFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: 'run-1' }),
+    );
+  });
+
+  it('completes the current one-time revision when it changes after delivery', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const revisedTask = {
+      ...task,
+      title: 'Revised after delivery',
+      revision: task.revision + 1,
+    };
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(revisedTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.finishSuccessfulTaskRun.mockResolvedValue({ taskUpdated: false });
+    mockAgentService.generate.mockResolvedValue({ text: 'Time for tennis.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot({ thread }) as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task: revisedTask,
+      outcome: 'success',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
+    });
+    expect(result).toEqual({
+      taskId: task.id,
+      status: 'sent',
+      reason: 'task_changed_after_delivery',
+    });
+  });
+
+  it('advances the current recurring revision when it changes after delivery', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'recurring',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      recurrence: {
+        frequency: 'daily',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        timeOfDay: '19:00',
+      },
+    });
+    const revisedTask = {
+      ...task,
+      prompt: 'Use the revised recurring reminder.',
+      revision: task.revision + 1,
+    };
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(revisedTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.finishSuccessfulTaskRun.mockResolvedValue({ taskUpdated: false });
+    mockAgentService.generate.mockResolvedValue({ text: 'Recurring reminder.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot() as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task: revisedTask,
+      outcome: 'success',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: new Date('2026-07-07T17:00:00.000Z'),
+    });
+    expect(result).toEqual({
+      taskId: task.id,
+      status: 'sent',
+      reason: 'task_changed_after_delivery',
+    });
+  });
+
+  it('does not post or advance when the run claim is lost before delivery', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const thread = createThread();
+
+    mockAgentScheduleDbService.getTaskById.mockResolvedValue(task);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.renewTaskRunLease.mockResolvedValue(false);
+    mockAgentService.generate.mockResolvedValue({ text: 'Time for tennis.' });
+
+    await expect(
+      AgentScheduleRunner.executeTask({
+        bot: createBot({ thread }) as never,
+        taskId: task.id,
+        now: new Date('2026-07-06T17:00:30.000Z'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'SCHEDULE_TASK_EXECUTION_FAILED',
+      retryable: true,
+    });
+
+    expect(thread.post).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.markTaskRunFailed).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a task rescheduled after its message was delivered', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'one_time',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+    });
+    const thread = createThread();
+    const bot = createBot({ thread });
+    const rescheduledTask = {
+      ...task,
+      revision: task.revision + 1,
+      nextRunAt: new Date('2026-07-07T17:00:00.000Z'),
+      updatedAt: new Date('2026-07-06T17:00:20.000Z'),
+    };
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(rescheduledTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.finishSuccessfulTaskRun.mockResolvedValue({ taskUpdated: false });
+    mockAgentService.generate.mockResolvedValue({ text: 'Time for tennis.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: bot as never,
+      taskId: task.id,
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time for tennis.' });
+    expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith({
+      task,
+      runId: 'run-1',
+      claimToken: expect.any(String),
+      output: 'Time for tennis.',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
+    });
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      taskId: task.id,
+      status: 'sent',
+      reason: 'task_changed_after_delivery',
+    });
+  });
+
+  it('does not advance a replacement trigger that resolves to the same occurrence time', async () => {
+    const task = createTask({
+      id: 'task-1',
+      scheduleKind: 'recurring',
+      nextRunAt: new Date('2026-07-06T17:00:00.000Z'),
+      recurrence: {
+        frequency: 'daily',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        timeOfDay: '19:00',
+      },
+      metadata: { qstashTriggerVersion: 'old-trigger' },
+    });
+    const replacementTriggerTask = {
+      ...task,
+      revision: task.revision + 1,
+      metadata: { qstashTriggerVersion: 'replacement-trigger' },
+    };
+
+    mockAgentScheduleDbService.getTaskById
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValue(replacementTriggerTask);
+    mockAgentScheduleDbService.createTaskRun.mockResolvedValue({
+      id: 'run-1',
+      taskId: task.id,
+    });
+    mockAgentScheduleDbService.finishSuccessfulTaskRun.mockResolvedValue({ taskUpdated: false });
+    mockAgentService.generate.mockResolvedValue({ text: 'Old trigger reminder.' });
+
+    const result = await AgentScheduleRunner.executeTask({
+      bot: createBot() as never,
+      taskId: task.id,
+      triggerVersion: 'old-trigger',
+      now: new Date('2026-07-06T17:00:30.000Z'),
+    });
+
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      taskId: task.id,
+      status: 'sent',
+      reason: 'task_changed_after_delivery',
     });
   });
 
@@ -290,9 +748,11 @@ describe('AgentScheduleRunner', () => {
     });
 
     expect(mockAgentService.generate).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.completeTask).toHaveBeenCalledWith({
-      taskId: 'task-1',
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task,
+      outcome: 'success',
       ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
     });
     expect(result).toEqual({
       taskId: 'task-1',
@@ -488,8 +948,9 @@ describe('AgentScheduleRunner', () => {
       now: new Date('2026-07-06T17:00:30.000Z'),
     });
 
-    expect(mockAgentScheduleDbService.rescheduleTask).toHaveBeenCalledWith({
-      taskId: 'task-1',
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task,
+      outcome: 'success',
       ranAt: new Date('2026-07-06T17:00:30.000Z'),
       nextRunAt: new Date('2026-07-07T17:00:00.000Z'),
     });
@@ -521,7 +982,7 @@ describe('AgentScheduleRunner', () => {
     });
     const error = new Error('db update failed');
 
-    mockAgentScheduleDbService.completeTask.mockRejectedValue(error);
+    mockAgentScheduleDbService.finishSuccessfulTaskRun.mockRejectedValue(error);
     mockAgentService.generate.mockResolvedValue({
       text: 'Time to walk the dog.',
     });
@@ -542,12 +1003,16 @@ describe('AgentScheduleRunner', () => {
 
     expect(thread.post).toHaveBeenCalledTimes(1);
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time to walk the dog.' });
-    expect(mockAgentScheduleDbService.markTaskRunSent).toHaveBeenCalledWith({
+    expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith({
+      task,
       runId: 'run-1',
+      claimToken: expect.any(String),
       output: 'Time to walk the dog.',
+      ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
     });
     expect(mockAgentScheduleDbService.markTaskRunFailed).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.failTask).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).not.toHaveBeenCalled();
   });
 
   it('marks the run failed and retries through QStash when generation fails before posting', async () => {
@@ -583,11 +1048,11 @@ describe('AgentScheduleRunner', () => {
 
     expect(mockAgentScheduleDbService.markTaskRunFailed).toHaveBeenCalledWith({
       runId: 'run-1',
+      claimToken: expect.any(String),
       error,
     });
     expect(thread.post).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.failTask).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.rescheduleTask).not.toHaveBeenCalled();
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).not.toHaveBeenCalled();
   });
 
   it('silently advances legacy tasks without a QStash failure callback after generation failure', async () => {
@@ -614,9 +1079,11 @@ describe('AgentScheduleRunner', () => {
     });
 
     expect(thread.post).not.toHaveBeenCalled();
-    expect(mockAgentScheduleDbService.failTask).toHaveBeenCalledWith({
-      taskId: 'task-1',
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task,
+      outcome: 'failure',
       ranAt: new Date('2026-07-06T17:00:30.000Z'),
+      nextRunAt: undefined,
     });
     expect(result).toEqual({
       taskId: 'task-1',
@@ -650,8 +1117,9 @@ describe('AgentScheduleRunner', () => {
       },
     });
 
-    expect(mockAgentScheduleDbService.rescheduleTask).toHaveBeenCalledWith({
-      taskId: 'task-1',
+    expect(mockAgentScheduleDbService.advanceTaskAfterRun).toHaveBeenCalledWith({
+      task,
+      outcome: 'failure',
       ranAt: new Date('2026-07-06T07:03:00.000Z'),
       nextRunAt: new Date('2026-07-07T07:00:00.000Z'),
     });
@@ -688,6 +1156,7 @@ function createTask({
     prompt: 'Send the user a short reminder about their tennis game.',
     scheduleKind,
     status,
+    revision: 1,
     timeZone: 'Europe/Warsaw',
     nextRunAt,
     recurrence,

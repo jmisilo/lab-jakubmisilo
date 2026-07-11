@@ -2,6 +2,7 @@ const mockPublishJSON = jest.fn();
 const mockScheduleCreate = jest.fn();
 const mockMessageCancel = jest.fn();
 const mockScheduleDelete = jest.fn();
+const mockReceiverVerify = jest.fn();
 
 jest.mock('@upstash/qstash', () => ({
   Client: jest.fn(() => ({
@@ -14,6 +15,10 @@ jest.mock('@upstash/qstash', () => ({
       cancel: mockMessageCancel,
     },
   })),
+  Receiver: jest.fn(() => ({
+    verify: mockReceiverVerify,
+  })),
+  SignatureError: class SignatureError extends Error {},
 }));
 
 describe('QStashService', () => {
@@ -22,6 +27,7 @@ describe('QStashService', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    mockReceiverVerify.mockReset();
     process.env = {
       ...originalEnv,
       QSTASH_TOKEN: 'qstash-token',
@@ -31,6 +37,93 @@ describe('QStashService', () => {
 
   afterAll(() => {
     process.env = originalEnv;
+  });
+
+  it('verifies a signed request and returns its raw body', async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = 'current-signing-key';
+    process.env.QSTASH_NEXT_SIGNING_KEY = 'next-signing-key';
+    mockReceiverVerify.mockResolvedValue(true);
+    const { Receiver } = await import('@upstash/qstash');
+    const { QStashService } = await import('.');
+    const body = JSON.stringify({ taskId: 'task-1' });
+
+    const result = await QStashService.verifySignedRequest(
+      new Request('https://agent.example.com/jobs/schedules/execute', {
+        method: 'POST',
+        headers: {
+          'upstash-region': 'eu-west-1',
+          'upstash-signature': 'signed-token',
+        },
+        body,
+      }),
+    );
+
+    expect(result).toEqual({ ok: true, body });
+    expect(Receiver).toHaveBeenCalledWith({
+      currentSigningKey: 'current-signing-key',
+      nextSigningKey: 'next-signing-key',
+      devMode: false,
+    });
+    expect(mockReceiverVerify).toHaveBeenCalledWith({
+      signature: 'signed-token',
+      body,
+      url: 'https://agent.example.com/jobs/schedules/execute',
+      clockTolerance: 30,
+      upstashRegion: 'eu-west-1',
+    });
+  });
+
+  it('rejects requests without a QStash signature before reading the body', async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = 'current-signing-key';
+    process.env.QSTASH_NEXT_SIGNING_KEY = 'next-signing-key';
+    const { Receiver } = await import('@upstash/qstash');
+    const { QStashService } = await import('.');
+    const request = new Request('https://agent.example.com/jobs/schedules/execute', {
+      method: 'POST',
+      body: JSON.stringify({ taskId: 'task-1' }),
+    });
+
+    const result = await QStashService.verifySignedRequest(request);
+
+    expect(result).toEqual({ ok: false, reason: 'unauthorized' });
+    expect(Receiver).not.toHaveBeenCalled();
+    await expect(request.text()).resolves.toBe(JSON.stringify({ taskId: 'task-1' }));
+  });
+
+  it('reports missing signing keys as a configuration failure', async () => {
+    delete process.env.QSTASH_CURRENT_SIGNING_KEY;
+    delete process.env.QSTASH_NEXT_SIGNING_KEY;
+    const { Receiver } = await import('@upstash/qstash');
+    const { QStashService } = await import('.');
+    const request = new Request('https://agent.example.com/jobs/schedules/execute', {
+      method: 'POST',
+      headers: { 'upstash-signature': 'signed-token' },
+      body: JSON.stringify({ taskId: 'task-1' }),
+    });
+
+    const result = await QStashService.verifySignedRequest(request);
+
+    expect(result).toEqual({ ok: false, reason: 'missing_configuration' });
+    expect(Receiver).not.toHaveBeenCalled();
+    await expect(request.text()).resolves.toBe(JSON.stringify({ taskId: 'task-1' }));
+  });
+
+  it('rejects an invalid QStash signature', async () => {
+    process.env.QSTASH_CURRENT_SIGNING_KEY = 'current-signing-key';
+    process.env.QSTASH_NEXT_SIGNING_KEY = 'next-signing-key';
+    const { SignatureError } = await import('@upstash/qstash');
+    mockReceiverVerify.mockRejectedValue(new SignatureError('invalid signature'));
+    const { QStashService } = await import('.');
+
+    const result = await QStashService.verifySignedRequest(
+      new Request('https://agent.example.com/jobs/schedules/execute', {
+        method: 'POST',
+        headers: { 'upstash-signature': 'invalid-token' },
+        body: JSON.stringify({ taskId: 'task-1' }),
+      }),
+    );
+
+    expect(result).toEqual({ ok: false, reason: 'unauthorized' });
   });
 
   it('uses a QStash-safe deduplication id for one-time tasks', async () => {

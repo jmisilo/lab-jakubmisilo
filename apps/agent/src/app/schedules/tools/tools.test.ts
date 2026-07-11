@@ -408,6 +408,7 @@ function createTask({
     prompt,
     scheduleKind,
     status,
+    revision: 1,
     timeZone: 'Europe/Warsaw',
     nextRunAt,
     recurrence: {},

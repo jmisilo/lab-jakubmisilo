@@ -184,10 +184,18 @@ export class AgentNutritionService {
       });
     }
 
+    const mealValues = this.#buildMealValues({ estimate, timeZone, now });
+    const update = estimate.eatenAt
+      ? mealValues
+      : {
+          ...mealValues,
+          eatenAt: current.eatenAt,
+          localDate: current.localDate,
+        };
     const meal = await AgentNutritionDbService.updateMeal({
       identityId,
       mealId: current.id,
-      update: this.#buildMealValues({ estimate, timeZone, now }),
+      update,
     });
 
     if (!meal) {

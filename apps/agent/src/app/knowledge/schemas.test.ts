@@ -59,6 +59,42 @@ describe('knowledge schemas', () => {
     ).toBe(false);
   });
 
+  it('requires exactly one replacement source when superseding a note', () => {
+    const replacementNode = {
+      title: 'Current company',
+      content: 'The user currently works at Company Y.',
+    };
+
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'supersede',
+        path: 'work/company-x',
+        node: replacementNode,
+      }).success,
+    ).toBe(true);
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'supersede',
+        path: 'work/company-x',
+        supersededByPath: 'work/company-y',
+      }).success,
+    ).toBe(true);
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'supersede',
+        path: 'work/company-x',
+      }).success,
+    ).toBe(false);
+    expect(
+      ManageKnowledgeToolInputSchema.safeParse({
+        action: 'supersede',
+        path: 'work/company-x',
+        node: replacementNode,
+        supersededByPath: 'work/company-y',
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts bounded explore input for subtree traversal', () => {
     const parsed = ReadKnowledgeToolInputSchema.parse({
       action: 'explore',
