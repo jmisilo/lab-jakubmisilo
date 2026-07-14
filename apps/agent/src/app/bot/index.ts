@@ -1,5 +1,7 @@
 import { createPostgresState } from '@chat-adapter/state-pg';
 import { createTelegramAdapter } from '@chat-adapter/telegram';
+import { blooio } from '@imessage-sdk/blooio';
+import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
 import { Chat } from 'chat';
 
 import { BotHandler } from '@/app/bot/bot-handler';
@@ -12,6 +14,9 @@ export const bot = new Chat({
     telegram: createTelegramAdapter({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
       secretToken: process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN,
+    }),
+    imessage: createIMessageAdapter({
+      provider: blooio(),
     }),
   },
   state: createPostgresState({

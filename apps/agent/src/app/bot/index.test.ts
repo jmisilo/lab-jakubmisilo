@@ -15,6 +15,8 @@ const mockBotHandler = {
   configure: jest.fn(),
   respondToMessage: jest.fn(),
 };
+const mockBlooioProvider = { name: 'blooio' };
+const mockIMessageAdapter = { name: 'imessage' };
 
 jest.mock(
   '@chat-adapter/state-pg',
@@ -31,6 +33,14 @@ jest.mock(
   }),
   { virtual: true },
 );
+
+jest.mock('@imessage-sdk/blooio', () => ({
+  blooio: jest.fn(() => mockBlooioProvider),
+}));
+
+jest.mock('@imessage-sdk/chat-adapter', () => ({
+  createIMessageAdapter: jest.fn(() => mockIMessageAdapter),
+}));
 
 jest.mock(
   'chat',
@@ -59,6 +69,25 @@ describe('bot composition', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+  });
+
+  it('registers Telegram and Blooio-backed iMessage adapters together', async () => {
+    const { Chat } = await import('chat');
+    const { blooio } = await import('@imessage-sdk/blooio');
+    const { createIMessageAdapter } = await import('@imessage-sdk/chat-adapter');
+
+    await import('./index');
+
+    expect(blooio).toHaveBeenCalledWith();
+    expect(createIMessageAdapter).toHaveBeenCalledWith({ provider: mockBlooioProvider });
+    expect(Chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adapters: {
+          telegram: expect.any(Object),
+          imessage: mockIMessageAdapter,
+        },
+      }),
+    );
   });
 
   it('subscribes new mentions before passing them to the shared bot handler', async () => {

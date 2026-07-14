@@ -85,7 +85,7 @@ describe('AgentNutritionService', () => {
   it('aggregates item nutrition and creates a local-date draft', async () => {
     mockNutritionDbService.createDraft.mockResolvedValue({
       meal: createMeal(),
-      created: true,
+      outcome: 'created',
     });
 
     const result = await AgentNutritionService.createMealDraft({
@@ -115,6 +115,7 @@ describe('AgentNutritionService', () => {
       }),
     );
     expect(result.meal.calories).toBe(500);
+    expect(result.outcome).toBe('created');
   });
 
   it('returns daily totals, goals, remaining macros, and confirmed meals', async () => {
