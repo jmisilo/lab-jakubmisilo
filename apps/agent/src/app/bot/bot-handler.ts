@@ -1,6 +1,8 @@
 import type { UserFacingFailure } from '@/infrastructure/errors';
 import type { Chat, Message, Thread } from 'chat';
 
+import { BlooioProvider } from '@imessage-sdk/blooio';
+import { IMessageAdapter } from '@imessage-sdk/chat-adapter';
 import { waitUntil } from '@vercel/functions';
 
 import { AgentService } from '@/app/agent';
@@ -10,9 +12,6 @@ import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
-
-const TYPING_INDICATOR_REFRESH_MS = 3_000;
-const TYPING_INDICATOR_TIMEOUT_MS = 1_500;
 
 export class BotHandler {
   static #bot: Chat | null = null;
@@ -32,7 +31,7 @@ export class BotHandler {
       '[BOT]: message received',
     );
 
-    await this.#withTypingIndicator({
+    await this.#withMessageInitialization({
       thread,
       operation: async () => {
         try {
@@ -222,71 +221,36 @@ export class BotHandler {
     }
   }
 
-  static async #withTypingIndicator<T>({
+  static async #withMessageInitialization<T>({
     thread,
     operation,
   }: {
     thread: Thread;
     operation: () => Promise<T>;
   }) {
-    this.#startTypingWithTimeout({ thread, timeoutEvent: 'initial' });
+    void this.#initMessage(thread);
 
-    const interval = setInterval(() => {
-      this.#startTypingWithTimeout({ thread, timeoutEvent: 'refresh' });
-    }, TYPING_INDICATOR_REFRESH_MS);
-
-    try {
-      return await operation();
-    } finally {
-      clearInterval(interval);
-    }
+    return operation();
   }
 
-  static #startTypingWithTimeout({
-    thread,
-    timeoutEvent,
-  }: {
-    thread: Thread;
-    timeoutEvent: 'initial' | 'refresh';
-  }) {
-    void Promise.race([
-      thread.startTyping(),
-      this.#rejectAfterTypingTimeout({ threadId: thread.id, timeoutEvent }),
-    ]).catch((error: unknown) => {
+  static async #initMessage(thread: Thread) {
+    try {
+      if (thread.adapter.name === 'imessage') {
+        const adapter = thread.adapter as IMessageAdapter<BlooioProvider>;
+
+        await adapter.markRead(thread.id);
+      }
+
+      await thread.startTyping();
+    } catch (error) {
       logger.warn(
         {
           threadId: thread.id,
           safeError: ErrorService.toSafeLog(error),
         },
-        '[BOT]: typing indicator failed',
+        '[BOT]: message initialization failed',
       );
-    });
-  }
-
-  static async #rejectAfterTypingTimeout({
-    threadId,
-    timeoutEvent,
-  }: {
-    threadId: string;
-    timeoutEvent: 'initial' | 'refresh';
-  }) {
-    await this.#sleep(TYPING_INDICATOR_TIMEOUT_MS);
-
-    throw AppError.timeout({
-      code: AppErrorCode.BOT_TYPING_INDICATOR_TIMEOUT,
-      message: 'Chat typing indicator timed out.',
-      context: {
-        threadId,
-        timeoutEvent,
-      },
-      timeoutMs: TYPING_INDICATOR_TIMEOUT_MS,
-    });
-  }
-
-  static #sleep(ms: number) {
-    return new Promise<void>((resolve) => {
-      setTimeout(resolve, ms);
-    });
+    }
   }
 }
 
