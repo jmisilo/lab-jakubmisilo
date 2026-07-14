@@ -12,7 +12,6 @@ const app = new Hono()
   .route('/', GoogleRouter)
   .route('/', WorldCupRouter)
   .route('/', ScheduleRouter)
-  .post('/webhooks/telegram', (c) => bot.webhooks.telegram(c.req.raw, { waitUntil }))
   .post('/webhooks/imessage', (c) => bot.webhooks.imessage(c.req.raw, { waitUntil }));
 
 export default app;
