@@ -23,6 +23,13 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('# User Experience');
     expect(prompt).toContain('Default style: casual, warm, natural, direct, and short.');
     expect(prompt).toContain('Sound like a sharp friend who works with the user');
+    expect(prompt).toContain('# Message Formatting');
+    expect(prompt).toContain('does not provide reliable Markdown rendering');
+    expect(prompt).toContain('prefix it with the Unicode bullet • followed by one space');
+    expect(prompt).toContain('Do not use hyphens or asterisks as list markers');
+    expect(prompt).toContain('Avoid Markdown headings, bold or italic markers');
+    expect(prompt).toContain('Write important links as complete bare URLs');
+    expect(prompt).toContain('easy to read as plain text with no Markdown rendering');
     expect(prompt).toContain('# Privacy And Metadata');
     expect(prompt).toContain('operation IDs, debug IDs, error codes');
     expect(prompt).toContain(
