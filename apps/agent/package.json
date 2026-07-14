@@ -22,7 +22,7 @@
     "@chat-adapter/telegram": "4.33.0",
     "@fontsource/inter": "^5.2.8",
     "@imessage-sdk/blooio": "^0.1.1",
-    "@imessage-sdk/chat-adapter": "0.1.0-beta.1",
+    "@imessage-sdk/chat-adapter": "0.1.0-beta.2",
     "@imessage-sdk/photon": "^0.1.0",
     "@labjm/utilities": "workspace:*",
     "@message-ui/components": "^0.1.0",
