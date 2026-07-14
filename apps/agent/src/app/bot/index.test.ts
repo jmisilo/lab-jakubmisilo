@@ -26,14 +26,6 @@ jest.mock(
   { virtual: true },
 );
 
-jest.mock(
-  '@chat-adapter/telegram',
-  () => ({
-    createTelegramAdapter: jest.fn(() => ({})),
-  }),
-  { virtual: true },
-);
-
 jest.mock('@imessage-sdk/blooio', () => ({
   blooio: jest.fn(() => mockBlooioProvider),
 }));
@@ -71,7 +63,7 @@ describe('bot composition', () => {
     jest.clearAllMocks();
   });
 
-  it('registers Telegram and Blooio-backed iMessage adapters together', async () => {
+  it('registers the Blooio-backed iMessage adapter', async () => {
     const { Chat } = await import('chat');
     const { blooio } = await import('@imessage-sdk/blooio');
     const { createIMessageAdapter } = await import('@imessage-sdk/chat-adapter');
@@ -83,7 +75,6 @@ describe('bot composition', () => {
     expect(Chat).toHaveBeenCalledWith(
       expect.objectContaining({
         adapters: {
-          telegram: expect.any(Object),
           imessage: mockIMessageAdapter,
         },
       }),
