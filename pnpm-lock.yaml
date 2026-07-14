@@ -60,8 +60,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@imessage-sdk/chat-adapter':
-        specifier: 0.1.0-beta.1
-        version: 0.1.0-beta.1(ai@7.0.19(zod@4.4.3))(chat@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))
+        specifier: 0.1.0-beta.2
+        version: 0.1.0-beta.2(ai@7.0.19(zod@4.4.3))(chat@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))
       '@imessage-sdk/photon':
         specifier: ^0.1.0
         version: 0.1.0(typescript@6.0.3)
@@ -1481,8 +1481,8 @@ packages:
     resolution: {integrity: sha512-6hVjdIZkk58Ri75bN2pOzgNnxbygPgZ9dXhLUmPdQ+pwnyHb3V+QrPwC4w3UZTT1ceMMh+mY9A5JWm0ehX60qg==}
     engines: {node: '>=20'}
 
-  '@imessage-sdk/chat-adapter@0.1.0-beta.1':
-    resolution: {integrity: sha512-wSokVR0vXS/OIVD1h1A5vcpUycAdCfOnmB8kfgoULxkjVLxrYmFdX5k3o/OEzo0yBi9oqba0bXvDcy74BAMl3w==}
+  '@imessage-sdk/chat-adapter@0.1.0-beta.2':
+    resolution: {integrity: sha512-LUl0qvh10FT/hQMCfvQC3shedU+8rjORCMfZcU7LeKW0NKtee9F+DVYIk0vEMArnfgXGwYrcbY2R+7DNyUcrIw==}
     engines: {node: '>=20'}
     peerDependencies:
       chat: ^4.33.0
@@ -7305,7 +7305,7 @@ snapshots:
       imessage-sdk: 0.1.2
       zod: 4.4.3
 
-  '@imessage-sdk/chat-adapter@0.1.0-beta.1(ai@7.0.19(zod@4.4.3))(chat@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))':
+  '@imessage-sdk/chat-adapter@0.1.0-beta.2(ai@7.0.19(zod@4.4.3))(chat@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))':
     dependencies:
       '@chat-adapter/shared': 4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
       chat: 4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
