@@ -4,6 +4,7 @@ import { and, asc, eq, ne, sql } from 'drizzle-orm';
 
 import { agentNutritionMeals, agentNutritionProfiles } from '@/infrastructure/db/schema';
 import { DbService } from '@/infrastructure/db/services';
+import { AppError, AppErrorCode } from '@/infrastructure/errors';
 
 export class AgentNutritionDbService extends DbService {
   static async upsertProfile(input: NewAgentNutritionProfile) {
@@ -48,10 +49,11 @@ export class AgentNutritionDbService extends DbService {
             eq(agentNutritionMeals.idempotencyKey, input.idempotencyKey),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (existing) {
-        return { meal: existing, created: false };
+        return this.#toDraftWriteOutcome(existing, false);
       }
 
       const now = new Date();
@@ -70,9 +72,42 @@ export class AgentNutritionDbService extends DbService {
       const [meal] = await tx
         .insert(agentNutritionMeals)
         .values({ ...input, status: 'draft' })
+        .onConflictDoNothing({
+          target: [agentNutritionMeals.identityId, agentNutritionMeals.idempotencyKey],
+        })
         .returning();
 
-      return { meal: meal ?? null, created: Boolean(meal) };
+      if (meal) {
+        return this.#toDraftWriteOutcome(meal, true);
+      }
+
+      const [replayedMeal] = await tx
+        .select()
+        .from(agentNutritionMeals)
+        .where(
+          and(
+            eq(agentNutritionMeals.identityId, input.identityId),
+            eq(agentNutritionMeals.idempotencyKey, input.idempotencyKey),
+          ),
+        )
+        .limit(1)
+        .for('update');
+
+      if (!replayedMeal) {
+        throw new AppError({
+          code: AppErrorCode.NUTRITION_PERSISTENCE_FAILED,
+          message: 'Nutrition draft conflict could not be resolved.',
+          context: {
+            identityId: input.identityId,
+            threadId: input.threadId,
+            sourceMessageId: input.sourceMessageId,
+          },
+          retryable: true,
+          userMessage: 'I could not save that nutrition update right now.',
+        });
+      }
+
+      return this.#toDraftWriteOutcome(replayedMeal, false);
     });
   }
 
@@ -201,6 +236,22 @@ export class AgentNutritionDbService extends DbService {
       fatGrams: totals?.fatGrams ?? 0,
       fiberGrams: totals?.fiberGrams ?? 0,
     };
+  }
+
+  static #toDraftWriteOutcome(meal: AgentNutritionMeal, created: boolean) {
+    if (created) {
+      return { outcome: 'created' as const, meal };
+    }
+
+    if (meal.status === 'draft') {
+      return { outcome: 'existing_draft' as const, meal };
+    }
+
+    if (meal.status === 'confirmed') {
+      return { outcome: 'already_confirmed' as const, meal };
+    }
+
+    return { outcome: 'stale_replay' as const, meal };
   }
 }
 

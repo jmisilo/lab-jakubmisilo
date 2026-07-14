@@ -335,4 +335,65 @@ describeIntegration('agent persistence integration', () => {
       confirmedAt,
     });
   });
+
+  it('distinguishes pending, confirmed, and superseded nutrition draft replays', async () => {
+    const baseDraft = {
+      identityId,
+      threadId: 'nutrition-replay-thread',
+      name: 'Yogurt bowl',
+      items: [
+        {
+          name: 'Yogurt bowl',
+          estimatedGrams: 300,
+          preparationMethod: 'Assembled',
+          calories: 360,
+          proteinGrams: 24,
+          carbsGrams: 42,
+          fatGrams: 10,
+          fiberGrams: 5,
+          confidence: 'medium' as const,
+        },
+      ],
+      source: 'text' as const,
+      calories: 360,
+      caloriesMin: 320,
+      caloriesMax: 400,
+      proteinGrams: 24,
+      carbsGrams: 42,
+      fatGrams: 10,
+      fiberGrams: 5,
+      confidence: 'medium' as const,
+      localDate: '2026-07-11',
+      eatenAt: new Date('2026-07-11T08:00:00.000Z'),
+    };
+    const confirmedKey = `confirmed-${randomUUID()}`;
+    const created = await AgentNutritionDbService.createDraft({
+      ...baseDraft,
+      idempotencyKey: confirmedKey,
+    });
+
+    expect(created).toMatchObject({ outcome: 'created', meal: { status: 'draft' } });
+    await expect(
+      AgentNutritionDbService.createDraft({ ...baseDraft, idempotencyKey: confirmedKey }),
+    ).resolves.toMatchObject({ outcome: 'existing_draft', meal: { status: 'draft' } });
+    await AgentNutritionDbService.confirmPendingDraft({
+      identityId,
+      threadId: baseDraft.threadId,
+      confirmedAt: new Date('2026-07-11T08:01:00.000Z'),
+    });
+    await expect(
+      AgentNutritionDbService.createDraft({ ...baseDraft, idempotencyKey: confirmedKey }),
+    ).resolves.toMatchObject({ outcome: 'already_confirmed', meal: { status: 'confirmed' } });
+
+    const supersededKey = `superseded-${randomUUID()}`;
+
+    await AgentNutritionDbService.createDraft({ ...baseDraft, idempotencyKey: supersededKey });
+    await AgentNutritionDbService.createDraft({
+      ...baseDraft,
+      idempotencyKey: `replacement-${randomUUID()}`,
+    });
+    await expect(
+      AgentNutritionDbService.createDraft({ ...baseDraft, idempotencyKey: supersededKey }),
+    ).resolves.toMatchObject({ outcome: 'stale_replay', meal: { status: 'deleted' } });
+  });
 });

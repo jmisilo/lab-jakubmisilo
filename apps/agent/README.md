@@ -85,6 +85,10 @@ Fill the provider and integration keys:
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_WEBHOOK_SECRET_TOKEN`
 - `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated Telegram numeric user IDs allowed to use the bot
+- `BLOOIO_API_KEY`
+- `BLOOIO_FROM_NUMBER`
+- `BLOOIO_WEBHOOK_SECRET`
+- `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent
 - `DATABASE_URL`
 - `QSTASH_CURRENT_SIGNING_KEY`
 - `QSTASH_NEXT_SIGNING_KEY`
@@ -122,6 +126,23 @@ Telegram webhook endpoint:
 ```txt
 POST /webhooks/telegram
 ```
+
+Blooio iMessage webhook endpoint:
+
+```txt
+POST /webhooks/imessage
+```
+
+Configure the Blooio webhook to send signed events to this endpoint. The adapter verifies them
+with `BLOOIO_WEBHOOK_SECRET`.
+
+To restrict iMessage access, set `IMESSAGE_ALLOWED_NUMBERS`:
+
+```sh
+IMESSAGE_ALLOWED_NUMBERS="+48123456789,+48987654321"
+```
+
+Leave it empty to allow all iMessage numbers.
 
 To restrict bot usage during development, set `TELEGRAM_ALLOWED_USER_IDS`:
 
@@ -191,6 +212,10 @@ Required:
 - `TELEGRAM_WEBHOOK_SECRET_TOKEN`
 - `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated allowlist while the agent is private
 - `TELEGRAM_BOT_USERNAME` — optional, defaults to `labjm_assistant_bot`
+- `BLOOIO_API_KEY` — Blooio API key used by the iMessage provider
+- `BLOOIO_FROM_NUMBER` — default Blooio sending number in E.164 format
+- `BLOOIO_WEBHOOK_SECRET` — verifies signed Blooio webhook deliveries
+- `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 allowlist while the agent is private
 - `OPENWEATHER_API_KEY` — required for weather and local-time tools
 - `QSTASH_CURRENT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
 - `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
@@ -233,7 +258,17 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 
 The `secret_token` must match `TELEGRAM_WEBHOOK_SECRET_TOKEN` in Vercel.
 
-### 5. Configure QStash schedules, if World Cup polling is enabled
+### 5. Configure Blooio webhook
+
+Point the Blooio signed webhook at:
+
+```txt
+POST https://<agent-domain>/webhooks/imessage
+```
+
+The webhook secret must match `BLOOIO_WEBHOOK_SECRET` in Vercel.
+
+### 6. Configure QStash schedules, if World Cup polling is enabled
 
 Use QStash schedules that call:
 

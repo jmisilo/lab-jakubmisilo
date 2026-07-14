@@ -37,7 +37,7 @@ describe('nutrition tools', () => {
   it('creates a meal estimate draft without claiming it was logged', async () => {
     mockNutritionService.createMealDraft.mockResolvedValue({
       meal: createMeal(),
-      created: true,
+      outcome: 'created',
     });
 
     const result = await manageNutritionTool.execute!(
@@ -57,6 +57,66 @@ describe('nutrition tools', () => {
         ok: true,
         message: 'Meal estimate saved as a draft. It is not logged until the user confirms it.',
         meal: expect.objectContaining({ status: 'draft', calories: 500 }),
+      }),
+    );
+  });
+
+  it('reports an idempotent draft replay as still pending', async () => {
+    mockNutritionService.createMealDraft.mockResolvedValue({
+      meal: createMeal(),
+      outcome: 'existing_draft',
+    });
+
+    const result = await manageNutritionTool.execute!(
+      { action: 'propose_meal', estimate: createEstimate() },
+      createToolOptions(),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message: 'This meal estimate is already pending confirmation.',
+        meal: expect.objectContaining({ status: 'draft' }),
+      }),
+    );
+  });
+
+  it('does not present a confirmed replay as a new draft', async () => {
+    mockNutritionService.createMealDraft.mockResolvedValue({
+      meal: createMeal({ status: 'confirmed', confirmedAt: NOW }),
+      outcome: 'already_confirmed',
+    });
+
+    const result = await manageNutritionTool.execute!(
+      { action: 'propose_meal', estimate: createEstimate() },
+      createToolOptions(),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        message: 'This meal estimate was already logged.',
+        meal: expect.objectContaining({ status: 'confirmed' }),
+      }),
+    );
+  });
+
+  it('rejects a replay of a superseded draft', async () => {
+    mockNutritionService.createMealDraft.mockResolvedValue({
+      meal: createMeal({ status: 'deleted', deletedAt: NOW }),
+      outcome: 'stale_replay',
+    });
+
+    const result = await manageNutritionTool.execute!(
+      { action: 'propose_meal', estimate: createEstimate() },
+      createToolOptions(),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        message: 'This meal estimate is no longer pending and was not logged again.',
+        meal: expect.objectContaining({ status: 'deleted' }),
       }),
     );
   });
