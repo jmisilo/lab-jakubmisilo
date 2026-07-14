@@ -127,9 +127,28 @@ export const manageNutritionTool: ManageNutritionTool = tool({
           estimate: input.estimate,
         });
 
+        if (result.outcome === 'already_confirmed') {
+          return {
+            ok: true,
+            message: 'This meal estimate was already logged.',
+            meal: toToolMeal(result.meal),
+          };
+        }
+
+        if (result.outcome === 'stale_replay') {
+          return {
+            ok: false,
+            message: 'This meal estimate is no longer pending and was not logged again.',
+            meal: toToolMeal(result.meal),
+          };
+        }
+
         return {
           ok: true,
-          message: 'Meal estimate saved as a draft. It is not logged until the user confirms it.',
+          message:
+            result.outcome === 'existing_draft'
+              ? 'This meal estimate is already pending confirmation.'
+              : 'Meal estimate saved as a draft. It is not logged until the user confirms it.',
           meal: toToolMeal(result.meal),
         };
       }

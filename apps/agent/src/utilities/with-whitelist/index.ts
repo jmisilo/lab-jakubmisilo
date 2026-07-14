@@ -8,36 +8,60 @@ const TELEGRAM_ALLOWED_USER_IDS = new Set(
     .map((userId) => userId.trim())
     .filter(Boolean),
 );
+const IMESSAGE_ALLOWED_NUMBERS = new Set(
+  (process.env.IMESSAGE_ALLOWED_NUMBERS ?? '')
+    .split(',')
+    .map((phoneNumber) => phoneNumber.trim())
+    .filter(Boolean),
+);
 
 export const withWhitelist =
   <TEvent extends string>(
     event: TEvent,
-    handler: TelegramMessageHandlerWithEvent<TEvent>,
-  ): TelegramMessageHandler =>
+    handler: WhitelistedMessageHandlerWithEvent<TEvent>,
+  ): WhitelistedMessageHandler =>
   async (thread, message) => {
     if (
-      TELEGRAM_ALLOWED_USER_IDS.has(message.author.userId) ||
-      TELEGRAM_ALLOWED_USER_IDS.size === 0
+      thread.adapter.name === 'telegram' &&
+      TELEGRAM_ALLOWED_USER_IDS.size > 0 &&
+      !TELEGRAM_ALLOWED_USER_IDS.has(message.author.userId)
     ) {
-      await handler(thread, message, event);
-
+      logger.warn(
+        {
+          messageEvent: event,
+          threadId: thread.id,
+          messageId: message.id,
+          authorId: message.author.userId,
+          allowedUserCount: TELEGRAM_ALLOWED_USER_IDS.size,
+        },
+        '[TELEGRAM_AGENT]: message ignored because author is not allowlisted',
+      );
       return;
     }
 
-    logger.warn(
-      {
-        messageEvent: event,
-        threadId: thread.id,
-        messageId: message.id,
-        authorId: message.author.userId,
-        allowedUserCount: TELEGRAM_ALLOWED_USER_IDS.size,
-      },
-      '[TELEGRAM_AGENT]: message ignored because author is not allowlisted',
-    );
+    if (
+      thread.adapter.name === 'imessage' &&
+      IMESSAGE_ALLOWED_NUMBERS.size > 0 &&
+      !IMESSAGE_ALLOWED_NUMBERS.has(message.author.userId)
+    ) {
+      logger.warn(
+        {
+          messageEvent: event,
+          threadId: thread.id,
+          messageId: message.id,
+          authorId: message.author.userId,
+          allowedUserCount: IMESSAGE_ALLOWED_NUMBERS.size,
+        },
+        '[IMESSAGE_AGENT]: message ignored because author is not allowlisted',
+      );
+      return;
+    }
+
+    await handler(thread, message, event);
   };
 
-type TelegramMessageHandler = (thread: Thread, message: Message) => Promise<void>;
-type TelegramMessageHandlerWithEvent<TEvent extends string> = (
+type WhitelistedMessageHandler = (thread: Thread, message: Message) => Promise<void>;
+type WhitelistedMessageHandlerWithEvent<TEvent extends string> = (
   thread: Thread,
   message: Message,
   event: TEvent,

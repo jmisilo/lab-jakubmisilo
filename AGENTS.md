@@ -34,7 +34,7 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 - `apps/web` — Next.js site and AI widget UI.
 - `apps/api` — Hono API powering the web app.
-- `apps/agent` — Hono + Chat SDK Telegram agent with AI SDK tools, memory, weather, and World Cup notifications.
+- `apps/agent` — Hono + Chat SDK Telegram and iMessage agent with AI SDK tools, memory, weather, and World Cup notifications.
 - `packages/ai` — AI widget tools and UI message types.
 - `packages/schemas` — shared Zod schemas.
 - `packages/types` — shared inferred types.
@@ -81,6 +81,8 @@ Important agent env vars:
 - `DATABASE_URL` — Drizzle app tables and Chat SDK PostgreSQL state.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET_TOKEN`, `TELEGRAM_BOT_USERNAME` — Telegram adapter config.
 - `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated Telegram numeric user IDs allowed to use the bot. Leave unset to allow all users.
+- `BLOOIO_API_KEY`, `BLOOIO_FROM_NUMBER`, `BLOOIO_WEBHOOK_SECRET` — Blooio-backed iMessage adapter config.
+- `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent. Leave unset to allow all numbers.
 - `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — World Cup polling request verification.
 - `OPENWEATHER_API_KEY` — weather and local-time tools.
 
