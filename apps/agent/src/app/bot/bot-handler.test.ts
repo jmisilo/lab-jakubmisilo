@@ -60,7 +60,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.useFakeTimers();
 
   mockAgentMemoryService.recordMessage.mockResolvedValue(undefined);
   mockAgentMemoryService.buildContext.mockResolvedValue([{ role: 'user', content: 'Hello' }]);
@@ -70,10 +69,6 @@ beforeEach(() => {
   mockAgentMemoryService.compressShortTermMemory.mockResolvedValue(undefined);
   mockAgentKnowledgeService.extractImplicitKnowledge.mockResolvedValue(undefined);
   mockAgentService.generate.mockResolvedValue({ text: 'Hi there.' });
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 describe('BotHandler', () => {
@@ -106,7 +101,7 @@ describe('BotHandler', () => {
       messages: [{ role: 'user', content: 'Hello' }],
       attachments: undefined,
     });
-    expect(thread.startTyping).toHaveBeenCalled();
+    expect(thread.startTyping).toHaveBeenCalledTimes(1);
     expect(getFirstInvocationOrder(thread.startTyping as jest.Mock)).toBeLessThan(
       getFirstInvocationOrder(mockAgentMemoryService.recordMessage),
     );
