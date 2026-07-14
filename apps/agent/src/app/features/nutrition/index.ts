@@ -90,7 +90,7 @@ export class AgentNutritionService {
       });
     }
 
-    return { meal, created: result.created };
+    return { meal, outcome: result.outcome };
   }
 
   static async getStatus({
