@@ -101,10 +101,10 @@ describe('BotHandler', () => {
       messages: [{ role: 'user', content: 'Hello' }],
       attachments: undefined,
     });
-    expect(thread.startTyping).toHaveBeenCalledTimes(1);
-    expect(getFirstInvocationOrder(thread.startTyping as jest.Mock)).toBeLessThan(
-      getFirstInvocationOrder(mockAgentMemoryService.recordMessage),
+    expect((thread.adapter as unknown as { markRead: jest.Mock }).markRead).toHaveBeenCalledWith(
+      'thread-1',
     );
+    expect(thread.startTyping).toHaveBeenCalledTimes(1);
     expect(thread.post).toHaveBeenCalledWith({ markdown: 'Hi there.' });
     expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
     expect(mockAgentKnowledgeService.extractImplicitKnowledge).toHaveBeenCalledWith({
@@ -150,16 +150,6 @@ describe('BotHandler', () => {
   });
 });
 
-function getFirstInvocationOrder(mock: jest.Mock) {
-  const [order] = mock.mock.invocationCallOrder;
-
-  if (order === undefined) {
-    throw new Error('Expected mock to have been called.');
-  }
-
-  return order;
-}
-
 function createBot() {
   return {
     transcripts: {
@@ -172,6 +162,10 @@ function createBot() {
 function createThread() {
   return {
     id: 'thread-1',
+    adapter: {
+      name: 'imessage',
+      markRead: jest.fn().mockResolvedValue(undefined),
+    },
     post: jest.fn().mockResolvedValue(undefined),
     startTyping: jest.fn().mockResolvedValue(undefined),
   } as unknown as Thread & {

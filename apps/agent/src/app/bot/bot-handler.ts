@@ -1,8 +1,8 @@
 import type { UserFacingFailure } from '@/infrastructure/errors';
+import type { BlooioProvider } from '@imessage-sdk/blooio';
+import type { IMessageAdapter } from '@imessage-sdk/chat-adapter';
 import type { Chat, Message, Thread } from 'chat';
 
-import { BlooioProvider } from '@imessage-sdk/blooio';
-import { IMessageAdapter } from '@imessage-sdk/chat-adapter';
 import { waitUntil } from '@vercel/functions';
 
 import { AgentService } from '@/app/agent';
