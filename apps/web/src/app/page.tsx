@@ -6,8 +6,14 @@ import { ApiStatus } from './_components/api-status';
 
 const PROJECTS = [
   {
-    title: 'Telegram AI Agent',
-    headline: 'Personal AI agent with World Cup 2026 events tracking!',
+    title: 'iMessage SDK',
+    headline: "A provider-neutral TypeScript SDK for iMessage providers' APIs.",
+    href: 'https://imessage-sdk.dev',
+    tag: 'Powers the AI Agent!',
+  },
+  {
+    title: 'Personal AI Agent',
+    headline: 'Personal AI agent with calories tracking, gmail & calendar integration, and more.',
     href: 'https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/agent',
     tag: 'track the WC!',
   },
@@ -15,7 +21,6 @@ const PROJECTS = [
     title: 'Extendable AI Widget',
     headline: 'Extendable AI widget component',
     href: '/ai-widget',
-    tag: 'latest',
   },
   {
     title: 'CLIPxGPT Captioner',

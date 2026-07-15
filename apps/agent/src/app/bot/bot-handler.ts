@@ -77,7 +77,7 @@ export class BotHandler {
             sourceMessageId: message.id,
           });
 
-          await thread.post({ markdown: responseText });
+          await thread.post({ raw: responseText });
 
           await Promise.all([
             bot.transcripts.append(
@@ -196,7 +196,7 @@ export class BotHandler {
 
     try {
       await thread.post({
-        markdown: `${failure.message}${retryText}`,
+        raw: `${failure.message}${retryText}`,
       });
 
       logger.info(

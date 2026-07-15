@@ -41,7 +41,7 @@ export class WorldCupNotificationService {
       '[WORLD_CUP]: posting notification',
     );
     await this.#postAttachment({ event, thread, threadId });
-    await thread.post({ markdown: message });
+    await thread.post({ raw: message });
   }
 
   static async #postAttachment({
@@ -65,7 +65,7 @@ export class WorldCupNotificationService {
         '[WORLD_CUP]: posting notification attachment',
       );
 
-      await thread.post({ attachments: [attachment], markdown: '' });
+      await thread.post({ attachments: [attachment], raw: '' });
     } catch (error) {
       logger.error(
         { safeError: ErrorService.toSafeLog(error), eventKey: event.eventKey, threadId },

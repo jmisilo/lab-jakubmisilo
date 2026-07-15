@@ -1,11 +1,11 @@
 # @labjm/agent
 
-Custom AI agent. Provide Telegram bot credentials to deploy the agent and receive messages on Telegram.
+Custom AI agent, built to empower my daily productivity and personal knowledge management. It is an iMessage agent with memory, knowledge, scheduling, nutrition tracking, and Google integration, powered by my own [iMessage SDK](https://imessage-sdk.dev).
 
 ## Features
 
 - **Local TUI** — terminal chat UI for testing the agent locally
-- **Telegram bot** — webhook endpoint for direct messages, mentions, and subscribed threads
+- **iMessage bot** — Blooio-backed webhook endpoint for direct messages and subscribed threads
 - **Memory** — PostgreSQL-backed chat state and agent memory
 - **Knowledge** — hierarchical durable notes with hybrid retrieval and atomic corrections
 - **Scheduling** — one-time and recurring reminders delivered through QStash
@@ -82,9 +82,6 @@ cp .env.local.example .env.local
 Fill the provider and integration keys:
 
 - `OPENAI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET_TOKEN`
-- `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated Telegram numeric user IDs allowed to use the bot
 - `BLOOIO_API_KEY`
 - `BLOOIO_FROM_NUMBER`
 - `BLOOIO_WEBHOOK_SECRET`
@@ -121,12 +118,6 @@ Health check:
 curl http://localhost:2000/health
 ```
 
-Telegram webhook endpoint:
-
-```txt
-POST /webhooks/telegram
-```
-
 Blooio iMessage webhook endpoint:
 
 ```txt
@@ -143,14 +134,6 @@ IMESSAGE_ALLOWED_NUMBERS="+48123456789,+48987654321"
 ```
 
 Leave it empty to allow all iMessage numbers.
-
-To restrict bot usage during development, set `TELEGRAM_ALLOWED_USER_IDS`:
-
-```sh
-TELEGRAM_ALLOWED_USER_IDS="123456789,987654321"
-```
-
-Leave it empty to allow all Telegram users.
 
 World Cup polling endpoint, called by QStash schedules:
 
@@ -208,10 +191,6 @@ Required:
 
 - `DATABASE_URL` — Neon Postgres connection string
 - `OPENAI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET_TOKEN`
-- `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated allowlist while the agent is private
-- `TELEGRAM_BOT_USERNAME` — optional, defaults to `labjm_assistant_bot`
 - `BLOOIO_API_KEY` — Blooio API key used by the iMessage provider
 - `BLOOIO_FROM_NUMBER` — default Blooio sending number in E.164 format
 - `BLOOIO_WEBHOOK_SECRET` — verifies signed Blooio webhook deliveries
@@ -246,19 +225,7 @@ Manual CLI deployment:
 vercel --cwd apps/agent deploy --prod
 ```
 
-### 4. Configure Telegram webhook
-
-Point Telegram at the deployed agent URL:
-
-```sh
-curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
-  -d "url=https://<agent-domain>/webhooks/telegram" \
-  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET_TOKEN"
-```
-
-The `secret_token` must match `TELEGRAM_WEBHOOK_SECRET_TOKEN` in Vercel.
-
-### 5. Configure Blooio webhook
+### 4. Configure Blooio webhook
 
 Point the Blooio signed webhook at:
 
@@ -268,7 +235,7 @@ POST https://<agent-domain>/webhooks/imessage
 
 The webhook secret must match `BLOOIO_WEBHOOK_SECRET` in Vercel.
 
-### 6. Configure QStash schedules, if World Cup polling is enabled
+### 5. Configure QStash schedules, if World Cup polling is enabled
 
 Use QStash schedules that call:
 
@@ -309,6 +276,6 @@ Review every generated SQL file before committing it. CI migrates a fresh pgvect
 
 - [AI SDK](https://sdk.vercel.ai) — agent runtime and model calls
 - [AI SDK TUI](https://sdk.vercel.ai) — local terminal UI
-- [Chat SDK](https://www.npmjs.com/package/chat) — Telegram bot adapter and chat state
+- [Chat SDK](https://www.npmjs.com/package/chat) — iMessage adapter integration and chat state
 - [Hono](https://hono.dev) — webhook server
 - [Drizzle](https://orm.drizzle.team) — PostgreSQL schema and migrations

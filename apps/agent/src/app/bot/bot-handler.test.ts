@@ -105,7 +105,7 @@ describe('BotHandler', () => {
       'thread-1',
     );
     expect(thread.startTyping).toHaveBeenCalledTimes(1);
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Hi there.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Hi there.' });
     expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
     expect(mockAgentKnowledgeService.extractImplicitKnowledge).toHaveBeenCalledWith({
       identityId: 'identity-1',
@@ -140,13 +140,34 @@ describe('BotHandler', () => {
     });
 
     expect(thread.post).toHaveBeenCalledWith({
-      markdown: 'I hit a failure while handling that request. Please retry.',
+      raw: 'I hit a failure while handling that request. Please retry.',
     });
     expect(thread.post).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        markdown: expect.stringContaining('Error code:'),
+        raw: expect.stringContaining('Error code:'),
       }),
     );
+  });
+
+  it('preserves the boundary after a bare URL in raw iMessage text', async () => {
+    const bot = createBot();
+    const thread = createThread();
+    const message = createMessage();
+    const responseText = [
+      'https://agent.example.com/links/google/connect/request-token',
+      'It expires soon.',
+    ].join('\n\n');
+
+    mockAgentService.generate.mockResolvedValue({ text: responseText });
+    BotHandler.configure({ bot });
+
+    await BotHandler.respondToMessage({
+      event: 'direct_message',
+      thread,
+      message,
+    });
+
+    expect(thread.post).toHaveBeenCalledWith({ raw: responseText });
   });
 });
 

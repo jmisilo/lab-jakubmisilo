@@ -86,7 +86,7 @@ async function handleGoogleCallback(c: Context) {
   try {
     await bot.initialize();
     await bot.thread(result.threadId).post({
-      markdown: 'Google is connected. Calendar and Gmail access are available when granted.',
+      raw: 'Google is connected. Calendar and Gmail access are available when granted.',
     });
   } catch (notificationError) {
     logger.warn(
@@ -265,7 +265,7 @@ async function sendExpiredConnectionRecovery({
 
     await bot.initialize();
     await bot.thread(replacement.threadId).post({
-      markdown: [
+      raw: [
         'That Google connection link expired.',
         `Here is a fresh one: ${replacement.connectionUrl}`,
         `It expires at ${replacement.expiresAt.toISOString()}.`,

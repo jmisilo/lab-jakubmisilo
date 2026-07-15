@@ -34,7 +34,7 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 - `apps/web` — Next.js site and AI widget UI.
 - `apps/api` — Hono API powering the web app.
-- `apps/agent` — Hono + Chat SDK Telegram and iMessage agent with AI SDK tools, memory, weather, and World Cup notifications.
+- `apps/agent` — Hono + Chat SDK iMessage agent with AI SDK tools, memory, weather, and World Cup notifications.
 - `packages/ai` — AI widget tools and UI message types.
 - `packages/schemas` — shared Zod schemas.
 - `packages/types` — shared inferred types.
@@ -43,10 +43,10 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 ## Agent App
 
-The Telegram agent is in `apps/agent`.
+The agent is in `apps/agent`.
 
 - Webhook entrypoint: `apps/agent/src/index.ts`.
-- Chat SDK setup and Telegram handlers: `apps/agent/src/app/bot/index.ts`.
+- Chat SDK setup and handlers: `apps/agent/src/app/bot/index.ts`.
 - AI agent runtime and tool registration: `apps/agent/src/app/agent`.
 - Memory services and context assembly: `apps/agent/src/app/memory`.
 - Weather tools: `apps/agent/src/app/features/weather`.
@@ -54,16 +54,16 @@ The Telegram agent is in `apps/agent`.
 - Drizzle schema and DB services: `apps/agent/src/infrastructure/db`.
 - Google, OpenWeather, and World Cup provider clients: `apps/agent/src/infrastructure`.
 
-Keep external systems behind service boundaries. Do not call provider SDKs, Telegram APIs, or database tables directly from unrelated application code.
+Keep external systems behind service boundaries. Do not call provider SDKs or database tables directly from unrelated application code.
 
 ## Chat SDK Notes
 
 Chat SDK normalizes platform events into `Thread` and `Message`.
 
-- Gate incoming Telegram messages before side effects such as `thread.subscribe()`, transcript writes, memory writes, or model calls.
-- Use `message.author.userId` for Telegram allowlist checks and `message.userKey ?? message.author.userId` for the current memory identity convention.
-- Use `thread.post({ markdown })` for Telegram responses.
-- Keep webhook routes thin; place behavior in services where it can be tested without live Telegram.
+- Gate incoming iMessage messages before side effects such as `thread.subscribe()`, transcript writes, memory writes, or model calls.
+- Use `message.author.userId` for the iMessage allowlist check and `message.userKey ?? message.author.userId` for the current memory identity convention.
+- Use `thread.post({ raw })` for iMessage text. The iMessage adapter renders Markdown as plain text, and that conversion can collapse meaningful whitespace around bare URLs.
+- Keep webhook routes thin; place behavior in services where it can be tested without live iMessage or Blooio.
 - State tables owned by `@chat-adapter/state-pg` are excluded from Drizzle migrations. Do not add Drizzle ownership for `chat_state_*` tables.
 
 ## Environment
@@ -79,8 +79,6 @@ Important agent env vars:
 
 - `OPENAI_API_KEY` — AI SDK model and embedding calls.
 - `DATABASE_URL` — Drizzle app tables and Chat SDK PostgreSQL state.
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET_TOKEN`, `TELEGRAM_BOT_USERNAME` — Telegram adapter config.
-- `TELEGRAM_ALLOWED_USER_IDS` — optional comma-separated Telegram numeric user IDs allowed to use the bot. Leave unset to allow all users.
 - `BLOOIO_API_KEY`, `BLOOIO_FROM_NUMBER`, `BLOOIO_WEBHOOK_SECRET` — Blooio-backed iMessage adapter config.
 - `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent. Leave unset to allow all numbers.
 - `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — World Cup polling request verification.
@@ -97,7 +95,7 @@ Prefer tests around public module boundaries:
 - World Cup subscription matching through `WorldCupSubscriptionService`.
 - Memory context behavior through `AgentContextService` and `AgentMemoryService`.
 
-Mock external boundaries: OpenAI/AI SDK calls, Telegram/Chat SDK posting, OpenWeather, World Cup API, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
+Mock external boundaries: OpenAI/AI SDK calls, iMessage/Chat SDK posting, Blooio, OpenWeather, World Cup API, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
 
 ## Code Style
 

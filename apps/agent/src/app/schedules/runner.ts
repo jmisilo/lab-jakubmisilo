@@ -184,7 +184,7 @@ export class AgentScheduleRunner {
       deliveryTask = delivery.task;
       output = delivery.output;
 
-      await bot.thread(deliveryTask.threadId).post({ markdown: output });
+      await bot.thread(deliveryTask.threadId).post({ raw: output });
     } catch (error) {
       logger.error(
         {

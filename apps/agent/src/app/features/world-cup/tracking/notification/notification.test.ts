@@ -66,10 +66,10 @@ describe('WorldCupNotificationService', () => {
     expect(initializeMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenNthCalledWith(1, {
       attachments: [attachment],
-      markdown: '',
+      raw: '',
     });
     expect(postMock).toHaveBeenNthCalledWith(2, {
-      markdown: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
+      raw: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
     });
   });
 
@@ -85,7 +85,7 @@ describe('WorldCupNotificationService', () => {
 
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith({
-      markdown: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
+      raw: 'Kickoff: 🇫🇷 France vs 🇦🇷 Argentina has started.',
     });
   });
 });

@@ -27,10 +27,11 @@ pnpm add -g vercel
 
 ## Environment
 
-Create local API env files:
+Create local env files:
 
 ```sh
 cp apps/api/.env.local.example apps/api/.env.local
+cp apps/agent/.env.local.example apps/agent/.env.local
 ```
 
 Fill the provider keys if you want to use real AI calls locally.

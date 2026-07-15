@@ -164,7 +164,7 @@ describe('AgentScheduleRunner', () => {
     expect(generateInput.messages.at(-1)?.content).toContain(
       'Scheduled task allowed side effects: none.',
     );
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Tennis starts at 7pm.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Tennis starts at 7pm.' });
     expect(bot.transcripts.append).toHaveBeenCalledWith(
       thread,
       { role: 'assistant', text: 'Tennis starts at 7pm.' },
@@ -271,7 +271,7 @@ describe('AgentScheduleRunner', () => {
       revisedTask.prompt,
     );
     expect(thread.post).toHaveBeenCalledTimes(1);
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Bring a fresh grip to tennis.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Bring a fresh grip to tennis.' });
     expect(mockAgentScheduleDbService.markTaskRunSkipped).not.toHaveBeenCalled();
     expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -325,7 +325,7 @@ describe('AgentScheduleRunner', () => {
     expect(mockAgentService.generate.mock.calls[1][0]).toEqual(
       expect.objectContaining({ scheduledTaskSideEffects: ['calendar.create'] }),
     );
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Calendar event created.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Calendar event created.' });
     expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith(
       expect.objectContaining({
         task: revisedTask,
@@ -371,7 +371,7 @@ describe('AgentScheduleRunner', () => {
     expect(mockAgentService.generate).toHaveBeenCalledTimes(2);
     expect(mockAgentScheduleDbService.renewTaskRunLease).toHaveBeenCalledTimes(2);
     expect(thread.post).toHaveBeenCalledTimes(1);
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Output from the fenced revision.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Output from the fenced revision.' });
   });
 
   it('retries when task revisions keep changing during bounded regeneration', async () => {
@@ -570,7 +570,7 @@ describe('AgentScheduleRunner', () => {
       now: new Date('2026-07-06T17:00:30.000Z'),
     });
 
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time for tennis.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Time for tennis.' });
     expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith({
       task,
       runId: 'run-1',
@@ -913,7 +913,7 @@ describe('AgentScheduleRunner', () => {
       now: new Date('2026-07-06T16:59:45.000Z'),
     });
 
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Check your email.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Check your email.' });
     expect(result).toEqual({
       taskId: 'task-1',
       status: 'sent',
@@ -1002,7 +1002,7 @@ describe('AgentScheduleRunner', () => {
     });
 
     expect(thread.post).toHaveBeenCalledTimes(1);
-    expect(thread.post).toHaveBeenCalledWith({ markdown: 'Time to walk the dog.' });
+    expect(thread.post).toHaveBeenCalledWith({ raw: 'Time to walk the dog.' });
     expect(mockAgentScheduleDbService.finishSuccessfulTaskRun).toHaveBeenCalledWith({
       task,
       runId: 'run-1',
