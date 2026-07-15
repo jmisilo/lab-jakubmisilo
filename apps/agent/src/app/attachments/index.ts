@@ -1,6 +1,7 @@
 import type { FilePart, ModelMessage } from 'ai';
 import type { Attachment } from 'chat';
 
+import decodeHeic from 'heic-decode';
 import sharp from 'sharp';
 
 import { AppError, AppErrorCode } from '@/infrastructure/errors';
@@ -9,6 +10,7 @@ const MAX_ATTACHMENT_COUNT = 3;
 const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1_536;
 const MAX_INPUT_PIXELS = 40_000_000;
+const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1']);
 const SUPPORTED_IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
 export class AgentAttachmentService {
@@ -108,14 +110,24 @@ export class AgentAttachmentService {
 
   static async #normalizeImage({ attachment, data, index }: NormalizeImageInput) {
     try {
-      const pipeline = sharp(data, {
+      const decodedHeic = this.#isHeic(data) ? await this.#decodeHeic(data) : null;
+      const pipeline = sharp(decodedHeic?.data ?? data, {
         failOn: 'error',
         limitInputPixels: MAX_INPUT_PIXELS,
+        ...(decodedHeic
+          ? {
+              raw: {
+                width: decodedHeic.width,
+                height: decodedHeic.height,
+                channels: 4 as const,
+              },
+            }
+          : {}),
         sequentialRead: true,
       });
       const metadata = await pipeline.metadata();
 
-      if (!metadata.format || !SUPPORTED_IMAGE_FORMATS.has(metadata.format)) {
+      if (!decodedHeic && (!metadata.format || !SUPPORTED_IMAGE_FORMATS.has(metadata.format))) {
         throw this.#unsupportedAttachmentError(attachment, metadata.format);
       }
 
@@ -127,6 +139,7 @@ export class AgentAttachmentService {
           fit: 'inside',
           withoutEnlargement: true,
         })
+        .toColourspace('srgb')
         .flatten({ background: '#ffffff' })
         .jpeg({ quality: 85 })
         .toBuffer();
@@ -152,9 +165,79 @@ export class AgentAttachmentService {
           size: data.byteLength,
         },
         retryable: false,
-        userMessage: 'Please send a valid JPEG, PNG, or WebP image.',
+        userMessage: 'Please send a valid JPEG, PNG, WebP, HEIC, or HEIF image.',
       });
     }
+  }
+
+  static async #decodeHeic(data: Buffer) {
+    const images = (await decodeHeic.all({ buffer: data })) as HeicImageCollection;
+
+    try {
+      const image = images[0];
+
+      if (!image) {
+        throw new Error('HEIC attachment does not contain an image.');
+      }
+
+      this.#assertImageDimensions({ width: image.width, height: image.height });
+
+      const decoded = await image.decode();
+      const expectedBytes = decoded.width * decoded.height * 4;
+
+      if (
+        decoded.width !== image.width ||
+        decoded.height !== image.height ||
+        decoded.data.byteLength !== expectedBytes
+      ) {
+        throw new Error('HEIC attachment decoded to an unexpected pixel buffer.');
+      }
+
+      return {
+        data: Buffer.from(decoded.data),
+        width: decoded.width,
+        height: decoded.height,
+      };
+    } finally {
+      images.dispose();
+    }
+  }
+
+  static #assertImageDimensions({ width, height }: { width: number; height: number }) {
+    const validDimensions =
+      Number.isSafeInteger(width) && Number.isSafeInteger(height) && width > 0 && height > 0;
+    const pixelCount = width * height;
+
+    if (!validDimensions || !Number.isSafeInteger(pixelCount)) {
+      throw new Error('HEIC attachment reported invalid image dimensions.');
+    }
+
+    if (pixelCount > MAX_INPUT_PIXELS) {
+      throw new AppError({
+        code: AppErrorCode.BOT_ATTACHMENT_TOO_LARGE,
+        message: 'Incoming attachment exceeds the decoded pixel limit.',
+        context: { width, height, pixelCount, maxInputPixels: MAX_INPUT_PIXELS },
+        retryable: false,
+        userMessage: 'That image has too many pixels. Please send a smaller version.',
+      });
+    }
+  }
+
+  static #isHeic(data: Buffer) {
+    if (data.byteLength < 12 || data.toString('ascii', 4, 8) !== 'ftyp') {
+      return false;
+    }
+
+    const declaredBoxSize = data.readUInt32BE(0);
+    const boxEnd =
+      declaredBoxSize === 0 ? data.byteLength : Math.min(declaredBoxSize, data.byteLength);
+    const brands = [data.toString('ascii', 8, 12)];
+
+    for (let offset = 16; offset + 4 <= boxEnd; offset += 4) {
+      brands.push(data.toString('ascii', offset, offset + 4));
+    }
+
+    return brands.some((brand) => HEIC_BRANDS.has(brand));
   }
 
   static async #readAttachmentData(attachment: Attachment) {
@@ -210,7 +293,7 @@ export class AgentAttachmentService {
         detectedFormat,
       },
       retryable: false,
-      userMessage: 'Please send a JPEG, PNG, or WebP image.',
+      userMessage: 'Please send a JPEG, PNG, WebP, HEIC, or HEIF image.',
     });
   }
 
@@ -241,4 +324,20 @@ type PrepareAttachmentInput = {
 
 type NormalizeImageInput = PrepareAttachmentInput & {
   data: Buffer;
+};
+
+type HeicDecodedImage = {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
+
+type HeicImageReference = {
+  width: number;
+  height: number;
+  decode(): Promise<HeicDecodedImage>;
+};
+
+type HeicImageCollection = HeicImageReference[] & {
+  dispose(): void;
 };

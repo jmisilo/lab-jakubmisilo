@@ -51,7 +51,7 @@ Core modules:
 - `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
 - `src/infrastructure/*` wraps provider HTTP clients, DB, QStash, logging, and app errors.
 
-Incoming attachments are ephemeral. The agent accepts up to three files per message, with a 7 MB limit per file. JPEG, PNG, and WebP images are limited to 40 decoded megapixels, resized within 1536x1536, and stripped of metadata. PDFs, videos, and other files are passed through as current-turn model file inputs. Original attachment bytes are not persisted by the application.
+Incoming attachments are ephemeral. The agent accepts up to three files per message, with a 7 MB limit per file. JPEG, PNG, WebP, HEIC, and HEIF images are limited to 40 decoded megapixels, normalized to JPEG within 1536x1536, and stripped of metadata. PDFs, videos, and other files are passed through as current-turn model file inputs. Original attachment bytes are not persisted by the application.
 
 Nutrition estimates follow `photo/text -> draft -> explicit confirmation -> daily totals`. PostgreSQL is the source of truth for goals and confirmed meals; conversational memory is not used as the nutrition ledger. Corrections replace the structured meal estimate, and deletion is soft so totals remain auditable.
 

@@ -4,6 +4,11 @@ import sharp from 'sharp';
 
 import { AgentAttachmentService } from '@/app/attachments';
 
+const IPHONE_HEIC_FIXTURE = Buffer.from(
+  'AAAAJGZ0eXBoZWljAAAAAG1pZjFNaVBybWlhZk1pSEJoZWljAAABxG1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAHBpY3QAAAAAAAAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAAADnBpdG0AAAAAAAEAAAA4aWluZgAAAAAAAgAAABVpbmZlAgAAAAABAABodmMxAAAAABVpbmZlAgAAAQACAABFeGlmAAAAABppcmVmAAAAAAAAAA5jZHNjAAIAAQABAAAA52lwcnAAAADGaXBjbwAAABNjb2xybmNseAACAAIABoAAAAAMY2xsaQDLAEAAAAAUaXNwZQAAAAAAAAAEAAAAAgAAAAlpcm90AAAAABBwaXhpAAAAAAMICAgAAAByaHZjQwEDcAAAALAAAAAAAB7wAPz9+PgAAAsDoAABABdAAQwB//8DcAAAAwCwAAADAAADAB5wJKEAAQAkQgEBA3AAAAMAsAAAAwAAAwAeoBQgQcCfBBiHuRZVNwICBgCAogABAAlEAcBhcshEU2QAAAAZaXBtYQAAAAAAAAABAAEGgQIDBYaEAAAALGlsb2MAAAAARAAAAgABAAAAAQAAAnoAAABEAAIAAAABAAAB+AAAAIIAAAABbWRhdAAAAAAAAADWAAAABkV4aWYAAE1NACoAAAAIAAQBGgAFAAAAAQAAAD4BGwAFAAAAAQAAAEYBKAADAAAAAQACAACHaQAEAAAAAQAAAE4AAAAAAAAASAAAAAEAAABIAAAAAQADoAEAAwAAAAEAAQAAoAIABAAAAAEAAAAEoAMABAAAAAEAAAACAAAAAAAAAEAoAa+jVQ4ZMvklqjq8XSMboNgIs8B6N6tk97WWsWZxUU+ldGuP//IiX1G+NzGE+YQ3Vdj//pzROJWAhIDW2YDg',
+  'base64',
+);
+
 describe('AgentAttachmentService', () => {
   it('returns the original messages when no attachment is present', async () => {
     const messages = [{ role: 'user' as const, content: 'What is this?' }];
@@ -99,6 +104,75 @@ describe('AgentAttachmentService', () => {
     });
 
     expect(fetchData).toHaveBeenCalledTimes(1);
+  });
+
+  it('decodes an iPhone HEIC image and normalizes it to JPEG', async () => {
+    const result = await AgentAttachmentService.addToLatestUserMessage({
+      messages: [{ role: 'user', content: 'What is in this photo?' }],
+      attachments: [
+        createAttachment({
+          data: IPHONE_HEIC_FIXTURE,
+          name: 'IMG_0001.HEIC',
+          mimeType: 'image/heic',
+        }),
+      ],
+    });
+    const content = result.at(-1)?.content;
+
+    if (!Array.isArray(content)) {
+      throw new Error('Expected multipart user content.');
+    }
+
+    const file = content.find((part) => part.type === 'file');
+
+    if (
+      !file ||
+      file.type !== 'file' ||
+      typeof file.data !== 'object' ||
+      file.data === null ||
+      !('type' in file.data) ||
+      file.data.type !== 'data' ||
+      !Buffer.isBuffer(file.data.data)
+    ) {
+      throw new Error('Expected normalized inline file data.');
+    }
+
+    const metadata = await sharp(file.data.data).metadata();
+
+    expect(file).toMatchObject({
+      filename: 'image-1.jpg',
+      mediaType: 'image/jpeg',
+    });
+    expect(metadata).toMatchObject({
+      format: 'jpeg',
+      width: 4,
+      height: 2,
+    });
+    expect(metadata.exif).toBeUndefined();
+  });
+
+  it('rejects a truncated HEIC image with a stable attachment error', async () => {
+    const decoderLog = jest.spyOn(console, 'log').mockImplementation();
+
+    try {
+      await expect(
+        AgentAttachmentService.addToLatestUserMessage({
+          messages: [{ role: 'user', content: 'Photo' }],
+          attachments: [
+            createAttachment({
+              data: IPHONE_HEIC_FIXTURE.subarray(0, 64),
+              name: 'broken.heic',
+              mimeType: 'image/heic',
+            }),
+          ],
+        }),
+      ).rejects.toMatchObject({
+        code: 'BOT_ATTACHMENT_UNSUPPORTED',
+        userMessage: 'Please send a valid JPEG, PNG, WebP, HEIC, or HEIF image.',
+      });
+    } finally {
+      decoderLog.mockRestore();
+    }
   });
 
   it('passes PDFs and videos as generic current-turn file parts', async () => {
