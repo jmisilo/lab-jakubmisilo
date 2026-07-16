@@ -1,15 +1,29 @@
 import type { AgentSkillSummary } from '@/app/skills/types';
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, SystemModelMessage } from 'ai';
 
 import { createHash } from 'node:crypto';
 
 import dedent from 'dedent';
 
 const PROMPT_CACHE_VERSION = 'agent-prompt:v1';
+const ROLLING_PROMPT_CACHE_BOUNDARY_COUNT = 2;
+const OPENAI_EXPLICIT_CACHE_BREAKPOINT = {
+  openai: {
+    promptCacheBreakpoint: { mode: 'explicit' as const },
+  },
+};
 
 export class AgentPromptService {
   static buildSystemPrompt({ skills }: AgentPromptContext) {
     return this.#buildStaticPrompt({ skills });
+  }
+
+  static buildCacheableSystemInstructions({ skills }: AgentPromptContext): SystemModelMessage {
+    return {
+      role: 'system',
+      content: this.#buildStaticPrompt({ skills }),
+      providerOptions: OPENAI_EXPLICIT_CACHE_BREAKPOINT,
+    };
   }
 
   static buildPromptCacheKey({ identityId, tools, skills }: AgentPromptCacheKeyContext) {
@@ -58,7 +72,58 @@ export class AgentPromptService {
       return [runtimeMessage];
     }
 
-    return [...messages.slice(0, -1), runtimeMessage, latestMessage];
+    return [
+      ...this.#markRecentCompletedUserTurnsForCaching(messages.slice(0, -1)),
+      runtimeMessage,
+      latestMessage,
+    ];
+  }
+
+  static #markRecentCompletedUserTurnsForCaching(messages: ModelMessage[]) {
+    const cacheBoundaryIndexes = new Set<number>();
+    let assistantSeen = false;
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+
+      if (message?.role === 'assistant') {
+        assistantSeen = true;
+        continue;
+      }
+
+      if (assistantSeen && message?.role === 'user' && typeof message.content === 'string') {
+        cacheBoundaryIndexes.add(index);
+
+        if (cacheBoundaryIndexes.size === ROLLING_PROMPT_CACHE_BOUNDARY_COUNT) {
+          break;
+        }
+      }
+    }
+
+    if (cacheBoundaryIndexes.size === 0) {
+      return messages;
+    }
+
+    return messages.map((message, index): ModelMessage => {
+      if (
+        !cacheBoundaryIndexes.has(index) ||
+        message.role !== 'user' ||
+        typeof message.content !== 'string'
+      ) {
+        return message;
+      }
+
+      return {
+        ...message,
+        content: [
+          {
+            type: 'text',
+            text: message.content,
+            providerOptions: OPENAI_EXPLICIT_CACHE_BREAKPOINT,
+          },
+        ],
+      };
+    });
   }
 
   static #buildStaticPrompt({ skills }: { skills: readonly AgentSkillSummary[] }) {

@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import { Hono } from 'hono';
 
 import { bot } from '@/app/bot';
@@ -8,6 +9,7 @@ import {
 } from '@/app/schedules/schemas';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { AgentObservabilityService } from '@/infrastructure/observability';
 import { QStashService } from '@/infrastructure/qstash';
 
 export const ScheduleRouter = new Hono()
@@ -58,6 +60,8 @@ export const ScheduleRouter = new Hono()
       );
 
       return c.json({ ok: false, error: 'Schedule runner failed' }, 500);
+    } finally {
+      waitUntil(AgentObservabilityService.flush());
     }
   })
   .post('/jobs/schedules/failure', async (c) => {

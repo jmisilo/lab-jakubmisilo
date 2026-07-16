@@ -12,27 +12,30 @@ import { agentTools } from '@/app/agent/tools';
 import { SkillService } from '@/app/skills';
 import { ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { AgentObservabilityService } from '@/infrastructure/observability';
 
 const AgentRuntimeContextSchema = z.object({
   identityId: z.string().min(1),
   threadId: z.string().min(1).optional(),
   sourceMessageId: z.string().optional(),
   mode: z.enum(['chat', 'scheduled_task']).optional(),
+  correlationId: z.uuid().optional(),
   timeZone: z.string().min(1).optional(),
   scheduledTaskSideEffects: z.array(z.enum(['calendar.create'])).optional(),
 });
 
 const UNAVAILABLE_TOOL_CONTEXT = 'tool-context-unavailable';
 const DEFAULT_USER_TIME_ZONE = 'Europe/Warsaw';
-const PROMPT_CACHE_RETENTION = '24h';
+const AGENT_MODEL = 'gpt-5.6-luna' satisfies Parameters<typeof openai>[0];
+const PROMPT_CACHE_MINIMUM_TTL = '30m';
 
 export class AgentService {
-  static #model: Parameters<typeof openai>[0] = 'gpt-5.6-luna';
+  static #model: Parameters<typeof openai>[0] = AGENT_MODEL;
 
   static readonly agent = new ToolLoopAgent({
     model: openai(this.#model),
     reasoning: 'high',
-    instructions: AgentPromptService.buildSystemPrompt({
+    instructions: AgentPromptService.buildCacheableSystemInstructions({
       skills: SkillService.listSkills(),
     }),
     allowSystemInMessages: true,
@@ -93,12 +96,21 @@ export class AgentService {
 
       return {
         ...input,
-        instructions: AgentPromptService.buildSystemPrompt({
+        instructions: AgentPromptService.buildCacheableSystemInstructions({
           skills,
         }),
         allowSystemInMessages: true,
         activeTools,
         toolOrder: activeTools,
+        telemetry:
+          options?.identityId && options.correlationId
+            ? AgentObservabilityService.createAgentTelemetry({
+                identityId: options.identityId,
+                threadId: options.threadId,
+                mode: options.mode ?? 'chat',
+                correlationId: options.correlationId,
+              })
+            : { isEnabled: false },
         providerOptions: {
           openai: {
             promptCacheKey: AgentPromptService.buildPromptCacheKey({
@@ -106,7 +118,10 @@ export class AgentService {
               tools: activeTools,
               skills,
             }),
-            promptCacheRetention: PROMPT_CACHE_RETENTION,
+            promptCacheOptions: {
+              mode: 'explicit',
+              ttl: PROMPT_CACHE_MINIMUM_TTL,
+            },
             passThroughUnsupportedFiles: true,
           } satisfies OpenAILanguageModelResponsesOptions,
         },
@@ -199,6 +214,8 @@ export class AgentService {
     timeZone?: string;
     scheduledTaskSideEffects?: AgentRuntimeContext['scheduledTaskSideEffects'];
   }) {
+    const correlationId = AgentObservabilityService.createCorrelationId();
+
     try {
       const runtimeClock = this.#getRuntimeClock({
         timeZone: timeZone ?? DEFAULT_USER_TIME_ZONE,
@@ -210,6 +227,7 @@ export class AgentService {
           threadId,
           sourceMessageId,
           mode,
+          correlationId,
           timeZone: runtimeClock.timeZone,
           scheduledTaskSideEffects,
         },
@@ -221,6 +239,7 @@ export class AgentService {
           threadId,
           sourceMessageId,
           mode,
+          correlationId,
           model: this.#model,
           finishReason: result.finishReason,
           stepCount: result.steps.length,
@@ -242,6 +261,7 @@ export class AgentService {
           threadId,
           sourceMessageId,
           mode,
+          correlationId,
           model: this.#model,
           safeError: ErrorService.toSafeLog(error),
         },

@@ -15,6 +15,9 @@ const mockAgentMemoryService = {
 const mockAgentKnowledgeService = {
   extractImplicitKnowledge: jest.fn(),
 };
+const mockAgentObservabilityService = {
+  flush: jest.fn(),
+};
 const mockLogger = {
   info: jest.fn(),
   debug: jest.fn(),
@@ -48,11 +51,16 @@ jest.mock('@/app/memory/context', () => ({
   },
 }));
 
+jest.mock('@/infrastructure/observability', () => ({
+  AgentObservabilityService: mockAgentObservabilityService,
+}));
+
 jest.mock('@/infrastructure/logger', () => ({
   logger: mockLogger,
 }));
 
 let BotHandler: typeof import('./bot-handler').BotHandler;
+let observabilityFlushPromise: Promise<void>;
 
 beforeAll(async () => {
   ({ BotHandler } = await import('./bot-handler'));
@@ -69,6 +77,8 @@ beforeEach(() => {
   mockAgentMemoryService.compressShortTermMemory.mockResolvedValue(undefined);
   mockAgentKnowledgeService.extractImplicitKnowledge.mockResolvedValue(undefined);
   mockAgentService.generate.mockResolvedValue({ text: 'Hi there.' });
+  observabilityFlushPromise = Promise.resolve();
+  mockAgentObservabilityService.flush.mockReturnValue(observabilityFlushPromise);
 });
 
 describe('BotHandler', () => {
@@ -106,7 +116,7 @@ describe('BotHandler', () => {
     );
     expect(thread.startTyping).toHaveBeenCalledTimes(1);
     expect(thread.post).toHaveBeenCalledWith({ raw: 'Hi there.' });
-    expect(mockWaitUntil).toHaveBeenCalledWith(expect.any(Promise));
+    expect(mockWaitUntil).toHaveBeenCalledWith(observabilityFlushPromise);
     expect(mockAgentKnowledgeService.extractImplicitKnowledge).toHaveBeenCalledWith({
       identityId: 'identity-1',
       threadId: 'thread-1',
@@ -147,6 +157,7 @@ describe('BotHandler', () => {
         raw: expect.stringContaining('Error code:'),
       }),
     );
+    expect(mockWaitUntil).toHaveBeenCalledWith(observabilityFlushPromise);
   });
 
   it('preserves the boundary after a bare URL in raw iMessage text', async () => {

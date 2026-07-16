@@ -11,6 +11,7 @@ Custom AI agent, built to empower my daily productivity and personal knowledge m
 - **Scheduling** — one-time and recurring reminders delivered through QStash
 - **Google integration** — Calendar management and strictly read-only Gmail access through one OAuth connection
 - **Nutrition tracking** — photo/text meal estimates, explicit confirmation, and daily calorie/macro progress
+- **Observability** — Vercel/Pino infrastructure logs and configurable LangSmith agent traces
 
 ## How The Agent Works
 
@@ -49,6 +50,7 @@ Core modules:
 - `src/app/knowledge` owns durable tree notes, retrieval, and implicit ingestion.
 - `src/app/features/nutrition` owns calorie goals, meal estimation workflows, and daily totals.
 - `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
+- `src/infrastructure/observability` owns LangSmith tracing, retention controls, and correlation metadata.
 - `src/infrastructure/*` wraps provider HTTP clients, DB, QStash, logging, and app errors.
 
 Incoming attachments are ephemeral. The agent accepts up to three files per message, with a 7 MB limit per file. JPEG, PNG, WebP, HEIC, and HEIF images are limited to 40 decoded megapixels, normalized to JPEG within 1536x1536, and stripped of metadata. PDFs, videos, and other files are passed through as current-turn model file inputs. Original attachment bytes are not persisted by the application.
@@ -89,6 +91,23 @@ Fill the provider and integration keys:
 - `DATABASE_URL`
 - `QSTASH_CURRENT_SIGNING_KEY`
 - `QSTASH_NEXT_SIGNING_KEY`
+
+LangSmith tracing is optional and disabled locally by default. To enable tracing, set
+`LANGSMITH_TRACING=true`, provide `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, and a base64-encoded
+32-byte `AGENT_OBSERVABILITY_HASH_KEY`. These privacy controls default to metadata-only tracing:
+
+```sh
+LANGSMITH_ENDPOINT="https://eu.api.smith.langchain.com"
+LANGSMITH_HIDE_INPUTS="true"
+LANGSMITH_HIDE_OUTPUTS="true"
+LANGSMITH_TRACING_SAMPLING_RATE="1"
+```
+
+Generate the observability hash key with `openssl rand -base64 32`. LangSmith receives
+pseudonymized identities, correlation and runtime metadata, model/tool timing, token usage, and
+safe outcomes. Set either hide variable to `false` only when you deliberately want LangSmith to
+retain that category of prompts, model outputs, tool inputs, or tool results.
+Set `LANGSMITH_WORKSPACE_ID` as well when the LangSmith API key is organization-scoped.
 
 ## Development
 
@@ -211,6 +230,20 @@ Generate the Google token encryption key with:
 openssl rand -base64 32
 ```
 
+Optional LangSmith observability should use separate configuration for each environment:
+
+- **Development** — tracing stays off locally unless explicitly enabled; use a development project,
+  service key, and hash key when needed.
+- **Staging** — configure the Vercel Preview scope with a staging project, service key, and hash key.
+- **Production** — configure the Vercel Production scope with a production project, service key,
+  and hash key.
+
+Set `LANGSMITH_HIDE_INPUTS=true`, and `LANGSMITH_HIDE_OUTPUTS=true` in environments where traces
+must remain metadata-only. Do not reuse
+`AGENT_OBSERVABILITY_HASH_KEY` between environments; changing it also changes the pseudonymous
+identity values used to correlate traces. `LANGSMITH_TRACING_SAMPLING_RATE` accepts a value from
+`0` to `1` and can be reduced later if trace volume grows.
+
 Enable both Google Calendar API and Gmail API in the same Google Cloud project. Configure the OAuth consent screen with the Calendar scopes used by the app and `https://www.googleapis.com/auth/gmail.readonly`. Use publishing status `In production` for durable refresh tokens; a personal unverified app will still show Google's warning screen.
 
 Add the optional env vars the same way when those integrations are enabled.
@@ -279,3 +312,4 @@ Review every generated SQL file before committing it. CI migrates a fresh pgvect
 - [Chat SDK](https://www.npmjs.com/package/chat) — iMessage adapter integration and chat state
 - [Hono](https://hono.dev) — webhook server
 - [Drizzle](https://orm.drizzle.team) — PostgreSQL schema and migrations
+- [LangSmith](https://www.langchain.com/langsmith/observability) — agent observability

@@ -2,9 +2,20 @@ import { createHash, createHmac } from 'node:crypto';
 
 import { AgentScheduleRunner } from '@/app/schedules/runner';
 
-import { ScheduleRouter } from './router';
+const mockWaitUntil = jest.fn();
+const mockAgentObservabilityService = {
+  flush: jest.fn(),
+};
+
+jest.mock('@vercel/functions', () => ({
+  waitUntil: mockWaitUntil,
+}));
 
 jest.mock('@/app/bot', () => ({ bot: {} }));
+
+jest.mock('@/infrastructure/observability', () => ({
+  AgentObservabilityService: mockAgentObservabilityService,
+}));
 
 jest.mock('@/app/schedules/runner', () => ({
   AgentScheduleRunner: {
@@ -14,9 +25,15 @@ jest.mock('@/app/schedules/runner', () => ({
 }));
 
 const runnerMock = jest.mocked(AgentScheduleRunner);
+let ScheduleRouter: typeof import('./router').ScheduleRouter;
+
+beforeAll(async () => {
+  ({ ScheduleRouter } = await import('./router'));
+});
 
 describe('ScheduleRouter', () => {
   const originalEnv = process.env;
+  let observabilityFlushPromise: Promise<void>;
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -25,6 +42,8 @@ describe('ScheduleRouter', () => {
       QSTASH_CURRENT_SIGNING_KEY: 'current-signing-key',
       QSTASH_NEXT_SIGNING_KEY: 'next-signing-key',
     };
+    observabilityFlushPromise = Promise.resolve();
+    mockAgentObservabilityService.flush.mockReturnValue(observabilityFlushPromise);
   });
 
   afterAll(() => {
@@ -62,6 +81,34 @@ describe('ScheduleRouter', () => {
       scheduledFor: new Date('2026-07-11T09:30:00.000Z'),
       triggerVersion: 'trigger-version-1',
     });
+    expect(mockWaitUntil).toHaveBeenCalledWith(observabilityFlushPromise);
+  });
+
+  it('flushes pending traces when verified schedule execution fails', async () => {
+    runnerMock.executeTask.mockRejectedValue(new Error('runner failed'));
+    const url = 'https://agent.example.com/jobs/schedules/execute';
+    const body = JSON.stringify({
+      taskId: 'task-1',
+      scheduleKind: 'one_time',
+      scheduledFor: '2026-07-11T09:30:00.000Z',
+      triggerVersion: 'trigger-version-1',
+    });
+
+    const response = await ScheduleRouter.request(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'upstash-signature': createQStashSignature({
+          body,
+          signingKey: 'current-signing-key',
+          url,
+        }),
+      },
+      body,
+    });
+
+    expect(response.status).toBe(500);
+    expect(mockWaitUntil).toHaveBeenCalledWith(observabilityFlushPromise);
   });
 
   it('delegates a verified failure callback to the schedule runner', async () => {
@@ -113,6 +160,8 @@ describe('ScheduleRouter', () => {
         sourceMessageId: 'message-1',
       },
     });
+    expect(mockAgentObservabilityService.flush).not.toHaveBeenCalled();
+    expect(mockWaitUntil).not.toHaveBeenCalled();
   });
 
   it('rejects an unsigned execution request before running the task', async () => {
@@ -128,6 +177,8 @@ describe('ScheduleRouter', () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ ok: false, error: 'Unauthorized' });
     expect(runnerMock.executeTask).not.toHaveBeenCalled();
+    expect(mockAgentObservabilityService.flush).not.toHaveBeenCalled();
+    expect(mockWaitUntil).not.toHaveBeenCalled();
   });
 
   it('reports missing QStash configuration before running the task', async () => {

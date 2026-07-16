@@ -149,6 +149,22 @@ describe('AgentPromptService', () => {
     ).not.toBe(AgentPromptService.buildPromptCacheKey(context));
   });
 
+  it('marks static system instructions as an explicit cache boundary', () => {
+    const instructions = AgentPromptService.buildCacheableSystemInstructions({ skills: [] });
+
+    expect(instructions).toEqual(
+      expect.objectContaining({
+        role: 'system',
+        content: expect.stringContaining('# Identity'),
+        providerOptions: {
+          openai: {
+            promptCacheBreakpoint: { mode: 'explicit' },
+          },
+        },
+      }),
+    );
+  });
+
   it('builds a fresh runtime context message for relative time handling', () => {
     const runtimeClock = {
       currentDate: '2026-07-07',
@@ -167,7 +183,7 @@ describe('AgentPromptService', () => {
     expect(message.content).toContain('prefer this message and the latest user message');
   });
 
-  it('places fresh runtime context immediately before the latest message', () => {
+  it('caches completed conversation before current-turn memory, runtime, and latest input', () => {
     const latestMessage = {
       role: 'user' as const,
       content: 'Remind me in 15 minutes.',
@@ -182,6 +198,10 @@ describe('AgentPromptService', () => {
           role: 'assistant',
           content: 'Earlier response.',
         },
+        {
+          role: 'user',
+          content: 'Current retrieved memory context.',
+        },
         latestMessage,
       ],
       runtimeClock: {
@@ -194,9 +214,65 @@ describe('AgentPromptService', () => {
       },
     });
 
-    expect(messages).toHaveLength(4);
+    expect(messages).toHaveLength(5);
+    expect(messages[0]).toEqual({
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: 'Earlier message.',
+          providerOptions: {
+            openai: {
+              promptCacheBreakpoint: { mode: 'explicit' },
+            },
+          },
+        },
+      ],
+    });
+    expect(messages[1]).toEqual({ role: 'assistant', content: 'Earlier response.' });
+    expect(messages[2]).toEqual({
+      role: 'user',
+      content: 'Current retrieved memory context.',
+    });
     expect(messages.at(-2)?.role).toBe('system');
     expect(messages.at(-2)?.content).toContain('# Current Runtime Context');
     expect(messages.at(-1)).toBe(latestMessage);
+  });
+
+  it('retains the previous rolling breakpoint while extending the cache', () => {
+    const messages = AgentPromptService.buildMessagesWithRuntimeContext({
+      messages: [
+        { role: 'user', content: 'First completed question.' },
+        { role: 'assistant', content: 'First completed answer.' },
+        { role: 'user', content: 'Second completed question.' },
+        { role: 'assistant', content: 'Second completed answer.' },
+        { role: 'user', content: 'Latest question.' },
+      ],
+      runtimeClock: {
+        currentDate: '2026-07-07',
+        currentDateTime: '2026-07-07 07:41',
+        currentUtcDateTime: '2026-07-07T05:41:00.000Z',
+        currentWeekday: 'Tuesday',
+        timeZone: 'Europe/Warsaw',
+        timeZoneOffset: 'UTC+02:00',
+      },
+    });
+
+    expect(messages[0]?.content).toEqual([
+      expect.objectContaining({
+        text: 'First completed question.',
+        providerOptions: {
+          openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        },
+      }),
+    ]);
+    expect(messages[2]?.content).toEqual([
+      expect.objectContaining({
+        text: 'Second completed question.',
+        providerOptions: {
+          openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        },
+      }),
+    ]);
   });
 });

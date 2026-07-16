@@ -52,6 +52,7 @@ The agent is in `apps/agent`.
 - Weather tools: `apps/agent/src/app/features/weather`.
 - World Cup tools, polling, subscription, and notification delivery: `apps/agent/src/app/features/world-cup`.
 - Drizzle schema and DB services: `apps/agent/src/infrastructure/db`.
+- Configurable LangSmith tracing: `apps/agent/src/infrastructure/observability`.
 - Google, OpenWeather, and World Cup provider clients: `apps/agent/src/infrastructure`.
 
 Keep external systems behind service boundaries. Do not call provider SDKs or database tables directly from unrelated application code.
@@ -83,6 +84,12 @@ Important agent env vars:
 - `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent. Leave unset to allow all numbers.
 - `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — World Cup polling request verification.
 - `OPENWEATHER_API_KEY` — weather and local-time tools.
+- `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — optional agent tracing; keep local tracing off by default and use separate projects and keys for development, staging, and production.
+- `LANGSMITH_ENDPOINT` — must be `https://eu.api.smith.langchain.com`; tracing fails closed for any other endpoint.
+- `LANGSMITH_WORKSPACE_ID` — required when `LANGSMITH_API_KEY` is organization-scoped.
+- `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` — `true` keeps the corresponding content out of traces; `false` explicitly captures it in LangSmith.
+- `LANGSMITH_TRACING_SAMPLING_RATE` — optional trace sampling rate from `0` to `1`.
+- `AGENT_OBSERVABILITY_HASH_KEY` — environment-specific base64-encoded 32-byte key for pseudonymizing trace identities.
 
 Never commit real secrets or local `.env*` files.
 
@@ -96,6 +103,10 @@ Prefer tests around public module boundaries:
 - Memory context behavior through `AgentContextService` and `AgentMemoryService`.
 
 Mock external boundaries: OpenAI/AI SDK calls, iMessage/Chat SDK posting, Blooio, OpenWeather, World Cup API, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
+
+Observability must stay non-critical: tracing failures must not fail agent turns, and tests must not
+send traces to LangSmith. Keep raw user identifiers out of trace metadata; trace content retention
+is controlled only through `LANGSMITH_HIDE_INPUTS` and `LANGSMITH_HIDE_OUTPUTS`.
 
 ## Code Style
 

@@ -12,6 +12,7 @@ import { AgentMemoryService } from '@/app/memory';
 import { AgentContextService } from '@/app/memory/context';
 import { AppError, AppErrorCode, ErrorService } from '@/infrastructure/errors';
 import { logger } from '@/infrastructure/logger';
+import { AgentObservabilityService } from '@/infrastructure/observability';
 
 export class BotHandler {
   static #bot: Chat | null = null;
@@ -31,7 +32,7 @@ export class BotHandler {
       '[BOT]: message received',
     );
 
-    await this.#withMessageInitialization({
+    await this.#withMessageLifecycle({
       thread,
       operation: async () => {
         try {
@@ -179,7 +180,7 @@ export class BotHandler {
         sourceMessageId,
       },
       retryable: true,
-      userMessage: 'I generated an empty response, so Telegram could not send it.',
+      userMessage: 'I generated an empty response, so iMessage could not send it.',
     });
   }
 
@@ -221,7 +222,7 @@ export class BotHandler {
     }
   }
 
-  static async #withMessageInitialization<T>({
+  static async #withMessageLifecycle<T>({
     thread,
     operation,
   }: {
@@ -230,7 +231,11 @@ export class BotHandler {
   }) {
     void this.#initMessage(thread);
 
-    return operation();
+    try {
+      return await operation();
+    } finally {
+      waitUntil(AgentObservabilityService.flush());
+    }
   }
 
   static async #initMessage(thread: Thread) {

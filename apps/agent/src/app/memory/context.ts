@@ -65,22 +65,25 @@ export class AgentContextService {
       this.#shortMemoryBaseTokenBudget +
       Math.max(this.#compressedMemoryTokenBudget - memoryContext.compressedTokensUsed, 0);
 
-    const context: ModelMessage[] = [];
-
-    if (memoryContext.content) {
-      context.push({
-        role: 'user',
-        content: memoryContext.content,
-      });
-    }
-
     const shortTermSelection = this.#selectShortTermContext({
       shortTermMemory,
       tokenBudget: shortMemoryTokenBudget,
       timeZone,
     });
+    const context = [...shortTermSelection.messages];
 
-    context.push(...shortTermSelection.messages);
+    if (memoryContext.content) {
+      const latestMessage = context.pop();
+
+      context.push({
+        role: 'user',
+        content: memoryContext.content,
+      });
+
+      if (latestMessage) {
+        context.push(latestMessage);
+      }
+    }
 
     logger.info(
       {

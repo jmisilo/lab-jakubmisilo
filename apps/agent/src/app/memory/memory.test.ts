@@ -216,7 +216,7 @@ describe('AgentMemoryService', () => {
 });
 
 describe('AgentContextService', () => {
-  it('assembles rolling compressed memory before short-term transcript messages', async () => {
+  it('assembles rolling compressed memory after completed history and before the latest message', async () => {
     mockAgentMemoryDbService.getRecentMemoryChunks.mockResolvedValue([
       createMemoryChunk({
         id: 'chunk-1',
@@ -227,20 +227,28 @@ describe('AgentContextService', () => {
     const context = await AgentContextService.buildContext({
       identityId: 'identity-1',
       threadId: 'thread-1',
-      shortTermMemory: [{ role: 'user', text: 'What should you remember about logging?' }],
+      shortTermMemory: [
+        { role: 'user', text: 'Earlier question.' },
+        { role: 'assistant', text: 'Earlier response.' },
+        { role: 'user', text: 'What should you remember about logging?' },
+      ],
     });
 
-    expect(context[0]).toEqual(
+    expect(context[2]).toEqual(
       expect.objectContaining({
         role: 'user',
       }),
     );
     expect(context.some((message) => message.role === 'system')).toBe(false);
 
-    const memoryContent = String(context[0]?.content);
+    const memoryContent = String(context[2]?.content);
     expect(memoryContent).toContain('Compressed conversation memory:');
     expect(memoryContent).toContain('[AI-compressed]');
     expect(memoryContent).toContain('Earlier discussion decided not to reintroduce Eve routes.');
+    expect(context.slice(0, 2)).toEqual([
+      { role: 'user', content: 'Earlier question.' },
+      { role: 'assistant', content: 'Earlier response.' },
+    ]);
     expect(context.at(-1)).toEqual({
       role: 'user',
       content: 'What should you remember about logging?',
