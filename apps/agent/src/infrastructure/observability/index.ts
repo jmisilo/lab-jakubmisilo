@@ -321,10 +321,9 @@ function sanitizeToolEndEvent({
   const toolOutput = event.toolOutput;
   const toolCallId = getStringField(toolCall, 'toolCallId');
   const toolName = getSafeLabel(toolCall.toolName) ?? 'unknown-tool';
-  const safeToolOutput =
-    !hideOutputs
-      ? toolOutput
-      : toolOutput.type === 'tool-result'
+  const safeToolOutput = !hideOutputs
+    ? toolOutput
+    : toolOutput.type === 'tool-result'
       ? {
           input: undefined,
           output: {
@@ -704,5 +703,5 @@ type ObservabilityConfigResult =
         | 'invalid_hash_key'
         | 'invalid_sampling_rate'
         | 'missing_api_key'
-        | 'missing_project'
+        | 'missing_project';
     };
