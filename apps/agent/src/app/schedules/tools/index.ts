@@ -42,7 +42,6 @@ export const manageScheduleTool: ManageScheduleTool = tool({
 
     # When Not To Use
     - The user wants a time block or event represented on Google Calendar; use Calendar tools.
-    - The user is asking about an existing World Cup notification subscription; use the World Cup subscription tool for those.
     - The user wants an immediate answer or immediate web search.
     - The requested time is ambiguous enough that the wrong schedule would be harmful; ask a brief clarification.
 

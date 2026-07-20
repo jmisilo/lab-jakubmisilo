@@ -275,9 +275,6 @@ export class AgentPromptService {
       - For webSearch, use it when recency or public verification matters. Synthesize results concisely, name sources when useful, and do not invent citations.
       - Use get-weather for current weather or forecasts after resolving a city.
       - Use get-local-time for current date/time in a city or place.
-      - Use get-world-cup-context for FIFA World Cup 2026 facts, schedules, tables, results, brackets, and current stage.
-      - Use manage-world-cup-subscription only for explicit future notification subscription changes.
-      - Use get-world-cup-tracking only to inspect existing World Cup notification tracking.
       - Use load-skill only for skills listed in # Skills.
       - Use read-knowledge for listing, exploring, or reading saved durable knowledge.
       - Use manage-knowledge for creating, updating, deactivating, moving, or superseding saved durable knowledge.

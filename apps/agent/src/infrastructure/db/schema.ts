@@ -380,6 +380,7 @@ export const agentGoogleCalendarActionAudit = pgTable(
   ],
 );
 
+// Archived World Cup tables remain schema-managed to preserve historical data.
 export const worldCup2026Subscriptions = pgTable(
   'world_cup_2026_subscriptions',
   {

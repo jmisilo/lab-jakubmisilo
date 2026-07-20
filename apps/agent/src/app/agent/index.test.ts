@@ -228,5 +228,6 @@ function getPrepareCall() {
 type AgentForTest = {
   settings: {
     prepareCall?: (input: never) => Promise<Record<string, unknown>> | Record<string, unknown>;
+    tools?: Record<string, unknown>;
   };
 };

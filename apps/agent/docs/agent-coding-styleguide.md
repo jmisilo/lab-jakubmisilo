@@ -24,7 +24,7 @@ Examples:
 - `AgentContextService`
 - `AIService`
 - `WeatherService`
-- `WorldCupSubscriptionService`
+- `AgentScheduleService`
 - `ErrorService`
 
 Rules:
@@ -144,7 +144,7 @@ External systems should sit behind scoped service/adapters.
 
 Examples:
 
-- `WorldCupApiClient` owns World Cup API calls.
+- `GoogleCalendarApiClient` owns Google Calendar API calls.
 - `AgentMemoryDbService` owns agent memory table access.
 - `WeatherService` owns OpenWeather behavior.
 

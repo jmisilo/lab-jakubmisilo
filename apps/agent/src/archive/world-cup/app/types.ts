@@ -1,0 +1,20 @@
+import type { z } from 'zod';
+
+import {
+  WORLD_CUP_EVENT_TYPES,
+  WorldCupApiGameSchema,
+  WorldCupDetectedEventSchema,
+  WorldCupEventPayloadSchema,
+  WorldCupEventTypeSchema,
+  WorldCupGameSnapshotSchema,
+  WorldCupTrackingModeSchema,
+} from '@/archive/world-cup/app/schemas';
+
+export { WORLD_CUP_EVENT_TYPES };
+
+export type WorldCupEventType = z.infer<typeof WorldCupEventTypeSchema>;
+export type WorldCupTrackingMode = z.infer<typeof WorldCupTrackingModeSchema>;
+export type WorldCupApiGame = z.output<typeof WorldCupApiGameSchema>;
+export type WorldCupGameSnapshot = z.output<typeof WorldCupGameSnapshotSchema>;
+export type WorldCupDetectedEvent = z.infer<typeof WorldCupDetectedEventSchema>;
+export type WorldCupEventPayload = z.infer<typeof WorldCupEventPayloadSchema>;

@@ -2,7 +2,9 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-
+  images: {
+    remotePatterns: [new URL('https://landing-storage.knmstudio.com/portfolio/lab/**')],
+  },
   async redirects() {
     return [
       {

@@ -25,7 +25,7 @@ export const loadSkillTool: LoadSkillTool = tool({
     # Do Not Use For
     - Guessing skill names that are not listed.
     - Loading skills to show their contents to the user.
-    - Replacing dedicated tools such as weather, web search, knowledge, or World Cup tools.
+    - Replacing dedicated tools such as weather, web search, or knowledge tools.
 
     # Usage
     - Use the exact skill name from # Skills.

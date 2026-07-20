@@ -75,17 +75,6 @@ export class AgentService {
         threadId: UNAVAILABLE_TOOL_CONTEXT,
         timeZone: DEFAULT_USER_TIME_ZONE,
       },
-      'manage-world-cup-subscription': {
-        identityId: UNAVAILABLE_TOOL_CONTEXT,
-        threadId: UNAVAILABLE_TOOL_CONTEXT,
-      },
-      'get-world-cup-tracking': {
-        identityId: UNAVAILABLE_TOOL_CONTEXT,
-        threadId: UNAVAILABLE_TOOL_CONTEXT,
-      },
-      'get-world-cup-context': {
-        timeZone: DEFAULT_USER_TIME_ZONE,
-      },
     },
     callOptionsSchema: AgentRuntimeContextSchema,
     prepareCall: ({ options, ...input }) => {
@@ -178,18 +167,6 @@ export class AgentService {
             timeZone,
             mode: options?.mode,
           },
-          'manage-world-cup-subscription': {
-            identityId,
-            threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
-            sourceMessageId: options?.sourceMessageId,
-          },
-          'get-world-cup-tracking': {
-            identityId,
-            threadId: options?.threadId ?? UNAVAILABLE_TOOL_CONTEXT,
-          },
-          'get-world-cup-context': {
-            timeZone,
-          },
         },
       };
     },
@@ -276,7 +253,6 @@ export class AgentService {
     const activeTools: (keyof AgentTools)[] = [
       'load-skill',
       'webSearch',
-      'get-world-cup-context',
       'get-weather',
       'get-local-time',
     ];
@@ -302,8 +278,6 @@ export class AgentService {
       activeTools.push('manage-schedule');
       activeTools.push('manage-nutrition');
       activeTools.push('manage-knowledge');
-      activeTools.push('manage-world-cup-subscription');
-      activeTools.push('get-world-cup-tracking');
     } else if (options?.identityId) {
       activeTools.push('manage-knowledge');
     }

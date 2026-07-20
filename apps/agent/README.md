@@ -50,6 +50,7 @@ Core modules:
 - `src/app/knowledge` owns durable tree notes, retrieval, and implicit ingestion.
 - `src/app/features/nutrition` owns calorie goals, meal estimation workflows, and daily totals.
 - `src/app/schedules` owns schedule creation, cancellation, execution, and recovery.
+- `src/archive/world-cup` preserves the disconnected World Cup 2026 implementation and its reconnection guide.
 - `src/infrastructure/observability` owns LangSmith tracing, retention controls, and correlation metadata.
 - `src/infrastructure/*` wraps provider HTTP clients, DB, QStash, logging, and app errors.
 
@@ -154,22 +155,6 @@ IMESSAGE_ALLOWED_NUMBERS="+48123456789,+48987654321"
 
 Leave it empty to allow all iMessage numbers.
 
-World Cup polling endpoint, called by QStash schedules:
-
-```txt
-GET /jobs/world-cup/events
-```
-
-The shared QStash infrastructure adapter verifies the raw request body and `upstash-signature` header with `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY`.
-
-The schedule window is every minute from 17:45 through 09:59 the next day in `Europe/Warsaw`:
-
-```txt
-CRON_TZ=Europe/Warsaw 45-59 17 * * *
-CRON_TZ=Europe/Warsaw * 18-23 * * *
-CRON_TZ=Europe/Warsaw * 0-9 * * *
-```
-
 ## Deployment to Vercel
 
 The agent is deployed as a Vercel Node function from the `apps/agent` workspace package. The Vercel project must use:
@@ -215,8 +200,8 @@ Required:
 - `BLOOIO_WEBHOOK_SECRET` — verifies signed Blooio webhook deliveries
 - `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 allowlist while the agent is private
 - `OPENWEATHER_API_KEY` — required for weather and local-time tools
-- `QSTASH_CURRENT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
-- `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed World Cup polling and scheduled-task execution
+- `QSTASH_CURRENT_SIGNING_KEY` — required for QStash-signed scheduled-task execution
+- `QSTASH_NEXT_SIGNING_KEY` — required for QStash-signed scheduled-task execution
 - `QSTASH_TOKEN` — required for creating QStash one-time messages and recurring schedules
 - `AGENT_PUBLIC_URL` — stable public base URL used as the QStash scheduled-task destination, for example `https://agent.example.com`
 - `GOOGLE_OAUTH_CLIENT_ID` — Google OAuth web application client id for Calendar and Gmail integration
@@ -268,25 +253,9 @@ POST https://<agent-domain>/webhooks/imessage
 
 The webhook secret must match `BLOOIO_WEBHOOK_SECRET` in Vercel.
 
-### 5. Configure QStash schedules, if World Cup polling is enabled
+### 5. Configure QStash for scheduled tasks
 
-Use QStash schedules that call:
-
-```txt
-GET https://<agent-domain>/jobs/world-cup/events
-```
-
-The route verifies QStash signatures with `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY`; it does not use a separate cron secret.
-
-Current polling window:
-
-```txt
-CRON_TZ=Europe/Warsaw 45-59 17 * * *
-CRON_TZ=Europe/Warsaw * 18-23 * * *
-CRON_TZ=Europe/Warsaw * 0-9 * * *
-```
-
-Generic user scheduling does not need a periodic polling cron. The `manage-schedule` tool creates QStash delayed messages for one-time tasks and QStash schedules for recurring tasks. QStash calls:
+The `manage-schedule` tool creates QStash delayed messages for one-time tasks and QStash schedules for recurring tasks. It does not need a manually configured periodic polling cron. QStash calls:
 
 ```txt
 POST https://<agent-domain>/jobs/schedules/execute
@@ -296,7 +265,7 @@ The route verifies QStash signatures with `QSTASH_CURRENT_SIGNING_KEY` and `QSTA
 
 ## Database
 
-Drizzle-managed app tables live in the `public` PostgreSQL schema, including the temporary `world_cup_2026_*` tables. Schema changes use the checked-in migration workflow:
+Drizzle-managed app tables live in the `public` PostgreSQL schema. The archived `world_cup_2026_*` tables remain managed to preserve historical data; do not drop them merely because the runtime module is disconnected. Schema changes use the checked-in migration workflow:
 
 ```sh
 pnpm --filter @labjm/agent db:generate

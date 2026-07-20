@@ -34,7 +34,7 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 - `apps/web` — Next.js site and AI widget UI.
 - `apps/api` — Hono API powering the web app.
-- `apps/agent` — Hono + Chat SDK iMessage agent with AI SDK tools, memory, weather, and World Cup notifications.
+- `apps/agent` — Hono + Chat SDK iMessage agent with AI SDK tools, memory, weather, and scheduling.
 - `packages/ai` — AI widget tools and UI message types.
 - `packages/schemas` — shared Zod schemas.
 - `packages/types` — shared inferred types.
@@ -50,10 +50,10 @@ The agent is in `apps/agent`.
 - AI agent runtime and tool registration: `apps/agent/src/app/agent`.
 - Memory services and context assembly: `apps/agent/src/app/memory`.
 - Weather tools: `apps/agent/src/app/features/weather`.
-- World Cup tools, polling, subscription, and notification delivery: `apps/agent/src/app/features/world-cup`.
+- Archived World Cup implementation and reconnection guide: `apps/agent/src/archive/world-cup`.
 - Drizzle schema and DB services: `apps/agent/src/infrastructure/db`.
 - Configurable LangSmith tracing: `apps/agent/src/infrastructure/observability`.
-- Google, OpenWeather, and World Cup provider clients: `apps/agent/src/infrastructure`.
+- Google and OpenWeather provider clients: `apps/agent/src/infrastructure`.
 
 Keep external systems behind service boundaries. Do not call provider SDKs or database tables directly from unrelated application code.
 
@@ -82,7 +82,7 @@ Important agent env vars:
 - `DATABASE_URL` — Drizzle app tables and Chat SDK PostgreSQL state.
 - `BLOOIO_API_KEY`, `BLOOIO_FROM_NUMBER`, `BLOOIO_WEBHOOK_SECRET` — Blooio-backed iMessage adapter config.
 - `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent. Leave unset to allow all numbers.
-- `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — World Cup polling request verification.
+- `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — scheduled-task request verification.
 - `OPENWEATHER_API_KEY` — weather and local-time tools.
 - `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — optional agent tracing; keep local tracing off by default and use separate projects and keys for development, staging, and production.
 - `LANGSMITH_ENDPOINT` — must be `https://eu.api.smith.langchain.com`; tracing fails closed for any other endpoint.
@@ -98,11 +98,9 @@ Never commit real secrets or local `.env*` files.
 Prefer tests around public module boundaries:
 
 - Weather behavior through `WeatherService`.
-- World Cup event detection through `WorldCupEventDetector`.
-- World Cup subscription matching through `WorldCupSubscriptionService`.
 - Memory context behavior through `AgentContextService` and `AgentMemoryService`.
 
-Mock external boundaries: OpenAI/AI SDK calls, iMessage/Chat SDK posting, Blooio, OpenWeather, World Cup API, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
+Mock external boundaries: OpenAI/AI SDK calls, iMessage/Chat SDK posting, Blooio, OpenWeather, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
 
 Observability must stay non-critical: tracing failures must not fail agent turns, and tests must not
 send traces to LangSmith. Keep raw user identifiers out of trace metadata; trace content retention

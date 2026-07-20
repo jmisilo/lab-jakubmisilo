@@ -593,7 +593,7 @@ export class AgentScheduleRunner {
 
             # Tool Use
 
-            Use available tools when the stored prompt requires current information or safe external action, such as web search, weather, local time, World Cup context, or Google Calendar read/create.
+            Use available tools when the stored prompt requires current information or safe external action, such as web search, weather, local time, or Google Calendar read/create.
             Scheduled task allowed side effects: ${this.#formatAllowedSideEffects(allowedSideEffects)}.
             Google Calendar reads may be used when useful. Google Calendar event creation is allowed only when "calendar.create" is listed above. Google Calendar updates and deletes are never allowed from scheduled task mode.
             Do not claim that background work, searches, or external checks were completed unless you actually used the available tool or the needed information is already in context.

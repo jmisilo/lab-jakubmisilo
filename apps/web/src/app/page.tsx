@@ -12,10 +12,9 @@ const PROJECTS = [
     tag: 'Powers the AI Agent!',
   },
   {
-    title: 'Personal AI Agent',
+    title: 'Personal Assistant',
     headline: 'Personal AI agent with calories tracking, gmail & calendar integration, and more.',
-    href: 'https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/agent',
-    tag: 'track the WC!',
+    href: '/assistant',
   },
   {
     title: 'Extendable AI Widget',
@@ -33,11 +32,6 @@ const PROJECTS = [
     headline: 'Fastest personal page builder',
     href: 'https://pagey.xyz?utm_source=lab.jakubmisilo.com',
     tag: 'worth checking!',
-  },
-  {
-    title: 'knmstudio',
-    headline: 'Product design & dev studio',
-    href: 'https://knmstudio.com?utm_source=lab.jakubmisilo.com',
   },
   {
     title: 'AI SDK Directory',

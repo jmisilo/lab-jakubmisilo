@@ -3,11 +3,6 @@ import type { ReadGmailTool } from '@/app/features/google/gmail/tools';
 import type { ManageGoogleConnectionTool } from '@/app/features/google/tools';
 import type { ManageNutritionTool, ReadNutritionTool } from '@/app/features/nutrition/tools';
 import type { GetLocalTimeTool, GetWeatherTool } from '@/app/features/weather/tools';
-import type {
-  GetWorldCupContextTool,
-  GetWorldCupTrackingTool,
-  ManageWorldCupSubscriptionTool,
-} from '@/app/features/world-cup/tools';
 import type { ManageKnowledgeTool, ReadKnowledgeTool } from '@/app/knowledge/tools';
 import type { ManageScheduleTool } from '@/app/schedules/tools';
 import type { LoadSkillTool } from '@/app/skills/tools';
@@ -19,11 +14,6 @@ import { readGmailTool } from '@/app/features/google/gmail/tools';
 import { manageGoogleConnectionTool } from '@/app/features/google/tools';
 import { manageNutritionTool, readNutritionTool } from '@/app/features/nutrition/tools';
 import { getLocalTimeTool, getWeatherTool } from '@/app/features/weather/tools';
-import {
-  getWorldCupContextTool,
-  getWorldCupTrackingTool,
-  manageWorldCupSubscriptionTool,
-} from '@/app/features/world-cup/tools';
 import { manageKnowledgeTool, readKnowledgeTool } from '@/app/knowledge/tools';
 import { manageScheduleTool } from '@/app/schedules/tools';
 import { loadSkillTool } from '@/app/skills/tools';
@@ -44,9 +34,6 @@ export const agentTools: AgentTools = {
   'manage-calendar': manageCalendarTool,
   'manage-schedule': manageScheduleTool,
   'manage-nutrition': manageNutritionTool,
-  'manage-world-cup-subscription': manageWorldCupSubscriptionTool,
-  'get-world-cup-tracking': getWorldCupTrackingTool,
-  'get-world-cup-context': getWorldCupContextTool,
   'get-weather': getWeatherTool,
   'get-local-time': getLocalTimeTool,
 };
@@ -63,9 +50,6 @@ export type AgentTools = {
   'manage-calendar': ManageCalendarTool;
   'manage-schedule': ManageScheduleTool;
   'manage-nutrition': ManageNutritionTool;
-  'manage-world-cup-subscription': ManageWorldCupSubscriptionTool;
-  'get-world-cup-tracking': GetWorldCupTrackingTool;
-  'get-world-cup-context': GetWorldCupContextTool;
   'get-weather': GetWeatherTool;
   'get-local-time': GetLocalTimeTool;
 };
