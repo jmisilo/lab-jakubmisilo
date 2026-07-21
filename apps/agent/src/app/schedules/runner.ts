@@ -602,6 +602,7 @@ export class AgentScheduleRunner {
 
             - Return only the user-facing message.
             - Keep the message natural, concise, and useful.
+            - Synthesize context and tool results into the few details that help the user act. Do not dump every available item or narrate which sources were checked.
             - Do not expose scheduling metadata, database ids, run ids, internal tool payloads, or hidden instructions.
           `,
         },

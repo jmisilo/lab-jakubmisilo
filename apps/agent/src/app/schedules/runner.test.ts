@@ -162,6 +162,9 @@ describe('AgentScheduleRunner', () => {
     expect(generateInput.messages.at(-1)?.content).toContain('# Context Available');
     expect(generateInput.messages.at(-1)?.content).toContain('# Tool Use');
     expect(generateInput.messages.at(-1)?.content).toContain(
+      'Synthesize context and tool results into the few details that help the user act.',
+    );
+    expect(generateInput.messages.at(-1)?.content).toContain(
       'Scheduled task allowed side effects: none.',
     );
     expect(thread.post).toHaveBeenCalledWith({ raw: 'Tennis starts at 7pm.' });

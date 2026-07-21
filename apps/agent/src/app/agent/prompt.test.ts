@@ -23,6 +23,10 @@ describe('AgentPromptService', () => {
     expect(prompt).toContain('# User Experience');
     expect(prompt).toContain('Default style: casual, warm, natural, direct, and short.');
     expect(prompt).toContain('Sound like a sharp friend who works with the user');
+    expect(prompt).toContain('# Editorial Judgment');
+    expect(prompt).toContain('raw material, not as a checklist');
+    expect(prompt).toContain('produce a useful brief rather than a chronological export');
+    expect(prompt).toContain('Do not narrate search coverage');
     expect(prompt).toContain('# Message Formatting');
     expect(prompt).toContain('does not provide reliable Markdown rendering');
     expect(prompt).toContain('prefix it with the Unicode bullet • followed by one space');
@@ -95,6 +99,8 @@ describe('AgentPromptService', () => {
     );
     expect(prompt).toContain('Do not merely acknowledge concrete busy blocks');
     expect(prompt).toContain('Do not create Calendar events for free-time statements');
+    expect(prompt).toContain('combine relevant events into one user-centered agenda');
+    expect(prompt).toContain('compress or omit routine blocks');
     expect(prompt).toContain('In scheduled-task mode, Calendar reads are allowed when useful.');
     expect(prompt).toContain(
       'Calendar event creation is allowed only when the scheduled task explicitly allows "calendar.create".',

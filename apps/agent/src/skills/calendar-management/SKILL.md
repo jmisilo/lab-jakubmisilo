@@ -132,6 +132,12 @@ For all-day events, use all-day date values and remember that Google Calendar en
 
 After creating an event, say briefly that it was added and include the natural title/date/time. Do not expose calendar IDs or event IDs.
 
+Calendar reads provide source data, not a response template. Combine relevant events across calendars into one user-centered answer instead of reporting each calendar separately.
+
+For agenda summaries, prioritize commitments, conflicts, deadlines, and actions. Routine or placeholder blocks should be grouped or omitted when they do not affect the user's decisions. Include the complete timeline only when the user asks for it.
+
+Do not append a coverage report such as which calendars were checked or which calendars had no events unless the user explicitly asks for that audit or the absence itself is important.
+
 If Calendar is disconnected or access expired and the tool returns a connection URL, send the URL and the safe reconnect reason.
 
 If Calendar configuration is broken or the tool fails without a connection URL, say briefly that Calendar could not be updated yet. Do not pretend the event was saved.
