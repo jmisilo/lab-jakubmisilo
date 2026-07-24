@@ -21,6 +21,7 @@ export const scheduleExecutionRoute = registerApiRoute('/jobs/schedules/execute'
       await SchedulingService.executeOneTime({
         mastra: context.get('mastra'),
         scheduleId: payload.data.scheduleId,
+        revision: payload.data.revision,
       }),
     );
   },

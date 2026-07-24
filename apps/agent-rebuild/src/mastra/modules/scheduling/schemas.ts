@@ -9,6 +9,8 @@ export const ManageScheduleInputSchema = z.object({
     'pause',
     'resume',
     'run_now',
+    'update',
+    'complete_occurrence',
   ]),
   title: z.string().min(1).max(180).optional(),
   prompt: z.string().min(1).max(4_000).optional(),
@@ -38,11 +40,21 @@ export const ManageScheduleRequestSchema = z.discriminatedUnion('action', [
     includeInactive: z.boolean().default(false),
   }),
   z.object({
-    action: z.enum(['cancel', 'pause', 'resume', 'run_now']),
+    action: z.enum(['cancel', 'pause', 'resume', 'run_now', 'complete_occurrence']),
     scheduleId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('update'),
+    scheduleId: z.string().min(1),
+    title: z.string().min(1).max(180).optional(),
+    prompt: z.string().min(1).max(4_000).optional(),
+    runAt: z.iso.datetime({ offset: true }).optional(),
+    cron: z.string().min(1).max(100).optional(),
+    timeZone: z.string().min(1).max(100).optional(),
   }),
 ]);
 
 export const OneTimeSchedulePayloadSchema = z.object({
   scheduleId: z.uuid(),
+  revision: z.number().int().positive(),
 });
