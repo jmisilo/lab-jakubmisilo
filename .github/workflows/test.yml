@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_test
+      RUN_AGENT_REBUILD_EVALS: ${{ secrets.OPENAI_API_KEY != '' }}
 
     services:
       postgres:
@@ -59,6 +60,18 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Prepare agent rebuild eval database
+        if: env.RUN_AGENT_REBUILD_EVALS == 'true'
+        run: |
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector'
+          pnpm --filter agent-rebuild db:push
+
+      - name: Run agent rebuild evaluations
+        if: env.RUN_AGENT_REBUILD_EVALS == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: pnpm --filter agent-rebuild eval
 
       - name: Run agent database integration tests
         env:
