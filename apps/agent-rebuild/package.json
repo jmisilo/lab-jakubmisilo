@@ -1,0 +1,53 @@
+{
+  "name": "agent-rebuild",
+  "version": "1.0.0",
+  "description": "A personal assistant built with Mastra, Chat SDK, and durable user-scoped knowledge.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "dev": "mastra dev",
+    "build": "mastra build",
+    "db:push": "drizzle-kit push",
+    "eval": "vitest run --config vitest.evals.config.ts",
+    "eval:watch": "vitest --config vitest.evals.config.ts",
+    "test": "vitest run",
+    "start": "mastra start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.8",
+    "@imessage-sdk/blooio": "^0.1.2",
+    "@imessage-sdk/chat-adapter": "0.1.0-beta.3",
+    "@mastra/core": "latest",
+    "@mastra/evals": "^1.6.0",
+    "@mastra/memory": "latest",
+    "@mastra/observability": "latest",
+    "@mastra/pg": "^1.17.0",
+    "@upstash/qstash": "^2.11.2",
+    "ai": "7.0.19",
+    "chat": "4.34.0",
+    "dedent": "1.7.2",
+    "drizzle-orm": "^0.45.2",
+    "heic-decode": "^2.1.0",
+    "hono": "^4.12.25",
+    "imessage-sdk": "^0.1.3",
+    "pg": "^8.22.0",
+    "sharp": "^0.34.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/pg": "^8.20.0",
+    "dotenv": "17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "mastra": "latest",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
