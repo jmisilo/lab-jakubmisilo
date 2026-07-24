@@ -6,7 +6,7 @@ import { ManageScheduleInputSchema, ManageScheduleRequestSchema } from './schema
 export const manageScheduleTool = createTool({
   id: 'manage_schedule',
   description:
-    'Create, list, pause, resume, run, or cancel one-time reminders and recurring agent tasks. Resolve dates and times before creating a task. A successful result is required before confirming it to the user.',
+    'Create, list, update, complete a pending occurrence, pause, resume, run, or cancel reminders and recurring tasks. Use complete_occurrence only after explicit completion language and an exact schedule match; it suppresses only today for recurring tasks. Resolve dates before creating. Confirm actions only when ok=true.',
   inputSchema: ManageScheduleInputSchema,
   execute: async (input, { agent, mastra }) => {
     if (!agent?.resourceId || !agent.threadId || !mastra) {
@@ -56,15 +56,86 @@ export const manageScheduleTool = createTool({
       }
 
       if (request.action === 'pause') {
-        return { ok: true, schedule: await mastra.schedules.pause(request.scheduleId) };
+        const changed =
+          (await SchedulingService.pauseOneTime({
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+          })) ||
+          (await SchedulingService.changeRecurring({
+            schedules: mastra.schedules,
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+            action: 'pause',
+          }));
+
+        return changed
+          ? { ok: true }
+          : { ok: false, message: 'That active schedule could not be found.' };
       }
 
       if (request.action === 'resume') {
-        return { ok: true, schedule: await mastra.schedules.resume(request.scheduleId) };
+        const changed =
+          (await SchedulingService.resumeOneTime({
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+          })) ||
+          (await SchedulingService.changeRecurring({
+            schedules: mastra.schedules,
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+            action: 'resume',
+          }));
+
+        return changed
+          ? { ok: true }
+          : { ok: false, message: 'That paused schedule could not be found.' };
       }
 
       if (request.action === 'run_now') {
-        return { ok: true, schedule: await mastra.schedules.run(request.scheduleId) };
+        const changed = await SchedulingService.changeRecurring({
+          schedules: mastra.schedules,
+          resourceId: agent.resourceId,
+          scheduleId: request.scheduleId,
+          action: 'run_now',
+        });
+
+        return changed
+          ? { ok: true }
+          : { ok: false, message: 'That recurring schedule could not be found.' };
+      }
+
+      if (request.action === 'complete_occurrence') {
+        const completion = await SchedulingService.completeOccurrence({
+          schedules: mastra.schedules,
+          resourceId: agent.resourceId,
+          scheduleId: request.scheduleId,
+        });
+
+        return completion
+          ? { ok: true, completion }
+          : { ok: false, message: 'That pending schedule occurrence could not be found.' };
+      }
+
+      if (request.action === 'update') {
+        const changed =
+          (await SchedulingService.updateOneTime({
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+            title: request.title,
+            prompt: request.prompt,
+            runAt: request.runAt,
+          })) ||
+          (await SchedulingService.updateRecurring({
+            schedules: mastra.schedules,
+            resourceId: agent.resourceId,
+            scheduleId: request.scheduleId,
+            title: request.title,
+            prompt: request.prompt,
+            cron: request.cron,
+            timeZone: request.timeZone,
+          }));
+
+        return changed ? { ok: true } : { ok: false, message: 'That schedule could not be found.' };
       }
 
       if (
@@ -76,8 +147,14 @@ export const manageScheduleTool = createTool({
         return { ok: true };
       }
 
-      await mastra.schedules.delete(request.scheduleId);
-      return { ok: true };
+      const changed = await SchedulingService.changeRecurring({
+        schedules: mastra.schedules,
+        resourceId: agent.resourceId,
+        scheduleId: request.scheduleId,
+        action: 'cancel',
+      });
+
+      return changed ? { ok: true } : { ok: false, message: 'That schedule could not be found.' };
     } catch (error) {
       return {
         ok: false,

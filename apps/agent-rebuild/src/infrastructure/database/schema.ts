@@ -4,11 +4,13 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -102,11 +104,13 @@ export const oneTimeSchedules = pgTable(
     prompt: text('prompt').notNull(),
     runAt: timestamp('run_at', { withTimezone: true }).notNull(),
     status: text('status', {
-      enum: ['active', 'running', 'completed', 'cancelled', 'failed'],
+      enum: ['active', 'paused', 'running', 'completed', 'cancelled', 'failed'],
     })
       .notNull()
       .default('active'),
     qstashMessageId: text('qstash_message_id'),
+    revision: integer('revision').notNull().default(1),
+    executionStartedAt: timestamp('execution_started_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -123,6 +127,133 @@ export const oneTimeSchedules = pgTable(
     check(
       'agent_rebuild_one_time_schedules_prompt_length_check',
       sql`char_length(${table.prompt}) <= 4000`,
+    ),
+  ],
+);
+
+export const scheduleOccurrenceCompletions = pgTable(
+  'agent_rebuild_schedule_occurrence_completions',
+  {
+    scheduleId: text('schedule_id').notNull(),
+    resourceId: text('resource_id').notNull(),
+    localDate: date('local_date', { mode: 'string' }).notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'agent_rebuild_schedule_occurrence_completions_pk',
+      columns: [table.scheduleId, table.localDate],
+    }),
+    index('agent_rebuild_schedule_occurrence_completions_owner_idx').on(
+      table.resourceId,
+      table.localDate,
+    ),
+  ],
+);
+
+export const googleOauthStates = pgTable(
+  'agent_rebuild_google_oauth_states',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    requestId: text('request_id').notNull(),
+    stateHash: text('state_hash').notNull(),
+    resourceId: text('resource_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_rebuild_google_oauth_states_request_idx').on(table.requestId),
+    uniqueIndex('agent_rebuild_google_oauth_states_hash_idx').on(table.stateHash),
+    index('agent_rebuild_google_oauth_states_expiry_idx').on(table.expiresAt),
+  ],
+);
+
+export const googleConnections = pgTable(
+  'agent_rebuild_google_connections',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    resourceId: text('resource_id').notNull(),
+    status: text('status', { enum: ['active', 'invalid', 'revoked'] })
+      .notNull()
+      .default('active'),
+    encryptedRefreshToken: text('encrypted_refresh_token').notNull(),
+    refreshTokenIv: text('refresh_token_iv').notNull(),
+    refreshTokenAuthTag: text('refresh_token_auth_tag').notNull(),
+    grantedScopes: text('granted_scopes').array().notNull().default([]),
+    connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_rebuild_google_connections_active_idx')
+      .on(table.resourceId)
+      .where(sql`${table.status} = 'active'`),
+    index('agent_rebuild_google_connections_owner_idx').on(table.resourceId, table.status),
+  ],
+);
+
+export const nutritionProfiles = pgTable(
+  'agent_rebuild_nutrition_profiles',
+  {
+    resourceId: text('resource_id').primaryKey(),
+    dailyCaloriesGoal: integer('daily_calories_goal').notNull(),
+    dailyProteinGoalGrams: real('daily_protein_goal_grams'),
+    dailyCarbsGoalGrams: real('daily_carbs_goal_grams'),
+    dailyFatGoalGrams: real('daily_fat_goal_grams'),
+    dailyFiberGoalGrams: real('daily_fiber_goal_grams'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'agent_rebuild_nutrition_profiles_calories_check',
+      sql`${table.dailyCaloriesGoal} between 500 and 10000`,
+    ),
+  ],
+);
+
+export const nutritionMeals = pgTable(
+  'agent_rebuild_nutrition_meals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    resourceId: text('resource_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    status: text('status', { enum: ['draft', 'confirmed', 'deleted'] })
+      .notNull()
+      .default('draft'),
+    name: text('name').notNull(),
+    items: jsonb('items').$type<Record<string, unknown>[]>().notNull(),
+    source: text('source', { enum: ['photo', 'text', 'manual'] }).notNull(),
+    calories: integer('calories').notNull(),
+    caloriesMin: integer('calories_min'),
+    caloriesMax: integer('calories_max'),
+    proteinGrams: real('protein_grams').notNull(),
+    carbsGrams: real('carbs_grams').notNull(),
+    fatGrams: real('fat_grams').notNull(),
+    fiberGrams: real('fiber_grams').notNull(),
+    confidence: text('confidence', { enum: ['high', 'medium', 'low'] }).notNull(),
+    localDate: date('local_date', { mode: 'string' }).notNull(),
+    eatenAt: timestamp('eaten_at', { withTimezone: true }).notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_rebuild_nutrition_meals_draft_idx')
+      .on(table.resourceId, table.threadId)
+      .where(sql`${table.status} = 'draft'`),
+    index('agent_rebuild_nutrition_meals_daily_idx').on(
+      table.resourceId,
+      table.localDate,
+      table.status,
+    ),
+    check(
+      'agent_rebuild_nutrition_meals_calories_check',
+      sql`${table.calories} between 0 and 20000`,
     ),
   ],
 );

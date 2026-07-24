@@ -1,6 +1,6 @@
 import { createPostgresState } from '@chat-adapter/state-pg';
+import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
-import { photon } from '@imessage-sdk/photon';
 import { Chat } from 'chat';
 
 import { BotHandler } from '@/app/bot/bot-handler';
@@ -11,7 +11,7 @@ export const bot = new Chat({
   userName: 'labjm_assistant_bot',
   adapters: {
     imessage: createIMessageAdapter({
-      provider: photon(),
+      provider: blooio(),
     }),
   },
   state: createPostgresState({

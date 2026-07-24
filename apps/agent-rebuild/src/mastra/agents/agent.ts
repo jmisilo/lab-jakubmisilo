@@ -2,17 +2,29 @@ import { openai } from '@ai-sdk/openai';
 import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
 import { Agent } from '@mastra/core/agent';
-import { TaskSignalProvider } from '@mastra/core/signals';
 import { askUserTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
 
+import { AttachmentService } from '../modules/attachments';
+import {
+  manageCalendarTool,
+  manageGoogleConnectionTool,
+  readCalendarTool,
+  readGmailTool,
+} from '../modules/google/tools';
+import { manageNutritionTool, readNutritionTool } from '../modules/nutrition/tools';
 import { manageScheduleTool } from '../modules/scheduling/tools';
+import { readLocalTimeTool, readWeatherTool } from '../modules/weather/tools';
 import { KnowledgeContextProcessor } from '../processors/knowledge-context';
 import { RuntimeContextProcessor } from '../processors/runtime-context';
 import { agentInstructions } from '../prompt';
 import { AgentRequestContextSchema } from '../runtime-context';
 import { responseQualityScorer } from '../scorers/response-quality';
+import { calendarManagementSkill } from '../skills/calendar-management';
+import { calorieTrackingSkill } from '../skills/calorie-tracking';
+import { gmailManagementSkill } from '../skills/gmail-management';
 import { knowledgeManagementSkill } from '../skills/knowledge-management';
+import { schedulingSkill } from '../skills/scheduling';
 import { manageKnowledgeTool, readKnowledgeTool } from '../tools/knowledge-tools';
 
 export const agent = new Agent({
@@ -45,7 +57,13 @@ export const agent = new Agent({
     },
   }),
   inputProcessors: [new RuntimeContextProcessor(), new KnowledgeContextProcessor()],
-  skills: [knowledgeManagementSkill],
+  skills: [
+    knowledgeManagementSkill,
+    schedulingSkill,
+    calendarManagementSkill,
+    gmailManagementSkill,
+    calorieTrackingSkill,
+  ],
   channels: {
     adapters: {
       imessage: {
@@ -58,6 +76,11 @@ export const agent = new Agent({
       },
     },
     resolveResourceId: ({ message }) => message.author.userId,
+    handlers: {
+      onDirectMessage: AttachmentService.handleMessage.bind(AttachmentService),
+      onMention: AttachmentService.handleMessage.bind(AttachmentService),
+      onSubscribedMessage: AttachmentService.handleMessage.bind(AttachmentService),
+    },
     inlineMedia: [
       'image/jpeg',
       'image/png',
@@ -72,6 +95,14 @@ export const agent = new Agent({
     read_knowledge: readKnowledgeTool,
     manage_knowledge: manageKnowledgeTool,
     manage_schedule: manageScheduleTool,
+    manage_google_connection: manageGoogleConnectionTool,
+    read_gmail: readGmailTool,
+    read_calendar: readCalendarTool,
+    manage_calendar: manageCalendarTool,
+    read_nutrition: readNutritionTool,
+    manage_nutrition: manageNutritionTool,
+    read_weather: readWeatherTool,
+    read_local_time: readLocalTimeTool,
     web_search: openai.tools.webSearch(),
   },
   scorers: {
@@ -83,5 +114,4 @@ export const agent = new Agent({
       },
     },
   },
-  signals: [new TaskSignalProvider()],
 });

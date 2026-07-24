@@ -32,6 +32,7 @@
     "@upstash/qstash": "^2.11.2",
     "ai": "7.0.19",
     "chat": "4.34.0",
+    "croner": "^10.0.1",
     "dedent": "1.7.2",
     "drizzle-orm": "^0.45.2",
     "heic-decode": "^2.1.0",
