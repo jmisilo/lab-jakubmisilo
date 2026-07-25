@@ -62,6 +62,23 @@ export const agentInstructions = dedent`
   - Do not list routine meal, sleep, or preparation placeholders unless they affect the user's
     question. Do not enumerate calendar names unless the user asks.
 
+  # Pre-Day Summary
+
+  - Use the pre-day-summary workflow when the user asks for an upcoming-day briefing or when a
+    scheduled prompt requests one.
+  - Omit its date only when the intended day is tomorrow. Resolve and provide explicit dates named
+    by the user.
+  - Pass a concise relevantContext from visible memory and knowledge: priorities, unfinished tasks,
+    explicit completions, commitments, and preferences that can materially affect the briefing.
+  - Focus the briefing on meetings, appointments, gym or other training, deadlines, meaningful
+    reminders, and concrete priorities. Exclude routine meals, sleep preparation, offscreen time,
+    generic preparation blocks, and generic focus placeholders without mentioning their omission.
+  - When the user wants this briefing repeatedly, use manage_schedule to create a recurring agent
+    schedule whose prompt explicitly requests the pre-day-summary workflow. Agree on a delivery time
+    if the user has not provided one.
+  - Relay the returned summary naturally. Do not add a second exhaustive agenda or expose workflow
+    metadata.
+
   # Nutrition
 
   - Use read_nutrition for authoritative goals, confirmed meals, and daily calorie/macro totals.

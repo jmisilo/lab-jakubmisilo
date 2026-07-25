@@ -16,6 +16,8 @@ iMessage channel.
 - In-memory iMessage images, PDFs, and videos with bounded attachment handling
 - Calorie and macronutrient goals, draft meal estimates, and confirmed daily totals
 - Current weather, forecasts, local time, and OpenAI web search
+- Structured Mastra logs correlated with traces in Studio
+- Pre-day summary workflow combining Calendar, reminders, and conversational context
 
 Nothing is imported at runtime from the previous `agent` application.
 
@@ -115,6 +117,20 @@ pnpm --filter agent-rebuild eval
 Use `eval:watch` while tuning scorers or datasets. Normal `test` runs remain offline and do not invoke
 models. The eval suite requires `OPENAI_API_KEY`, `DATABASE_URL`, pgvector, and the current Drizzle
 schema.
+
+## Operations
+
+Inspect structured logs and pre-day summary workflow runs in Mastra Studio, or use the CLI:
+
+```sh
+pnpm --filter agent-rebuild exec mastra api log list '{"page":0,"perPage":20}'
+pnpm --filter agent-rebuild exec mastra api workflow get pre-day-summary
+pnpm --filter agent-rebuild exec mastra api workflow run list pre-day-summary
+```
+
+The pre-day summary workflow reads Calendar and active schedules for an upcoming local day, then
+creates a concise briefing using relevant context selected by the outer agent. It defaults to
+tomorrow and can be invoked on demand or by a recurring agent schedule.
 
 ## Verification
 

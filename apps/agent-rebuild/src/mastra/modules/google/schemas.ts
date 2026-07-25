@@ -28,13 +28,24 @@ export const GoogleCalendarListResponseSchema = z.looseObject({
     .default([]),
 });
 
-export const GoogleCalendarEventsResponseSchema = z.looseObject({
-  items: z.array(z.looseObject({ id: z.string() })).default([]),
+const GoogleCalendarEventTimeSchema = z.looseObject({
+  date: z.string().optional(),
+  dateTime: z.string().optional(),
+  timeZone: z.string().optional(),
 });
 
 export const GoogleCalendarEventSchema = z.looseObject({
   id: z.string(),
   summary: z.string().optional(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  status: z.string().optional(),
+  start: GoogleCalendarEventTimeSchema.optional(),
+  end: GoogleCalendarEventTimeSchema.optional(),
+});
+
+export const GoogleCalendarEventsResponseSchema = z.looseObject({
+  items: z.array(GoogleCalendarEventSchema).default([]),
 });
 
 export const GoogleFreeBusyResponseSchema = z.looseObject({

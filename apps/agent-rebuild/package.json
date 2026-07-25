@@ -26,6 +26,7 @@
     "@imessage-sdk/chat-adapter": "0.1.0-beta.3",
     "@mastra/core": "latest",
     "@mastra/evals": "^1.6.0",
+    "@mastra/loggers": "^1.2.0",
     "@mastra/memory": "latest",
     "@mastra/observability": "latest",
     "@mastra/pg": "^1.17.0",

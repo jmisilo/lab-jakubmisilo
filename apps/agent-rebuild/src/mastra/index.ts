@@ -9,6 +9,7 @@ import {
 import { PostgresStore } from '@mastra/pg';
 
 import { databasePool } from '../infrastructure/database';
+import { logger } from '../infrastructure/logger';
 import { agent } from './agents/agent';
 import { googleRoutes } from './modules/google/routes';
 import {
@@ -29,9 +30,14 @@ import {
 } from './scorers/knowledge-retrieval';
 import { responseQualityScorer } from './scorers/response-quality';
 import { manageKnowledgeTool, readKnowledgeTool } from './tools/knowledge-tools';
+import { preDaySummaryWorkflow } from './workflows/pre-day-summary';
 
 export const mastra = new Mastra({
+  logger,
   agents: { agent },
+  workflows: {
+    preDaySummary: preDaySummaryWorkflow,
+  },
   tools: {
     readKnowledgeTool,
     manageKnowledgeTool,
@@ -84,9 +90,13 @@ export const mastra = new Mastra({
   observability: new Observability({
     configs: {
       default: {
-        serviceName: 'mastra',
+        serviceName: 'agent',
         exporters: [new MastraStorageExporter(), new MastraPlatformExporter()],
         spanOutputProcessors: [new SensitiveDataFilter()],
+        logging: {
+          enabled: true,
+          level: 'info',
+        },
       },
     },
   }),

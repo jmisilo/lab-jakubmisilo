@@ -26,6 +26,7 @@ import { gmailManagementSkill } from '../skills/gmail-management';
 import { knowledgeManagementSkill } from '../skills/knowledge-management';
 import { schedulingSkill } from '../skills/scheduling';
 import { manageKnowledgeTool, readKnowledgeTool } from '../tools/knowledge-tools';
+import { preDaySummaryWorkflow } from '../workflows/pre-day-summary';
 
 export const agent = new Agent({
   id: 'agent',
@@ -104,6 +105,9 @@ export const agent = new Agent({
     read_weather: readWeatherTool,
     read_local_time: readLocalTimeTool,
     web_search: openai.tools.webSearch(),
+  },
+  workflows: {
+    pre_day_summary: preDaySummaryWorkflow,
   },
   scorers: {
     responseQuality: {
