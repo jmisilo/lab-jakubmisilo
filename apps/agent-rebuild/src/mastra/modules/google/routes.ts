@@ -1,6 +1,7 @@
 import { registerApiRoute } from '@mastra/core/server';
 
 import { GoogleService } from '.';
+import { logger } from '../../../infrastructure/logger';
 
 export const googleRoutes = [
   registerApiRoute('/links/google/connect/:requestId', {
@@ -73,7 +74,10 @@ export const googleRoutes = [
           ),
         );
       } catch (error) {
-        console.error('[GOOGLE]: OAuth callback failed', error);
+        logger.error('Google OAuth callback failed', {
+          error:
+            error instanceof Error ? { name: error.name, message: error.message } : String(error),
+        });
         return context.html(
           renderGooglePage(
             'Google was not connected',

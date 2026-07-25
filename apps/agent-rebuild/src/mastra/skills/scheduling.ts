@@ -22,6 +22,14 @@ export const schedulingSkill = createSkill({
     - Current limits are 10 active one-time and 10 active recurring schedules per user.
     - Confirm creation only after the tool returns ok: true.
 
+    ## Pre-Day Summary
+
+    When the user wants a recurring upcoming-day briefing, create a recurring agent schedule. Its
+    durable prompt must tell the future agent to run the pre-day-summary workflow for the upcoming
+    day, supply relevant conversational context, and send only the resulting user-facing briefing.
+    Agree on a delivery time when none is stated; an evening-before time is usually more useful than
+    an early-morning default.
+
     ## Time
 
     Resolve relative dates from current runtime context. If a time without a date already passed and

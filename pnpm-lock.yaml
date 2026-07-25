@@ -180,6 +180,9 @@ importers:
       '@mastra/evals':
         specifier: ^1.6.0
         version: 1.6.0(@mastra/core@1.52.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.4)(ai@7.0.19(zod@4.4.3))(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3))
+      '@mastra/loggers':
+        specifier: ^1.2.0
+        version: 1.2.0(@mastra/core@1.52.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.4)(ai@7.0.19(zod@4.4.3))(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3))
       '@mastra/memory':
         specifier: latest
         version: 1.23.1(@mastra/core@1.52.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.4)(ai@7.0.19(zod@4.4.3))(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3))

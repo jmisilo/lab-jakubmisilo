@@ -2,6 +2,8 @@ import type { Attachment, Message, Thread } from 'chat';
 
 import sharp from 'sharp';
 
+import { logger } from '../../../infrastructure/logger';
+
 const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
 const MAX_IMAGE_COUNT = 3;
 const MAX_IMAGE_DIMENSION = 1_536;
@@ -26,9 +28,14 @@ export class AttachmentService {
       message.attachments = await Promise.all(
         message.attachments.map((attachment) => this.#prepare(attachment)),
       );
+
       await defaultHandler(thread, message);
     } catch (error) {
-      console.warn('[ATTACHMENTS]: incoming attachment rejected', error);
+      logger.warn('Incoming attachment rejected', {
+        error:
+          error instanceof Error ? { name: error.name, message: error.message } : String(error),
+      });
+
       await thread.post(
         error instanceof Error
           ? error.message

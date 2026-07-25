@@ -6,6 +6,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 
 import { database } from '../../../infrastructure/database';
 import { googleConnections, googleOauthStates } from '../../../infrastructure/database/schema';
+import { logger } from '../../../infrastructure/logger';
 import {
   GOOGLE_SCOPES,
   GoogleCalendarEventSchema,
@@ -163,7 +164,10 @@ export class GoogleService {
         body: new URLSearchParams({ token: refreshToken }),
       });
     } catch (error) {
-      console.warn('[GOOGLE]: token revocation request failed', error);
+      logger.warn('Google token revocation request failed', {
+        error:
+          error instanceof Error ? { name: error.name, message: error.message } : String(error),
+      });
     }
 
     await database
