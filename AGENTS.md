@@ -21,9 +21,8 @@ Package-scoped commands:
 pnpm --filter @labjm/web dev
 pnpm --filter @labjm/api dev
 pnpm --filter @labjm/agent dev
-pnpm --filter @labjm/agent dev:server
-pnpm --filter @labjm/agent db:generate
-pnpm --filter @labjm/agent db:migrate
+pnpm --filter @labjm/agent db:push
+pnpm --filter @labjm/agent eval
 ```
 
 Use `pnpm` for dependency changes. Do not hand-edit `pnpm-lock.yaml`.
@@ -34,7 +33,8 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 - `apps/web` — Next.js site and AI widget UI.
 - `apps/api` — Hono API powering the web app.
-- `apps/agent` — Hono + Chat SDK iMessage agent with AI SDK tools, memory, weather, and scheduling.
+- `apps/agent` — Mastra + Chat SDK iMessage agent with memory, knowledge, integrations, workflows,
+  and scheduling.
 - `packages/ai` — AI widget tools and UI message types.
 - `packages/schemas` — shared Zod schemas.
 - `packages/types` — shared inferred types.
@@ -45,27 +45,24 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 
 The agent is in `apps/agent`.
 
-- Webhook entrypoint: `apps/agent/src/index.ts`.
-- Chat SDK setup and handlers: `apps/agent/src/app/bot/index.ts`.
-- AI agent runtime and tool registration: `apps/agent/src/app/agent`.
-- Memory services and context assembly: `apps/agent/src/app/memory`.
-- Weather tools: `apps/agent/src/app/features/weather`.
-- Archived World Cup implementation and reconnection guide: `apps/agent/src/archive/world-cup`.
-- Drizzle schema and DB services: `apps/agent/src/infrastructure/db`.
-- Configurable LangSmith tracing: `apps/agent/src/infrastructure/observability`.
-- Google and OpenWeather provider clients: `apps/agent/src/infrastructure`.
+- Mastra composition: `apps/agent/src/mastra/index.ts`.
+- Agent and channel setup: `apps/agent/src/mastra/agents/agent.ts`.
+- Product modules: `apps/agent/src/mastra/modules`.
+- Knowledge domain: `apps/agent/src/modules/knowledge`.
+- Drizzle schema: `apps/agent/src/infrastructure/database`.
+- Previous AI SDK implementation: `apps/agent/archive-ai-sdk`.
 
 Keep external systems behind service boundaries. Do not call provider SDKs or database tables directly from unrelated application code.
 
 ## Chat SDK Notes
 
-Chat SDK normalizes platform events into `Thread` and `Message`.
+Mastra Channels normalizes platform events and owns thread continuity.
 
-- Gate incoming iMessage messages before side effects such as `thread.subscribe()`, transcript writes, memory writes, or model calls.
-- Use `message.author.userId` for the iMessage allowlist check and `message.userKey ?? message.author.userId` for the current memory identity convention.
-- Use `thread.post({ raw })` for iMessage text. The iMessage adapter renders Markdown as plain text, and that conversion can collapse meaningful whitespace around bare URLs.
-- Keep webhook routes thin; place behavior in services where it can be tested without live iMessage or Blooio.
-- State tables owned by `@chat-adapter/state-pg` are excluded from Drizzle migrations. Do not add Drizzle ownership for `chat_state_*` tables.
+- The Photon iMessage adapter resolves the canonical resource from `message.author.userId`.
+- Keep webhook routes thin and signature-verified.
+- Keep attachment limits and normalization in the attachments module.
+- Do not use Mastra's in-process scheduler on serverless deployment. Recurring definitions use
+  Mastra storage, while QStash owns delivery timing.
 
 ## Environment
 
@@ -73,38 +70,27 @@ Copy package examples before local development:
 
 ```sh
 cp apps/api/.env.local.example apps/api/.env.local
-cp apps/agent/.env.local.example apps/agent/.env.local
+cp apps/agent/.env.example apps/agent/.env
 ```
 
 Important agent env vars:
 
 - `OPENAI_API_KEY` — AI SDK model and embedding calls.
-- `DATABASE_URL` — Drizzle app tables and Chat SDK PostgreSQL state.
+- `DATABASE_URL` — Mastra PostgreSQL storage and Drizzle app tables.
 - `BLOOIO_API_KEY`, `BLOOIO_FROM_NUMBER`, `BLOOIO_WEBHOOK_SECRET` — Blooio-backed iMessage adapter config.
-- `IMESSAGE_ALLOWED_NUMBERS` — optional comma-separated E.164 phone numbers allowed to use the iMessage agent. Leave unset to allow all numbers.
+- `AGENT_API_TOKEN` — protects Studio and generic agent API routes.
+- `AGENT_RESOURCE_ID` — resource used by Studio/API sessions.
+- `AGENT_PUBLIC_URL` — stable public origin used by QStash and Google links.
 - `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` — scheduled-task request verification.
 - `OPENWEATHER_API_KEY` — weather and local-time tools.
-- `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — optional agent tracing; keep local tracing off by default and use separate projects and keys for development, staging, and production.
-- `LANGSMITH_ENDPOINT` — must be `https://eu.api.smith.langchain.com`; tracing fails closed for any other endpoint.
-- `LANGSMITH_WORKSPACE_ID` — required when `LANGSMITH_API_KEY` is organization-scoped.
-- `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` — `true` keeps the corresponding content out of traces; `false` explicitly captures it in LangSmith.
-- `LANGSMITH_TRACING_SAMPLING_RATE` — optional trace sampling rate from `0` to `1`.
-- `AGENT_OBSERVABILITY_HASH_KEY` — environment-specific base64-encoded 32-byte key for pseudonymizing trace identities.
 
 Never commit real secrets or local `.env*` files.
 
 ## Testing
 
-Prefer tests around public module boundaries:
-
-- Weather behavior through `WeatherService`.
-- Memory context behavior through `AgentContextService` and `AgentMemoryService`.
-
-Mock external boundaries: OpenAI/AI SDK calls, iMessage/Chat SDK posting, Blooio, OpenWeather, QStash, and database services. Database integration tests are gated by `AGENT_DB_INTEGRATION_TESTS=1` and should stay focused on persistence behavior that unit tests cannot prove.
-
-Observability must stay non-critical: tracing failures must not fail agent turns, and tests must not
-send traces to LangSmith. Keep raw user identifiers out of trace metadata; trace content retention
-is controlled only through `LANGSMITH_HIDE_INPUTS` and `LANGSMITH_HIDE_OUTPUTS`.
+Prefer tests around public module and workflow boundaries. Mock OpenAI, Photon, Google, OpenWeather,
+QStash, and database boundaries. Keep normal tests offline; model-backed evaluation belongs in the
+separate `eval` command.
 
 ## Code Style
 

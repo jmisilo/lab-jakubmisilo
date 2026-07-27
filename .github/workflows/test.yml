@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_test
-      RUN_AGENT_REBUILD_EVALS: ${{ secrets.OPENAI_API_KEY != '' }}
+      RUN_AGENT_EVALS: ${{ secrets.OPENAI_API_KEY != '' }}
 
     services:
       postgres:
@@ -47,39 +47,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate agent database migrations
-        run: pnpm --filter @labjm/agent db:check
-
-      - name: Verify agent schema migration coverage
+      - name: Prepare agent database
         run: |
-          pnpm --filter @labjm/agent db:generate --name ci-schema-drift
-          git diff --exit-code -- apps/agent/src/infrastructure/db/drizzle
-
-      - name: Apply agent database migrations
-        run: pnpm --filter @labjm/agent db:migrate
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector'
+          pnpm --filter @labjm/agent db:push
 
       - name: Run tests
         run: pnpm test
 
-      - name: Prepare agent rebuild eval database
-        if: env.RUN_AGENT_REBUILD_EVALS == 'true'
-        run: |
-          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector'
-          pnpm --filter agent-rebuild db:push
-
-      - name: Run agent rebuild evaluations
-        if: env.RUN_AGENT_REBUILD_EVALS == 'true'
+      - name: Run agent evaluations
+        if: env.RUN_AGENT_EVALS == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: pnpm --filter agent-rebuild eval
-
-      - name: Run agent database integration tests
-        env:
-          AGENT_DB_INTEGRATION_TESTS: '1'
-        run: >-
-          pnpm --filter @labjm/agent test --runInBand
-          src/infrastructure/db/services/agent-knowledge.integration.test.ts
-          src/infrastructure/db/services/agent-persistence.integration.test.ts
+        run: pnpm --filter @labjm/agent eval
 
       - name: Run typecheck
         run: pnpm typecheck
