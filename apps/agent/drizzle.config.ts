@@ -1,16 +1,23 @@
 import { config } from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
 
-config({ path: '.env.local', quiet: true });
+config({ path: '.env', quiet: true });
+config({ path: '.env.local', override: true, quiet: true });
+
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is required to manage the agent database schema.');
+}
 
 export default defineConfig({
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: databaseUrl,
   },
-  out: './src/infrastructure/db/drizzle',
-  schema: './src/infrastructure/db/schema.ts',
-  tablesFilter: ['!chat_state_*', '!chat_subscriptions', '!chat_locks', '!chat_cache'],
+  out: './src/infrastructure/database/drizzle',
+  schema: './src/infrastructure/database/schema.ts',
+  tablesFilter: ['agent_*'],
   strict: true,
   verbose: true,
 });
