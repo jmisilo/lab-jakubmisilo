@@ -1,8 +1,8 @@
 import type { Message, Thread } from 'chat';
 
 import { openai } from '@ai-sdk/openai';
+import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
-import { photon } from '@imessage-sdk/photon';
 import { Agent } from '@mastra/core/agent';
 import { askUserTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
@@ -33,7 +33,7 @@ import { manageKnowledgeTool, readKnowledgeTool } from '../tools/knowledge-tools
 import { preDaySummaryWorkflow } from '../workflows/pre-day-summary';
 
 const imessageAdapter = createIMessageAdapter({
-  provider: photon(),
+  provider: blooio(),
 });
 
 export const agent = new Agent({
