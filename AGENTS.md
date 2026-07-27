@@ -58,7 +58,7 @@ Keep external systems behind service boundaries. Do not call provider SDKs or da
 
 Mastra Channels normalizes platform events and owns thread continuity.
 
-- The Photon iMessage adapter resolves the canonical resource from `message.author.userId`.
+- The Blooio iMessage adapter resolves the canonical resource from `message.author.userId`.
 - Keep webhook routes thin and signature-verified.
 - Keep attachment limits and normalization in the attachments module.
 - Do not use Mastra's in-process scheduler on serverless deployment. Recurring definitions use
@@ -88,7 +88,7 @@ Never commit real secrets or local `.env*` files.
 
 ## Testing
 
-Prefer tests around public module and workflow boundaries. Mock OpenAI, Photon, Google, OpenWeather,
+Prefer tests around public module and workflow boundaries. Mock OpenAI, Blooio, Google, OpenWeather,
 QStash, and database boundaries. Keep normal tests offline; model-backed evaluation belongs in the
 separate `eval` command.
 

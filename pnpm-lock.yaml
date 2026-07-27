@@ -48,8 +48,8 @@ importers:
         specifier: ^0.1.2
         version: 0.1.2
       '@imessage-sdk/chat-adapter':
-        specifier: 0.1.0-beta.3
-        version: 0.1.0-beta.3(ai@7.0.19(zod@4.4.3))(chat@4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))
+        specifier: 0.1.1
+        version: 0.1.1(ai@7.0.19(zod@4.4.3))(chat@4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))
       '@imessage-sdk/photon':
         specifier: ^0.1.2
         version: 0.1.2(typescript@6.0.3)
@@ -81,8 +81,8 @@ importers:
         specifier: 7.0.19
         version: 7.0.19(zod@4.4.3)
       chat:
-        specifier: 4.34.0
-        version: 4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
+        specifier: 4.35.0
+        version: 4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
       croner:
         specifier: ^10.0.1
         version: 10.0.1
@@ -858,8 +858,8 @@ packages:
   '@bufbuild/protobuf@2.12.1':
     resolution: {integrity: sha512-BvAMfS6LrgZiryOAZ4pBYucu4wG/Ei/9o9DZ9akbREnMLbPJiom2i8b9C8IsKErQoiKqVhrerzt3kOT/RrzLHg==}
 
-  '@chat-adapter/shared@4.33.0':
-    resolution: {integrity: sha512-PIafG7ySashbaGBBBnpDtufgXYiAEf8LIp2nu6iTXYe97KBgCK5qwFksONxEcvOkpMvLsn2Tx/Ui2dGLA0Xe6g==}
+  '@chat-adapter/shared@4.35.0':
+    resolution: {integrity: sha512-C0GvfiSk6JMdLlydbLIOmT9frMicFic++HBaD69JqmgyaT/CUvOII83Tsq+Yf5DKp53BXbK1NswKg5CId0PW9A==}
     engines: {node: '>=20'}
 
   '@chevrotain/types@11.1.2':
@@ -1660,11 +1660,11 @@ packages:
     resolution: {integrity: sha512-Yc3So/RU4lZ7hkZVeJnBua/kLA5Dlk53UabyH7vUxoo3GLbbBP8RAhPztmO36oGxKMXtVIohi9fAvGjUhz4oKg==}
     engines: {node: '>=20'}
 
-  '@imessage-sdk/chat-adapter@0.1.0-beta.3':
-    resolution: {integrity: sha512-tyi15obkhy6gAIdTHzrcVlFEcoOzOdJHFuh2E9YC4Zq2jbnnp+yYc5+I+1hqlFMeB5clsmM6SBxYdltwzd8jsg==}
+  '@imessage-sdk/chat-adapter@0.1.1':
+    resolution: {integrity: sha512-cii4E9ehO9+4FvJ3BM+1N8j7BSEytopRkFAsaVHcht+bAqX8QQPH+5a7/p1uelccktsEOOtsdgPjLMmLxoAdfQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      chat: ^4.33.0
+      chat: ^4.35.0
 
   '@imessage-sdk/photon@0.1.2':
     resolution: {integrity: sha512-oBXKkaZA3UYXOkpEFMzsd2yStj80KHnlcQ6eIl180RXh6spoaEjg3ELVCv8pY0m10496qGlQTrEY/zvelsWqHQ==}
@@ -3772,26 +3772,17 @@ packages:
   chardet@2.2.0:
     resolution: {integrity: sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA==}
 
-  chat@4.33.0:
-    resolution: {integrity: sha512-qaQyr6Nm7gLEPkYpfjlZzCxKKjvDyRe3GoVA5++RrzW9po5fe3ddH4l9JkGaFsTvSiRGAzuz12WJj/BB5+A6Hw==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      ai: ^6.0.182
-      zod: ^3.0.0 || ^4.0.0
-    peerDependenciesMeta:
-      ai:
-        optional: true
-      zod:
-        optional: true
-
-  chat@4.34.0:
-    resolution: {integrity: sha512-g3c9ANavtCX7BwHcB5c3lWKIUm+8Oo7qlbgQ7/ni1rmVLLeCQa7FiMfeIyEyTAd/4HlRQu5jcS4EPdb0VyhUDQ==}
+  chat@4.35.0:
+    resolution: {integrity: sha512-IUbdgTBvgs/XYhKcpKGrpmZgcl8KcA5NZ+eOww+0rBdhPf+95INjcUauQTk5e48UI1V4PRg9stToPsT4vle07g==}
     engines: {node: '>=20'}
     peerDependencies:
       ai: ^6.0.182 || ^7.0.0
+      workflow: ^5.0.0-beta.35
       zod: ^3.0.0 || ^4.0.0
     peerDependenciesMeta:
       ai:
+        optional: true
+      workflow:
         optional: true
       zod:
         optional: true
@@ -8464,12 +8455,13 @@ snapshots:
 
   '@bufbuild/protobuf@2.12.1': {}
 
-  '@chat-adapter/shared@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)':
+  '@chat-adapter/shared@4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      chat: 4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
+      chat: 4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
     transitivePeerDependencies:
       - ai
       - supports-color
+      - workflow
       - zod
 
   '@chevrotain/types@11.1.2': {}
@@ -8983,15 +8975,16 @@ snapshots:
       imessage-sdk: 0.1.3
       zod: 4.4.3
 
-  '@imessage-sdk/chat-adapter@0.1.0-beta.3(ai@7.0.19(zod@4.4.3))(chat@4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))':
+  '@imessage-sdk/chat-adapter@0.1.1(ai@7.0.19(zod@4.4.3))(chat@4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3))':
     dependencies:
-      '@chat-adapter/shared': 4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
-      chat: 4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
+      '@chat-adapter/shared': 4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
+      chat: 4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
       imessage-sdk: 0.1.3
       zod: 4.4.3
     transitivePeerDependencies:
       - ai
       - supports-color
+      - workflow
 
   '@imessage-sdk/photon@0.1.2(typescript@6.0.3)':
     dependencies:
@@ -9421,7 +9414,7 @@ snapshots:
       '@sindresorhus/slugify': 2.2.1
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
-      chat: 4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
+      chat: 4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3)
       croner: 10.0.1
       dotenv: 17.4.2
       execa: 9.6.1
@@ -9449,6 +9442,7 @@ snapshots:
       - rxjs
       - supports-color
       - utf-8-validate
+      - workflow
 
   '@mastra/deployer-vercel@1.2.9(@hono/node-server@2.0.5(hono@4.12.25))(@mastra/core@1.52.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.4)(ai@7.0.19(zod@4.4.3))(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3))(typescript@6.0.3)(zod@4.4.3)':
     dependencies:
@@ -11144,22 +11138,7 @@ snapshots:
 
   chardet@2.2.0: {}
 
-  chat@4.33.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3):
-    dependencies:
-      '@workflow/serde': 4.1.0-beta.2
-      mdast-util-to-string: 4.0.0
-      remark-gfm: 4.0.1
-      remark-parse: 11.0.0
-      remark-stringify: 11.0.0
-      remend: 1.3.0
-      unified: 11.0.5
-    optionalDependencies:
-      ai: 7.0.19(zod@4.4.3)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
-
-  chat@4.34.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3):
+  chat@4.35.0(ai@7.0.19(zod@4.4.3))(zod@4.4.3):
     dependencies:
       '@workflow/serde': 4.1.0-beta.2
       mdast-util-to-string: 4.0.0
