@@ -15,7 +15,7 @@ bundle, uploaded to Vercel, or covered by the active package's build and test co
 - Images, PDFs, and videos with bounded in-memory attachment handling
 - Calorie and macronutrient tracking
 - Weather, local time, and OpenAI web search
-- Mastra Platform production observability, scorers, and the pre-day summary workflow
+- Mastra Platform production observability, scorers, and the day summary workflow
 
 ## Local Development
 
@@ -31,6 +31,10 @@ Push the custom schema and start Studio:
 pnpm --filter @labjm/agent db:push
 pnpm --filter @labjm/agent dev
 ```
+
+`db:push` also initializes Mastra's storage schema. Production disables automatic storage
+initialization so Vercel cold starts only perform normal queries, not schema DDL. Run `db:push`
+before the first deployment and after upgrading Mastra storage packages.
 
 Open `http://localhost:4111`. Studio and generic agent APIs use `AGENT_API_TOKEN`; local development
 falls back to `agent-local-dev-token`.
@@ -96,7 +100,7 @@ Configure Blooio to deliver to:
 https://<agent-domain>/api/agents/agent/channels/imessage/webhook
 ```
 
-Push the schema once for the production database, then deploy from the repository:
+Push both application and Mastra schemas before deploying:
 
 ```sh
 pnpm --filter @labjm/agent db:push

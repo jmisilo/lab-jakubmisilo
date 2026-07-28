@@ -23,13 +23,12 @@ export const schedulingSkill = createSkill({
     - Current limits are 10 active one-time and 10 active recurring schedules per user.
     - Confirm creation only after the tool returns ok: true.
 
-    ## Pre-Day Summary
+    ## Day Summary
 
-    When the user wants a recurring upcoming-day briefing, create a recurring agent schedule. Its
-    durable prompt must tell the future agent to run the pre-day-summary workflow for the upcoming
-    day, supply relevant conversational context, and send only the resulting user-facing briefing.
-    Agree on a delivery time when none is stated; an evening-before time is usually more useful than
-    an early-morning default.
+    When the user wants a recurring daily briefing, create a recurring agent schedule. Its durable
+    prompt must tell the future agent to run the day-summary workflow for the current local day,
+    supply relevant conversational context, and send only the resulting user-facing briefing.
+    Agree on a delivery time when none is stated; use a practical morning time by default.
 
     ## Time
 
@@ -39,6 +38,8 @@ export const schedulingSkill = createSkill({
 
     ## Manage
 
+    Use list when the user asks what reminders or scheduled tasks they have. It returns both
+    one-time and recurring schedules.
     Use list before changing a naturally described schedule unless exactly one matching ID is already
     available from recent tool context. Use get when full details of one exact schedule are needed.
     Use update to change its title, prompt, time, or cadence; pause for a temporary stop; resume to
@@ -50,7 +51,8 @@ export const schedulingSkill = createSkill({
     Use complete_occurrence only after explicit completion such as "done", "I took them", or "already
     handled". Never infer completion from plans, questions, negation, habits, or unrelated history.
     Resolve exactly one pending schedule first. One-time completion stops that reminder permanently;
-    recurring completion suppresses only today's occurrence.
+    recurring completion suppresses only that exact pending occurrence. Later occurrences, including
+    later the same day, remain active.
 
     ## Calendar Boundary
 

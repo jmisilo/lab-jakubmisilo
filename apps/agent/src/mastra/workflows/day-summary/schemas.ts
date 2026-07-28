@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-export const PreDaySummaryInputSchema = z.object({
+export const DaySummaryInputSchema = z.object({
   date: z.iso
     .date()
     .optional()
-    .describe(
-      'Local date to summarize, formatted YYYY-MM-DD. Omit only when the upcoming day means tomorrow.',
-    ),
+    .describe('Local date to summarize, formatted YYYY-MM-DD. Omit to summarize today.'),
   relevantContext: z
     .string()
     .max(6_000)
@@ -16,7 +14,7 @@ export const PreDaySummaryInputSchema = z.object({
     ),
 });
 
-export const PreDaySummaryDayWindowSchema = z.object({
+export const DaySummaryDayWindowSchema = z.object({
   date: z.iso.date(),
   timeZone: z.string().min(1),
   timeMin: z.iso.datetime({ offset: true }),
@@ -24,7 +22,7 @@ export const PreDaySummaryDayWindowSchema = z.object({
   relevantContext: z.string().max(6_000).optional(),
 });
 
-const PreDaySummaryCalendarEventSchema = z.object({
+const DaySummaryCalendarEventSchema = z.object({
   title: z.string(),
   start: z.string(),
   end: z.string(),
@@ -32,28 +30,28 @@ const PreDaySummaryCalendarEventSchema = z.object({
   location: z.string().optional(),
 });
 
-const PreDaySummaryScheduledTaskSchema = z.object({
+const DaySummaryScheduledTaskSchema = z.object({
   title: z.string(),
   scheduledFor: z.iso.datetime({ offset: true }),
   recurring: z.boolean(),
 });
 
-export const PreDaySummaryContextSchema = PreDaySummaryDayWindowSchema.extend({
+export const DaySummaryContextSchema = DaySummaryDayWindowSchema.extend({
   calendar: z.object({
     available: z.boolean(),
-    events: z.array(PreDaySummaryCalendarEventSchema),
+    events: z.array(DaySummaryCalendarEventSchema),
   }),
   schedules: z.object({
     available: z.boolean(),
-    tasks: z.array(PreDaySummaryScheduledTaskSchema),
+    tasks: z.array(DaySummaryScheduledTaskSchema),
   }),
 });
 
-export const PreDaySummaryModelOutputSchema = z.object({
+export const DaySummaryModelOutputSchema = z.object({
   summary: z.string().min(1).max(6_000),
 });
 
-export const PreDaySummaryOutputSchema = z.object({
+export const DaySummaryOutputSchema = z.object({
   date: z.iso.date(),
   timeZone: z.string().min(1),
   summary: z.string().min(1).max(6_000),

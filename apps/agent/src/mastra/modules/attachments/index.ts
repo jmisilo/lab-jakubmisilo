@@ -6,7 +6,8 @@ import sharp from 'sharp';
 import { logger } from '../../../infrastructure/logger';
 
 const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
-const MAX_IMAGE_COUNT = 3;
+const MAX_ATTACHMENT_COUNT = 3;
+const MAX_TOTAL_ATTACHMENT_BYTES = 14 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1_536;
 const MAX_IMAGE_PIXELS = 40_000_000;
 
@@ -17,18 +18,26 @@ export class AttachmentService {
     defaultHandler: (thread: Thread, message: Message) => Promise<void>,
   ) {
     try {
-      const imageCount = message.attachments.filter((attachment) =>
-        this.#isImage(attachment),
-      ).length;
-
-      if (imageCount > MAX_IMAGE_COUNT) {
-        await thread.post('Please send up to three images at a time.');
+      if (message.attachments.length > MAX_ATTACHMENT_COUNT) {
+        await thread.post('Please send up to three attachments at a time.');
         return;
       }
 
-      message.attachments = await Promise.all(
-        message.attachments.map((attachment) => this.#prepare(attachment)),
-      );
+      this.#assertDeclaredAttachmentSizes(message.attachments);
+      this.#assertDeclaredTotalSize(message.attachments);
+
+      const preparedAttachments: Attachment[] = [];
+      let totalBytes = 0;
+
+      for (const attachment of message.attachments) {
+        const prepared = await this.#prepare(attachment, MAX_TOTAL_ATTACHMENT_BYTES - totalBytes);
+
+        totalBytes += prepared.accountedBytes;
+        this.#assertTotalSize(totalBytes);
+        preparedAttachments.push(prepared.attachment);
+      }
+
+      message.attachments = preparedAttachments;
 
       await defaultHandler(thread, message);
     } catch (error) {
@@ -45,19 +54,22 @@ export class AttachmentService {
     }
   }
 
-  static async #prepare(attachment: Attachment) {
+  static async #prepare(attachment: Attachment, remainingBytes: number) {
     if (attachment.size !== undefined && attachment.size > MAX_ATTACHMENT_BYTES) {
       throw new Error('Each attachment must be 7 MB or smaller.');
     }
 
-    const data = await this.#readBounded(attachment);
+    const data = await this.#readBounded(attachment, remainingBytes);
 
     if (!this.#isImage(attachment)) {
       return {
-        ...attachment,
-        data,
-        url: undefined,
-        fetchData: async () => data,
+        attachment: {
+          ...attachment,
+          data,
+          url: undefined,
+          fetchData: async () => data,
+        },
+        accountedBytes: data.byteLength,
       };
     }
 
@@ -65,30 +77,48 @@ export class AttachmentService {
       const normalized = await this.#normalizeImage(data, attachment);
 
       return {
-        ...attachment,
-        data: normalized,
-        url: undefined,
-        fetchData: async () => normalized,
-        mimeType: 'image/jpeg',
-        name: 'image.jpg',
-        size: normalized.byteLength,
+        attachment: {
+          ...attachment,
+          data: normalized,
+          url: undefined,
+          fetchData: async () => normalized,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          size: normalized.byteLength,
+        },
+        accountedBytes: Math.max(data.byteLength, normalized.byteLength),
       };
     } catch {
       throw new Error('Please send a valid JPEG, PNG, WebP, HEIC, or HEIF image.');
     }
   }
 
-  static async #readBounded(attachment: Attachment) {
+  static async #readBounded(attachment: Attachment, remainingBytes: number) {
     if (Buffer.isBuffer(attachment.data)) {
-      return this.#assertSize(attachment.data);
+      return this.#assertSize(attachment.data, remainingBytes);
     }
 
     if (attachment.data instanceof Blob) {
-      return this.#assertSize(Buffer.from(await attachment.data.arrayBuffer()));
+      if (attachment.data.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error('Each attachment must be 7 MB or smaller.');
+      }
+
+      if (attachment.data.size > remainingBytes) {
+        throw new Error('Please keep all attachments in a message under 14 MB total.');
+      }
+
+      return this.#assertSize(Buffer.from(await attachment.data.arrayBuffer()), remainingBytes);
     }
 
     if (attachment.fetchData) {
-      return this.#assertSize(await attachment.fetchData());
+      if (
+        (attachment.size === undefined && remainingBytes < MAX_ATTACHMENT_BYTES) ||
+        (attachment.size !== undefined && attachment.size > remainingBytes)
+      ) {
+        throw new Error('Please keep all attachments in a message under 14 MB total.');
+      }
+
+      return this.#assertSize(await attachment.fetchData(), remainingBytes);
     }
 
     if (!attachment.url) {
@@ -123,6 +153,11 @@ export class AttachmentService {
       if (totalBytes > MAX_ATTACHMENT_BYTES) {
         await reader.cancel();
         throw new Error('Each attachment must be 7 MB or smaller.');
+      }
+
+      if (totalBytes > remainingBytes) {
+        await reader.cancel();
+        throw new Error('Please keep all attachments in a message under 14 MB total.');
       }
 
       chunks.push(Buffer.from(chunk.value));
@@ -191,11 +226,35 @@ export class AttachmentService {
     );
   }
 
-  static #assertSize(data: Buffer) {
+  static #assertSize(data: Buffer, remainingBytes: number) {
     if (data.byteLength > MAX_ATTACHMENT_BYTES) {
       throw new Error('Each attachment must be 7 MB or smaller.');
     }
 
+    if (data.byteLength > remainingBytes) {
+      throw new Error('Please keep all attachments in a message under 14 MB total.');
+    }
+
     return data;
+  }
+
+  static #assertDeclaredTotalSize(attachments: Attachment[]) {
+    const totalBytes = attachments.reduce((sum, attachment) => sum + (attachment.size ?? 0), 0);
+
+    this.#assertTotalSize(totalBytes);
+  }
+
+  static #assertDeclaredAttachmentSizes(attachments: Attachment[]) {
+    for (const attachment of attachments) {
+      if (attachment.size !== undefined && attachment.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error('Each attachment must be 7 MB or smaller.');
+      }
+    }
+  }
+
+  static #assertTotalSize(totalBytes: number) {
+    if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      throw new Error('Please keep all attachments in a message under 14 MB total.');
+    }
   }
 }

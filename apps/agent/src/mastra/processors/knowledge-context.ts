@@ -9,7 +9,7 @@ import {
   KnowledgeContextNoteTag,
 } from '../modules/knowledge/context';
 import { resolveIdentityId } from '../runtime-context';
-import { insertContextBeforeLatestMessage } from './late-context';
+import { insertContextBeforeLatestUserMessage } from './late-context';
 
 const KNOWLEDGE_CONTEXT_STATE_KEY = 'knowledgeContext';
 
@@ -90,7 +90,7 @@ export class KnowledgeContextProcessor {
     );
 
     return {
-      prompt: insertContextBeforeLatestMessage(stablePrompt, knowledgeContext.join('\n\n')),
+      prompt: insertContextBeforeLatestUserMessage(stablePrompt, knowledgeContext.join('\n\n')),
     };
   }
 }

@@ -7,7 +7,6 @@ import {
   RequestContext,
 } from '@mastra/core/request-context';
 import { Client, Receiver } from '@upstash/qstash';
-import { Cron } from 'croner';
 import { and, count, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { database } from '../../../infrastructure/database';
@@ -16,6 +15,7 @@ import {
   recurringScheduleRuns,
   scheduleOccurrenceCompletions,
 } from '../../../infrastructure/database/schema';
+import { nextPendingRecurringOccurrence, recurringOccurrenceForTrigger } from './occurrences';
 
 const ACTIVE_ONE_TIME_LIMIT = 10;
 const ACTIVE_RECURRING_LIMIT = 10;
@@ -274,45 +274,53 @@ export class SchedulingService {
       'timezone' in recurring && typeof recurring.timezone === 'string'
         ? recurring.timezone
         : 'UTC';
-    const nextRun = new Cron(recurring.cron, {
-      timezone: timeZone,
-      paused: true,
-    }).nextRun(new Date(Date.now() - EARLY_DELIVERY_TOLERANCE_MS));
+    const now = new Date();
+    const scheduledFor = nextPendingRecurringOccurrence({
+      cron: recurring.cron,
+      timeZone,
+      now,
+    });
 
-    if (!nextRun) {
+    if (!scheduledFor) {
       return null;
     }
 
-    const localDate = this.#localDate(nextRun, timeZone);
-
-    if (localDate !== this.#localDate(new Date(), timeZone)) {
+    if (this.#localDate(scheduledFor, timeZone) !== this.#localDate(now, timeZone)) {
       throw new Error('That recurring task has no pending occurrence today.');
     }
 
     await database
       .insert(scheduleOccurrenceCompletions)
-      .values({ scheduleId: recurring.id, resourceId, localDate })
+      .values({ scheduleId: recurring.id, resourceId, scheduledFor })
       .onConflictDoNothing();
 
-    return { kind: 'recurring' as const, localDate };
+    return { kind: 'recurring' as const, scheduledFor: scheduledFor.toISOString() };
   }
 
   static async prepareOccurrence({
     scheduleId,
+    cron,
     firedAt,
     timeZone,
   }: {
     scheduleId: string;
+    cron: string;
     firedAt: Date;
     timeZone: string;
   }) {
+    const scheduledFor = recurringOccurrenceForTrigger({ cron, firedAt, timeZone });
+
+    if (!scheduledFor) {
+      return undefined;
+    }
+
     const [completion] = await database
       .select({ scheduleId: scheduleOccurrenceCompletions.scheduleId })
       .from(scheduleOccurrenceCompletions)
       .where(
         and(
           eq(scheduleOccurrenceCompletions.scheduleId, scheduleId),
-          eq(scheduleOccurrenceCompletions.localDate, this.#localDate(firedAt, timeZone)),
+          eq(scheduleOccurrenceCompletions.scheduledFor, scheduledFor),
         ),
       )
       .limit(1);
@@ -462,19 +470,10 @@ export class SchedulingService {
 
     this.#assertOneTimeRunAt(schedule.runAt);
     const revision = schedule.revision + 1;
-    const messageId = await this.#publishOneTime({
-      scheduleId,
-      revision,
-      runAt: schedule.runAt,
-      title: schedule.title,
-    });
-
-    await database
+    const [reserved] = await database
       .update(oneTimeSchedules)
       .set({
-        status: 'active',
         revision,
-        qstashMessageId: messageId,
         updatedAt: new Date(),
       })
       .where(
@@ -484,7 +483,49 @@ export class SchedulingService {
           eq(oneTimeSchedules.status, 'paused'),
           eq(oneTimeSchedules.revision, schedule.revision),
         ),
-      );
+      )
+      .returning({ id: oneTimeSchedules.id });
+
+    if (!reserved) {
+      return false;
+    }
+
+    const messageId = await this.#publishOneTime({
+      scheduleId,
+      revision,
+      runAt: schedule.runAt,
+      title: schedule.title,
+    });
+
+    let resumed;
+
+    try {
+      [resumed] = await database
+        .update(oneTimeSchedules)
+        .set({
+          status: 'active',
+          revision,
+          qstashMessageId: messageId,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(oneTimeSchedules.id, scheduleId),
+            eq(oneTimeSchedules.resourceId, resourceId),
+            eq(oneTimeSchedules.status, 'paused'),
+            eq(oneTimeSchedules.revision, revision),
+          ),
+        )
+        .returning({ id: oneTimeSchedules.id });
+    } catch (error) {
+      await this.#compensateOneTimePublish(messageId, error);
+      throw error;
+    }
+
+    if (!resumed) {
+      await this.#qstash.messages.cancel(messageId);
+      return false;
+    }
 
     return true;
   }
@@ -511,7 +552,7 @@ export class SchedulingService {
     const revision = current.revision + 1;
     const title = input.title ?? current.title;
 
-    await database
+    const [paused] = await database
       .update(oneTimeSchedules)
       .set({
         status: 'paused',
@@ -522,8 +563,18 @@ export class SchedulingService {
         updatedAt: new Date(),
       })
       .where(
-        and(eq(oneTimeSchedules.id, current.id), eq(oneTimeSchedules.revision, current.revision)),
-      );
+        and(
+          eq(oneTimeSchedules.id, current.id),
+          eq(oneTimeSchedules.resourceId, input.resourceId),
+          eq(oneTimeSchedules.status, current.status),
+          eq(oneTimeSchedules.revision, current.revision),
+        ),
+      )
+      .returning({ id: oneTimeSchedules.id });
+
+    if (!paused) {
+      return false;
+    }
 
     if (current.qstashMessageId) {
       await this.#qstash.messages.cancel(current.qstashMessageId);
@@ -540,16 +591,30 @@ export class SchedulingService {
       title,
     });
 
-    await database
-      .update(oneTimeSchedules)
-      .set({ status: 'active', qstashMessageId: messageId, updatedAt: new Date() })
-      .where(
-        and(
-          eq(oneTimeSchedules.id, current.id),
-          eq(oneTimeSchedules.revision, revision),
-          eq(oneTimeSchedules.status, 'paused'),
-        ),
-      );
+    let reactivated;
+
+    try {
+      [reactivated] = await database
+        .update(oneTimeSchedules)
+        .set({ status: 'active', qstashMessageId: messageId, updatedAt: new Date() })
+        .where(
+          and(
+            eq(oneTimeSchedules.id, current.id),
+            eq(oneTimeSchedules.resourceId, input.resourceId),
+            eq(oneTimeSchedules.revision, revision),
+            eq(oneTimeSchedules.status, 'paused'),
+          ),
+        )
+        .returning({ id: oneTimeSchedules.id });
+    } catch (error) {
+      await this.#compensateOneTimePublish(messageId, error);
+      throw error;
+    }
+
+    if (!reactivated) {
+      await this.#qstash.messages.cancel(messageId);
+      return false;
+    }
 
     return true;
   }
@@ -648,6 +713,7 @@ export class SchedulingService {
       schedule.agentId !== 'agent' ||
       !schedule.resourceId ||
       !schedule.threadId ||
+      !schedule.cron ||
       schedule.status !== 'active'
     ) {
       return { status: 'inactive_or_missing' as const };
@@ -659,7 +725,8 @@ export class SchedulingService {
       respectOccurrenceCompletion &&
       (await this.prepareOccurrence({
         scheduleId: schedule.id,
-        firedAt: new Date(),
+        cron: schedule.cron,
+        firedAt: await this.#recurringDeliveryCreatedAt(deliveryId),
         timeZone,
       })) === null
     ) {
@@ -802,6 +869,28 @@ export class SchedulingService {
     }
 
     return messageId;
+  }
+
+  static async #compensateOneTimePublish(messageId: string, cause: unknown) {
+    try {
+      await this.#qstash.messages.cancel(messageId);
+    } catch (compensationError) {
+      throw new AggregateError(
+        [cause, compensationError],
+        'The one-time reminder update failed and its QStash message could not be cancelled.',
+      );
+    }
+  }
+
+  static async #recurringDeliveryCreatedAt(deliveryId: string) {
+    const message = await this.#qstash.messages.get(deliveryId);
+    const createdAt = new Date(message.createdAt);
+
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new Error('QStash returned an invalid recurring delivery creation time.');
+    }
+
+    return createdAt;
   }
 
   static async #upsertRecurringTrigger({

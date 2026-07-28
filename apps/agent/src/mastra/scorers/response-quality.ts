@@ -2,6 +2,8 @@ import { createScorer } from '@mastra/core/evals';
 import dedent from 'dedent';
 import { z } from 'zod';
 
+import { createOpenAILegacyPromptCacheModel, OpenAIPromptCacheKeys } from '../prompt-cache';
+
 const ResponseQualityAnalysisSchema = z.object({
   relevance: z.number().min(0).max(1),
   naturalness: z.number().min(0).max(1),
@@ -17,7 +19,10 @@ export const responseQualityScorer = createScorer({
     'Evaluates whether the personal assistant gives a relevant, natural, concise, user-focused response without exposing internal metadata.',
   type: 'agent',
   judge: {
-    model: 'openai/gpt-5.4-nano',
+    model: createOpenAILegacyPromptCacheModel(
+      'gpt-5.4-nano',
+      OpenAIPromptCacheKeys.responseQuality,
+    ),
     instructions:
       'You are a strict but practical evaluator of a personal assistant. Judge only the visible interaction and do not reward verbosity.',
   },
