@@ -50,7 +50,9 @@ jobs:
       - name: Prepare agent database
         run: |
           psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector'
-          pnpm --filter @labjm/agent db:push
+          pnpm --filter @labjm/agent db:push:ci
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c 'SELECT 1 FROM public.agent_knowledge_nodes LIMIT 0'
 
       - name: Run tests
         run: pnpm test
