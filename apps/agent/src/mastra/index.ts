@@ -1,12 +1,7 @@
 import { Mastra } from '@mastra/core/mastra';
 import { SimpleAuth } from '@mastra/core/server';
 import { VercelDeployer } from '@mastra/deployer-vercel';
-import {
-  MastraPlatformExporter,
-  MastraStorageExporter,
-  Observability,
-  SensitiveDataFilter,
-} from '@mastra/observability';
+import { Observability, SensitiveDataFilter } from '@mastra/observability';
 import { PostgresStore } from '@mastra/pg';
 
 import { databasePool } from '../infrastructure/database';
@@ -25,9 +20,10 @@ import { SchedulingService } from './modules/scheduling';
 import { scheduleExecutionRoute } from './modules/scheduling/routes';
 import { manageScheduleTool } from './modules/scheduling/tools';
 import { readLocalTimeTool, readWeatherTool } from './modules/weather/tools';
+import { createAgentObservabilityExporters } from './observability';
 import { responseQualityScorer } from './scorers/response-quality';
 import { manageKnowledgeTool, readKnowledgeTool } from './tools/knowledge-tools';
-import { preDaySummaryWorkflow } from './workflows/pre-day-summary';
+import { daySummaryWorkflow } from './workflows/day-summary';
 
 export const mastra = new Mastra({
   deployer: new VercelDeployer({
@@ -38,7 +34,7 @@ export const mastra = new Mastra({
   logger,
   agents: { agent },
   workflows: {
-    preDaySummary: preDaySummaryWorkflow,
+    daySummary: daySummaryWorkflow,
   },
   tools: {
     readKnowledgeTool,
@@ -60,18 +56,20 @@ export const mastra = new Mastra({
     id: 'agent-storage',
     pool: databasePool,
     schemaName: 'mastra',
+    disableInit: process.env.NODE_ENV === 'production',
   }),
   scheduler: {
     enabled: false,
   },
   schedules: {
     prepare: async ({ agentId, schedule, trigger }) => {
-      if (agentId !== 'agent') {
+      if (agentId !== 'agent' || typeof schedule.cron !== 'string') {
         return undefined;
       }
 
       return SchedulingService.prepareOccurrence({
         scheduleId: schedule.id,
+        cron: schedule.cron,
         firedAt: trigger.firedAt,
         timeZone: typeof schedule.timezone === 'string' ? schedule.timezone : 'UTC',
       });
@@ -95,7 +93,7 @@ export const mastra = new Mastra({
     configs: {
       default: {
         serviceName: 'agent',
-        exporters: [new MastraStorageExporter(), new MastraPlatformExporter()],
+        exporters: createAgentObservabilityExporters(),
         spanOutputProcessors: [new SensitiveDataFilter()],
         logging: {
           enabled: true,

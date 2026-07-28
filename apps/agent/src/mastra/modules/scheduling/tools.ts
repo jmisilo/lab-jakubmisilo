@@ -6,7 +6,7 @@ import { ManageScheduleInputSchema, ManageScheduleRequestSchema } from './schema
 export const manageScheduleTool = createTool({
   id: 'manage_schedule',
   description:
-    'Create, inspect, list, update, complete a pending occurrence, pause, resume, run, or cancel reminders and recurring tasks. Use get for one exact schedule and list to discover matches. Use complete_occurrence only after explicit completion language and an exact schedule match; it suppresses only today for recurring tasks. Resolve dates before creating. Confirm actions only when ok=true.',
+    'Create, inspect, list, update, complete a pending occurrence, pause, resume, run, or cancel reminders and recurring tasks. Use list when the user asks what reminders or scheduled tasks they have; it returns both oneTime and recurring schedules. Use get for one exact schedule. Use complete_occurrence only after explicit completion language and an exact schedule match; it suppresses only that exact recurring occurrence, while later occurrences remain active. Resolve dates before creating. Confirm actions only when ok=true.',
   inputSchema: ManageScheduleInputSchema,
   execute: async (input, { agent, mastra }) => {
     if (!agent?.resourceId || !agent.threadId || !mastra) {

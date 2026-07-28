@@ -7,18 +7,30 @@ import {
 } from '@mastra/evals/scorers/prebuilt';
 
 import { KnowledgeContextNoteTag } from '../modules/knowledge/context';
+import { createOpenAILegacyPromptCacheModel, OpenAIPromptCacheKeys } from '../prompt-cache';
 
-const JudgeModel = 'openai/gpt-5.4-nano';
+const PrecisionJudgeModel = createOpenAILegacyPromptCacheModel(
+  'gpt-5.4-nano',
+  OpenAIPromptCacheKeys.knowledgePrecision,
+);
+const RecallJudgeModel = createOpenAILegacyPromptCacheModel(
+  'gpt-5.4-nano',
+  OpenAIPromptCacheKeys.knowledgeRecall,
+);
+const FaithfulnessJudgeModel = createOpenAILegacyPromptCacheModel(
+  'gpt-5.4-nano',
+  OpenAIPromptCacheKeys.knowledgeFaithfulness,
+);
 
 export const knowledgeContextPrecisionScorer = createContextPrecisionScorer({
-  model: JudgeModel,
+  model: PrecisionJudgeModel,
   options: {
     contextExtractor: getRetrievedKnowledgeContext,
   },
 });
 
 export const knowledgeContextRecallScorer = createContextRecallScorer({
-  model: JudgeModel,
+  model: RecallJudgeModel,
   options: {
     contextExtractor: getRetrievedKnowledgeContext,
   },
@@ -26,7 +38,7 @@ export const knowledgeContextRecallScorer = createContextRecallScorer({
 
 export function createKnowledgeFaithfulnessScorer(context: string[]) {
   return createFaithfulnessScorer({
-    model: JudgeModel,
+    model: FaithfulnessJudgeModel,
     options: { context },
   });
 }

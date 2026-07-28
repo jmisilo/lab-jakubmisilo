@@ -2,29 +2,31 @@ import { Mastra } from '@mastra/core/mastra';
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from '@mastra/core/request-context';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { preDaySummaryWorkflow } from '.';
+import { daySummaryWorkflow } from '.';
 import { GoogleService } from '../../modules/google';
 import { SchedulingService } from '../../modules/scheduling';
+import { daySummaryAgent } from './summary-agent';
 
 vi.mock('../../../infrastructure/database', () => ({
   database: {},
 }));
 vi.mock('./summary-agent', () => ({
-  preDaySummaryAgent: {
+  daySummaryAgent: {
     generate: vi.fn().mockResolvedValue({
       object: {
-        summary: 'Tomorrow is centered around the project review at noon.',
+        summary: 'Today is centered around the project review at noon.',
       },
     }),
   },
 }));
 
-describe('preDaySummaryWorkflow', () => {
+describe('daySummaryWorkflow', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
-  it('gathers upcoming-day context and returns a generated briefing', async () => {
+  it('gathers day context and returns a generated briefing', async () => {
     vi.spyOn(GoogleService, 'listCalendars').mockResolvedValue([
       { id: 'primary', summary: 'Personal' },
     ]);
@@ -42,10 +44,10 @@ describe('preDaySummaryWorkflow', () => {
     });
     const mastra = new Mastra({
       workflows: {
-        preDaySummary: preDaySummaryWorkflow,
+        daySummary: daySummaryWorkflow,
       },
     });
-    const workflow = mastra.getWorkflow('preDaySummary');
+    const workflow = mastra.getWorkflow('daySummary');
     const run = await workflow.createRun({ resourceId: 'user-1' });
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_RESOURCE_ID_KEY, 'user-1');
@@ -66,18 +68,61 @@ describe('preDaySummaryWorkflow', () => {
     }
 
     expect(result.stepExecutionPath).toEqual([
-      'resolve-upcoming-day',
-      'gather-upcoming-day-context',
-      'summarize-upcoming-day',
+      'resolve-day',
+      'gather-day-context',
+      'summarize-day',
     ]);
     expect(result.result).toEqual({
       date: '2026-07-26',
       timeZone: 'Europe/Warsaw',
-      summary: 'Tomorrow is centered around the project review at noon.',
+      summary: 'Today is centered around the project review at noon.',
       calendarAvailable: true,
       schedulesAvailable: true,
       eventCount: 1,
       scheduledTaskCount: 0,
     });
+    expect(daySummaryAgent.generate).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        memory: {
+          resource: 'user-1',
+          thread: 'day-summary:user-1:2026-07-26',
+        },
+        requestContext,
+      }),
+    );
+  });
+
+  it('defaults to the current local day', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-26T22:30:00.000Z'));
+    vi.spyOn(GoogleService, 'listCalendars').mockResolvedValue([]);
+    vi.spyOn(SchedulingService, 'list').mockResolvedValue({
+      recurring: [],
+      oneTime: [],
+    });
+    const mastra = new Mastra({
+      workflows: {
+        daySummary: daySummaryWorkflow,
+      },
+    });
+    const workflow = mastra.getWorkflow('daySummary');
+    const run = await workflow.createRun({ resourceId: 'user-1' });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_RESOURCE_ID_KEY, 'user-1');
+    requestContext.set('timeZone', 'Europe/Warsaw');
+
+    const result = await run.start({
+      inputData: {},
+      requestContext,
+    });
+
+    expect(result.status).toBe('success');
+
+    if (result.status !== 'success') {
+      throw new Error(`Day summary workflow finished with status ${result.status}.`);
+    }
+
+    expect(result.result.date).toBe('2026-07-27');
   });
 });

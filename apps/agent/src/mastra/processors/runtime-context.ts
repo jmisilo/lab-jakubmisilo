@@ -3,7 +3,7 @@ import type { ProcessInputStepArgs, ProcessLLMRequestArgs } from '@mastra/core/p
 import dedent from 'dedent';
 
 import { resolveTimeZone } from '../runtime-context';
-import { insertContextBeforeLatestMessage } from './late-context';
+import { insertContextBeforeLatestUserMessage } from './late-context';
 
 const RUNTIME_CONTEXT_TAG = 'agent-runtime-context';
 const RUNTIME_CONTEXT_STATE_KEY = 'runtimeContext';
@@ -13,6 +13,10 @@ export class RuntimeContextProcessor {
   readonly name = 'Agent runtime context';
 
   processInputStep({ requestContext, state }: ProcessInputStepArgs) {
+    if (typeof state[RUNTIME_CONTEXT_STATE_KEY] === 'string') {
+      return {};
+    }
+
     const timeZone = resolveTimeZone(requestContext);
     const now = new Date();
     const localDateTime = new Intl.DateTimeFormat('en-GB', {
@@ -43,7 +47,7 @@ export class RuntimeContextProcessor {
     }
 
     return {
-      prompt: insertContextBeforeLatestMessage(prompt, runtimeContext),
+      prompt: insertContextBeforeLatestUserMessage(prompt, runtimeContext),
     };
   }
 }

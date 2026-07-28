@@ -126,15 +126,18 @@ export const scheduleOccurrenceCompletions = pgTable(
   {
     scheduleId: text('schedule_id').notNull(),
     resourceId: text('resource_id').notNull(),
-    localDate: date('local_date', { mode: 'string' }).notNull(),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({
       name: 'agent_schedule_occurrence_completions_pk',
-      columns: [table.scheduleId, table.localDate],
+      columns: [table.scheduleId, table.scheduledFor],
     }),
-    index('agent_schedule_occurrence_completions_owner_idx').on(table.resourceId, table.localDate),
+    index('agent_schedule_occurrence_completions_owner_idx').on(
+      table.resourceId,
+      table.scheduledFor,
+    ),
   ],
 );
 

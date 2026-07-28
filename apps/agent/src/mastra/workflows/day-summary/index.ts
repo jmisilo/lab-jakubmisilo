@@ -1,5 +1,6 @@
 import type { Mastra } from '@mastra/core/mastra';
 
+import { MASTRA_THREAD_ID_KEY } from '@mastra/core/request-context';
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 
 import { logger } from '../../../infrastructure/logger';
@@ -7,26 +8,26 @@ import { GoogleService } from '../../modules/google';
 import { SchedulingService } from '../../modules/scheduling';
 import { resolveIdentityId, resolveTimeZone } from '../../runtime-context';
 import {
-  PreDaySummaryContextSchema,
-  PreDaySummaryDayWindowSchema,
-  PreDaySummaryInputSchema,
-  PreDaySummaryModelOutputSchema,
-  PreDaySummaryOutputSchema,
+  DaySummaryContextSchema,
+  DaySummaryDayWindowSchema,
+  DaySummaryInputSchema,
+  DaySummaryModelOutputSchema,
+  DaySummaryOutputSchema,
 } from './schemas';
-import { preDaySummaryAgent } from './summary-agent';
+import { daySummaryAgent } from './summary-agent';
 
 const MAX_CALENDARS = 20;
 const MAX_EVENTS_PER_CALENDAR = 25;
 const MAX_AGENDA_EVENTS = 50;
 
-const resolveUpcomingDayStep = createStep({
-  id: 'resolve-upcoming-day',
-  description: 'Resolve the requested day, defaulting to tomorrow in the user timezone.',
-  inputSchema: PreDaySummaryInputSchema,
-  outputSchema: PreDaySummaryDayWindowSchema,
+const resolveDayStep = createStep({
+  id: 'resolve-day',
+  description: 'Resolve the requested day, defaulting to today in the user timezone.',
+  inputSchema: DaySummaryInputSchema,
+  outputSchema: DaySummaryDayWindowSchema,
   execute: async ({ inputData, requestContext }) => {
     const timeZone = resolveTimeZone(requestContext);
-    const date = inputData.date ?? nextDate(formatLocalDate(new Date(), timeZone));
+    const date = inputData.date ?? formatLocalDate(new Date(), timeZone);
 
     return {
       date,
@@ -38,16 +39,16 @@ const resolveUpcomingDayStep = createStep({
   },
 });
 
-const gatherUpcomingDayContextStep = createStep({
-  id: 'gather-upcoming-day-context',
-  description: 'Read calendar events and scheduled tasks relevant to the upcoming day.',
-  inputSchema: PreDaySummaryDayWindowSchema,
-  outputSchema: PreDaySummaryContextSchema,
+const gatherDayContextStep = createStep({
+  id: 'gather-day-context',
+  description: 'Read calendar events and scheduled tasks relevant to the requested day.',
+  inputSchema: DaySummaryDayWindowSchema,
+  outputSchema: DaySummaryContextSchema,
   execute: async ({ inputData, requestContext, mastra }) => {
     const resourceId = resolveIdentityId(requestContext);
 
     if (!resourceId) {
-      throw new Error('Pre-day summary requires a user identity.');
+      throw new Error('Day summary requires a user identity.');
     }
 
     const [calendar, schedules] = await Promise.all([
@@ -64,7 +65,7 @@ const gatherUpcomingDayContextStep = createStep({
       }),
     ]);
 
-    logger.info('Pre-day summary context gathered', {
+    logger.info('Day summary context gathered', {
       date: inputData.date,
       timeZone: inputData.timeZone,
       calendarAvailable: calendar.available,
@@ -81,13 +82,24 @@ const gatherUpcomingDayContextStep = createStep({
   },
 });
 
-const summarizeUpcomingDayStep = createStep({
-  id: 'summarize-upcoming-day',
-  description: 'Create the final user-facing pre-day briefing.',
-  inputSchema: PreDaySummaryContextSchema,
-  outputSchema: PreDaySummaryOutputSchema,
-  execute: async ({ inputData }) => {
-    const result = await preDaySummaryAgent.generate(
+const summarizeDayStep = createStep({
+  id: 'summarize-day',
+  description: 'Create the final user-facing day briefing.',
+  inputSchema: DaySummaryContextSchema,
+  outputSchema: DaySummaryOutputSchema,
+  execute: async ({ inputData, requestContext }) => {
+    const resourceId = resolveIdentityId(requestContext);
+
+    if (!resourceId) {
+      throw new Error('Day summary requires a user identity.');
+    }
+
+    const requestThreadId = requestContext?.get(MASTRA_THREAD_ID_KEY);
+    const threadId =
+      typeof requestThreadId === 'string' && requestThreadId.trim()
+        ? requestThreadId
+        : `day-summary:${resourceId}:${inputData.date}`;
+    const result = await daySummaryAgent.generate(
       [
         {
           role: 'user',
@@ -107,8 +119,13 @@ const summarizeUpcomingDayStep = createStep({
         },
       ],
       {
+        memory: {
+          resource: resourceId,
+          thread: threadId,
+        },
+        requestContext,
         structuredOutput: {
-          schema: PreDaySummaryModelOutputSchema,
+          schema: DaySummaryModelOutputSchema,
         },
       },
     );
@@ -125,16 +142,16 @@ const summarizeUpcomingDayStep = createStep({
   },
 });
 
-export const preDaySummaryWorkflow = createWorkflow({
-  id: 'pre-day-summary',
+export const daySummaryWorkflow = createWorkflow({
+  id: 'day-summary',
   description:
-    'Prepare a concise briefing for an upcoming day from Calendar, reminders, and relevant conversational context. Use on demand or from a scheduled agent run. Omit date to summarize tomorrow; provide an explicit date when the user names one. Pass only relevant priorities, unfinished tasks, completions, commitments, and preferences as relevantContext. Return the summary naturally without exposing workflow metadata.',
-  inputSchema: PreDaySummaryInputSchema,
-  outputSchema: PreDaySummaryOutputSchema,
+    'Prepare a concise briefing for a day from Calendar, Gmail when useful, reminders, and relevant conversational context. Use on demand or from a scheduled agent run. Omit date to summarize today; provide an explicit date when the user names another day. Pass only relevant priorities, unfinished tasks, completions, commitments, and preferences as relevantContext. Return the summary naturally without exposing workflow metadata.',
+  inputSchema: DaySummaryInputSchema,
+  outputSchema: DaySummaryOutputSchema,
 })
-  .then(resolveUpcomingDayStep)
-  .then(gatherUpcomingDayContextStep)
-  .then(summarizeUpcomingDayStep)
+  .then(resolveDayStep)
+  .then(gatherDayContextStep)
+  .then(summarizeDayStep)
   .commit();
 
 async function readCalendarContext({ resourceId, timeMin, timeMax }: ReadContextInput) {
@@ -180,7 +197,7 @@ async function readCalendarContext({ resourceId, timeMin, timeMax }: ReadContext
         .slice(0, MAX_AGENDA_EVENTS),
     };
   } catch (error) {
-    logger.warn('Pre-day summary calendar context unavailable', {
+    logger.warn('Day summary calendar context unavailable', {
       error: safeError(error),
     });
 
@@ -246,7 +263,7 @@ async function readScheduleContext({
       ),
     };
   } catch (error) {
-    logger.warn('Pre-day summary schedule context unavailable', {
+    logger.warn('Day summary schedule context unavailable', {
       error: safeError(error),
     });
 

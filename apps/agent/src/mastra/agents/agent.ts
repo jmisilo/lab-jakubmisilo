@@ -1,14 +1,16 @@
 import type { Message, Thread } from 'chat';
 
 import { openai } from '@ai-sdk/openai';
-import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
+import { photon } from '@imessage-sdk/photon';
 import { Agent } from '@mastra/core/agent';
+import { TokenLimiterProcessor, ToolCallFilter } from '@mastra/core/processors';
 import { askUserTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
 import { waitUntil } from '@vercel/functions';
 
 import { logger } from '../../infrastructure/logger';
+import { configurePlainTextIMessageOutput } from '../channels/imessage';
 import { AttachmentService } from '../modules/attachments';
 import {
   manageCalendarTool,
@@ -20,8 +22,15 @@ import { manageNutritionTool, readNutritionTool } from '../modules/nutrition/too
 import { manageScheduleTool } from '../modules/scheduling/tools';
 import { readLocalTimeTool, readWeatherTool } from '../modules/weather/tools';
 import { KnowledgeContextProcessor } from '../processors/knowledge-context';
+import { OpenAIPromptCachingProcessor } from '../processors/openai-prompt-caching';
 import { RuntimeContextProcessor } from '../processors/runtime-context';
 import { agentInstructions } from '../prompt';
+import {
+  createOpenAILegacyPromptCacheOptions,
+  createOpenAIPromptCacheOptions,
+  OpenAIExplicitPromptCacheBreakpoint,
+  OpenAIPromptCacheKeys,
+} from '../prompt-cache';
 import { AgentRequestContextSchema } from '../runtime-context';
 import { responseQualityScorer } from '../scorers/response-quality';
 import { calendarManagementSkill } from '../skills/calendar-management';
@@ -30,18 +39,24 @@ import { gmailManagementSkill } from '../skills/gmail-management';
 import { knowledgeManagementSkill } from '../skills/knowledge-management';
 import { schedulingSkill } from '../skills/scheduling';
 import { manageKnowledgeTool, readKnowledgeTool } from '../tools/knowledge-tools';
-import { preDaySummaryWorkflow } from '../workflows/pre-day-summary';
+import { daySummaryWorkflow } from '../workflows/day-summary';
 
-const imessageAdapter = createIMessageAdapter({
-  provider: blooio(),
-});
+const _imessageAdapter = configurePlainTextIMessageOutput(
+  createIMessageAdapter({
+    provider: photon(),
+  }),
+);
 
 export const agent = new Agent({
   id: 'agent',
   name: 'Agent',
   description:
     'A personal assistant, living "next" to the user, that can help with a variety of tasks, reducing switching between apps and tools. The purpose is to streamline user\'s workflow and enhance productivity by providing a single point of interaction for various tasks.',
-  instructions: agentInstructions,
+  instructions: {
+    role: 'system',
+    content: agentInstructions,
+    providerOptions: OpenAIExplicitPromptCacheBreakpoint,
+  },
   model: 'openai/gpt-5.6-luna',
   requestContextSchema: AgentRequestContextSchema,
   defaultOptions: {
@@ -49,11 +64,7 @@ export const agent = new Agent({
     autoResumeSuspendedTools: true,
     providerOptions: {
       openai: {
-        promptCacheKey: 'personal-agent:v1',
-        promptCacheOptions: {
-          mode: 'implicit',
-          ttl: '30m',
-        },
+        ...createOpenAIPromptCacheOptions(OpenAIPromptCacheKeys.mainAgent),
         reasoningEffort: 'high',
       },
     },
@@ -61,16 +72,39 @@ export const agent = new Agent({
   memory: new Memory({
     options: {
       generateTitle: true,
+      lastMessages: 20,
       observationalMemory: {
         model: 'openai/gpt-5.4-nano',
         scope: 'resource',
         shareTokenBudget: true,
         temporalMarkers: true,
-        activateAfterIdle: '10m',
+        activateAfterIdle: '30m',
+        observation: {
+          providerOptions: {
+            openai: createOpenAILegacyPromptCacheOptions(OpenAIPromptCacheKeys.memoryObserver),
+          },
+        },
+        reflection: {
+          providerOptions: {
+            openai: createOpenAILegacyPromptCacheOptions(OpenAIPromptCacheKeys.memoryReflector),
+          },
+        },
       },
     },
   }),
-  inputProcessors: [new RuntimeContextProcessor(), new KnowledgeContextProcessor()],
+  inputProcessors: [
+    new RuntimeContextProcessor(),
+    new KnowledgeContextProcessor(),
+    new ToolCallFilter({
+      filterAfterToolSteps: 2,
+      preserveModelOutput: true,
+    }),
+    new TokenLimiterProcessor({
+      limit: 300_000,
+      trimMode: 'contiguous',
+    }),
+    new OpenAIPromptCachingProcessor(),
+  ],
   skills: [
     knowledgeManagementSkill,
     schedulingSkill,
@@ -81,7 +115,7 @@ export const agent = new Agent({
   channels: {
     adapters: {
       imessage: {
-        adapter: imessageAdapter,
+        adapter: _imessageAdapter,
         gateway: false,
         streaming: false,
         toolDisplay: 'hidden',
@@ -112,7 +146,7 @@ export const agent = new Agent({
     web_search: openai.tools.webSearch(),
   },
   workflows: {
-    pre_day_summary: preDaySummaryWorkflow,
+    day_summary: daySummaryWorkflow,
   },
   scorers: {
     responseQuality: {
@@ -148,7 +182,7 @@ async function _handleMessage(
 
 async function _markRead(thread: Thread) {
   try {
-    await imessageAdapter.markRead(thread.id);
+    await _imessageAdapter.markRead(thread.id);
   } catch (error) {
     logger.warn('Failed to mark incoming iMessage as read', {
       error: _describeChannelError(error),

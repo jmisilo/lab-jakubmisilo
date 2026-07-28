@@ -1,10 +1,17 @@
 import type { ProcessLLMRequestArgs } from '@mastra/core/processors';
 
-export function insertContextBeforeLatestMessage(
+export function insertContextBeforeLatestUserMessage(
   prompt: ProcessLLMRequestArgs['prompt'],
   content: string,
 ) {
-  const insertionIndex = Math.max(prompt.length - 1, 0);
+  let insertionIndex = Math.max(prompt.length - 1, 0);
+
+  for (let index = prompt.length - 1; index >= 0; index -= 1) {
+    if (prompt[index]?.role === 'user') {
+      insertionIndex = index;
+      break;
+    }
+  }
 
   return [
     ...prompt.slice(0, insertionIndex),
