@@ -1,8 +1,8 @@
 import type { Message, Thread } from 'chat';
 
 import { openai } from '@ai-sdk/openai';
+import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
-import { photon } from '@imessage-sdk/photon';
 import { Agent } from '@mastra/core/agent';
 import { TokenLimiterProcessor, ToolCallFilter } from '@mastra/core/processors';
 import { askUserTool } from '@mastra/core/tools';
@@ -43,7 +43,7 @@ import { daySummaryWorkflow } from '../workflows/day-summary';
 
 const _imessageAdapter = configurePlainTextIMessageOutput(
   createIMessageAdapter({
-    provider: photon(),
+    provider: blooio(),
   }),
 );
 

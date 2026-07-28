@@ -9,6 +9,7 @@
     "build": "mastra build",
     "postbuild": "node scripts/prepare-vercel-output.mjs",
     "db:push": "drizzle-kit push && node scripts/initialize-mastra-storage.mjs",
+    "db:push:ci": "drizzle-kit push --force && node scripts/initialize-mastra-storage.mjs",
     "eval": "vitest run --config vitest.evals.config.ts",
     "eval:watch": "vitest --config vitest.evals.config.ts",
     "lint": "mastra lint",
