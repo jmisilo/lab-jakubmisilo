@@ -1,5 +1,6 @@
 output.txt
 .tmp
+.traces
 logs
 node_modules
 dist

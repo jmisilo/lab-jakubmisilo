@@ -16,7 +16,10 @@ export default defineConfig({
     url: databaseUrl,
   },
   out: './src/infrastructure/database/drizzle',
-  schema: './src/infrastructure/database/schema.ts',
+  schema: [
+    './src/infrastructure/database/schema.ts',
+    './src/infrastructure/database/drizzle-chat-state-sequences.ts',
+  ],
   schemaFilter: ['public'],
   tablesFilter: ['agent_*'],
   strict: true,

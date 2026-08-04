@@ -100,6 +100,7 @@ export const oneTimeSchedules = pgTable(
     title: text('title').notNull(),
     prompt: text('prompt').notNull(),
     runAt: timestamp('run_at', { withTimezone: true }).notNull(),
+    idempotencyKey: text('idempotency_key'),
     status: text('status', {
       enum: ['active', 'paused', 'running', 'completed', 'cancelled', 'failed'],
     })
@@ -113,6 +114,9 @@ export const oneTimeSchedules = pgTable(
   },
   (table) => [
     index('agent_one_time_schedules_owner_idx').on(table.resourceId, table.status, table.runAt),
+    uniqueIndex('agent_one_time_schedules_idempotency_idx')
+      .on(table.resourceId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
     check('agent_one_time_schedules_title_length_check', sql`char_length(${table.title}) <= 180`),
     check(
       'agent_one_time_schedules_prompt_length_check',

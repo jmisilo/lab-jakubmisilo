@@ -4,26 +4,35 @@ import { VercelDeployer } from '@mastra/deployer-vercel';
 import { Observability, SensitiveDataFilter } from '@mastra/observability';
 import { PostgresStore } from '@mastra/pg';
 
-import { databasePool } from '../infrastructure/database';
-import { logger } from '../infrastructure/logger';
-import { agent } from './agents/agent';
-import { googleRoutes } from './modules/google/routes';
+import { agent } from '../app/agent/index';
+import { postToThread } from '../app/bot/delivery';
+import { imessageWebhookRoute } from '../app/bot/routes';
+import { runScheduled } from '../app/bot/scheduled';
+import { googleRoutes } from '../app/features/google/routes';
 import {
   manageCalendarTool,
   manageGoogleConnectionTool,
   readCalendarTool,
   readGmailTool,
-} from './modules/google/tools';
-import { IdentityService } from './modules/identity';
-import { manageNutritionTool, readNutritionTool } from './modules/nutrition/tools';
-import { SchedulingService } from './modules/scheduling';
-import { scheduleExecutionRoute } from './modules/scheduling/routes';
-import { manageScheduleTool } from './modules/scheduling/tools';
-import { readLocalTimeTool, readWeatherTool } from './modules/weather/tools';
+} from '../app/features/google/tools';
+import { manageNutritionTool, readNutritionTool } from '../app/features/nutrition/tools';
+import { readLocalTimeTool, readWeatherTool } from '../app/features/weather/tools';
+import { IdentityService } from '../app/identity';
+import { configureScheduleDelivery } from '../app/schedules';
+import { scheduleExecutionRoute, scheduleFailureRoute } from '../app/schedules/routes';
+import { manageScheduleTool } from '../app/schedules/tools';
+import { googleSafetyScorer } from '../app/scorers/google';
+import { knowledgeManagementScorer } from '../app/scorers/knowledge-management';
+import { memoryContinuityScorer } from '../app/scorers/memory';
+import { responseQualityScorer } from '../app/scorers/response-quality';
+import { schedulingReliabilityScorer } from '../app/scorers/scheduling';
+import { manageKnowledgeTool, readKnowledgeTool } from '../app/tools/knowledge-tools';
+import { daySummaryWorkflow } from '../app/workflows/day-summary';
+import { databasePool } from '../infrastructure/database';
+import { logger } from '../infrastructure/logger';
 import { createAgentObservabilityExporters } from './observability';
-import { responseQualityScorer } from './scorers/response-quality';
-import { manageKnowledgeTool, readKnowledgeTool } from './tools/knowledge-tools';
-import { daySummaryWorkflow } from './workflows/day-summary';
+
+configureScheduleDelivery({ runScheduled, postToThread });
 
 export const mastra = new Mastra({
   deployer: new VercelDeployer({
@@ -51,6 +60,10 @@ export const mastra = new Mastra({
   },
   scorers: {
     responseQuality: responseQualityScorer,
+    schedulingReliability: schedulingReliabilityScorer,
+    googleSafety: googleSafetyScorer,
+    memoryContinuity: memoryContinuityScorer,
+    knowledgeManagement: knowledgeManagementScorer,
   },
   storage: new PostgresStore({
     id: 'agent-storage',
@@ -61,23 +74,14 @@ export const mastra = new Mastra({
   scheduler: {
     enabled: false,
   },
-  schedules: {
-    prepare: async ({ agentId, schedule, trigger }) => {
-      if (agentId !== 'agent' || typeof schedule.cron !== 'string') {
-        return undefined;
-      }
-
-      return SchedulingService.prepareOccurrence({
-        scheduleId: schedule.id,
-        cron: schedule.cron,
-        firedAt: trigger.firedAt,
-        timeZone: typeof schedule.timezone === 'string' ? schedule.timezone : 'UTC',
-      });
-    },
-  },
   server: {
     apiPrefix: '/api/mastra',
-    apiRoutes: [scheduleExecutionRoute, ...googleRoutes],
+    apiRoutes: [
+      imessageWebhookRoute,
+      scheduleExecutionRoute,
+      scheduleFailureRoute,
+      ...googleRoutes,
+    ],
     auth: new SimpleAuth({
       tokens: {
         [IdentityService.apiToken]: {

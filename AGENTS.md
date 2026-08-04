@@ -46,9 +46,10 @@ This is a pnpm + Turborepo monorepo. Packages are ESM TypeScript.
 The agent is in `apps/agent`.
 
 - Mastra composition: `apps/agent/src/mastra/index.ts`.
-- Agent and channel setup: `apps/agent/src/mastra/agents/agent.ts`.
-- Product modules: `apps/agent/src/mastra/modules`.
-- Knowledge domain: `apps/agent/src/modules/knowledge`.
+- Agent composition: `apps/agent/src/app/agent/index.ts`.
+- Chat SDK transport: `apps/agent/src/app/bot`.
+- Product modules: `apps/agent/src/app`.
+- Knowledge domain: `apps/agent/src/app/knowledge`.
 - Drizzle schema: `apps/agent/src/infrastructure/database`.
 - Previous AI SDK implementation: `apps/agent/archive-ai-sdk`.
 
@@ -56,10 +57,12 @@ Keep external systems behind service boundaries. Do not call provider SDKs or da
 
 ## Chat SDK Notes
 
-Mastra Channels normalizes platform events and owns thread continuity.
+Mastra registers the agent's HTTP routes; Chat SDK owns platform transport and thread continuity,
+while Mastra owns agent execution.
 
 - The Blooio iMessage adapter resolves the canonical resource from `message.author.userId`.
-- Keep webhook routes thin and signature-verified.
+- Keep Mastra-registered webhook routes thin and signature-verified. Chat SDK owns deduplication, queueing,
+  locks, and the single platform-posting path; do not add a second transcript or posting path in Mastra.
 - Keep attachment limits and normalization in the attachments module.
 - Do not use Mastra's in-process scheduler on serverless deployment. Recurring definitions use
   Mastra storage, while QStash owns delivery timing.
