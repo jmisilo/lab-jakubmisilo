@@ -2,11 +2,10 @@
 
 import type { Dispatch, FC, RefObject, SetStateAction, SubmitEventHandler } from 'react';
 
+import { cn } from 'cnfast';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import useMeasure from 'react-use-measure';
-
-import { cn } from '@labjm/utilities/cn';
 
 import type { ModelChoice, ThinkingIntensity } from './types';
 import { AIWidgetModelSelector } from './ai-widget-model-selector';

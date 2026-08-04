@@ -10,13 +10,10 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./cn": "./src/cn/index.ts",
     "./url-composer": "./src/url-composer/index.ts"
   },
   "dependencies": {
-    "@labjm/schemas": "workspace:*",
-    "classnames": "^2.5.1",
-    "tailwind-merge": "^3.6.0"
+    "@labjm/schemas": "workspace:*"
   },
   "devDependencies": {
     "@labjm/jest-config": "workspace:*",
