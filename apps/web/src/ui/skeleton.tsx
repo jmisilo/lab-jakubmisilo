@@ -1,6 +1,5 @@
+import { cn } from 'cnfast';
 import { type FC, type HTMLAttributes } from 'react';
-
-import { cn } from '@labjm/utilities/cn';
 
 type SkeletonProps = HTMLAttributes<HTMLDivElement> & { bgColor?: string };
 

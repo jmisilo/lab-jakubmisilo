@@ -2,9 +2,8 @@
 
 import type { CSSProperties, FC } from 'react';
 
+import { cn } from 'cnfast';
 import { useEffect, useState } from 'react';
-
-import { cn } from '@labjm/utilities/cn';
 
 import styles from './loading-text.module.css';
 

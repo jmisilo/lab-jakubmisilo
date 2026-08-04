@@ -2,7 +2,7 @@
 
 import type { FC } from 'react';
 
-import { cn } from '@labjm/utilities/cn';
+import { cn } from 'cnfast';
 
 import type { ThinkingIntensity } from './types';
 import { THINKING_INTENSITIES } from './constants';

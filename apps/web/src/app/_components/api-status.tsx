@@ -1,4 +1,4 @@
-import { cn } from '@labjm/utilities';
+import { cn } from 'cnfast';
 
 import { apiClient } from '@/infrastructure/api';
 import { Skeleton } from '@/ui/skeleton';
