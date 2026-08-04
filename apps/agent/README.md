@@ -2,9 +2,18 @@
 
 Mastra personal assistant exposed through Studio and the Blooio-backed Chat SDK iMessage channel.
 
+Mastra is the application API layer through its registered route descriptors. Chat SDK owns the
+iMessage webhook handling, signature verification, deduplication, queueing, locks, and the single
+platform-posting path. The transport attachment service validates and normalizes inbound files
+before Mastra sees them. Mastra owns model, tool, memory, workflow, and observability execution;
+it does not create a second transport or transcript path.
+
 The previous AI SDK implementation is preserved in `archive-ai-sdk` for presentation and
 historical reference only. It is not imported by the active application, included in the runtime
 bundle, uploaded to Vercel, or covered by the active package's build and test commands.
+
+Active application/runtime code lives under `src/app` in the same feature-oriented shape as the
+archived implementation. `src/mastra/index.ts` is the Mastra composition root only.
 
 ## Capabilities
 
@@ -32,9 +41,12 @@ pnpm --filter @labjm/agent db:push
 pnpm --filter @labjm/agent dev
 ```
 
-`db:push` also initializes Mastra's storage schema. Production disables automatic storage
-initialization so Vercel cold starts only perform normal queries, not schema DDL. Run `db:push`
-before the first deployment and after upgrading Mastra storage packages.
+`db:push` first initializes Chat SDK's PostgreSQL state tables, then pushes the application schema
+and initializes Mastra's storage schema. Chat SDK remains the owner of its `chat_state_*` tables and
+backing sequences; the push-only Drizzle config declares those sequences only to prevent Drizzle Kit
+from proposing their deletion. Production disables automatic storage initialization so Vercel cold
+starts only perform normal queries, not schema DDL. Run `db:push` before the first deployment and
+after upgrading Mastra storage packages.
 
 Open `http://localhost:4111`. Studio and generic agent APIs use `AGENT_API_TOKEN`; local development
 falls back to `agent-local-dev-token`.
@@ -113,7 +125,8 @@ Output API artifact during that build.
 
 Mastra serves Studio at `/` and mounts built-in server routes below `/api/mastra`. Application
 routes use the remaining `/api` namespace: Google OAuth uses `/api/links/google/*`, QStash
-delivers to `/api/jobs/schedules/execute`, and the iMessage webhook remains below
+delivers to `/api/jobs/schedules/execute` and reports exhausted delivery retries to
+`/api/jobs/schedules/failure`, and the iMessage webhook remains below
 `/api/agents/*`.
 
 The deployed Studio is served at the production origin and protected by `AGENT_API_TOKEN`. The
@@ -146,6 +159,11 @@ Normal tests are offline. The opt-in eval suite uses the configured model and da
 ```sh
 pnpm --filter @labjm/agent eval
 ```
+
+The core evals cover scheduling tool execution and truthful confirmations, Google OAuth/read-only
+boundaries, multi-turn memory continuity, and durable knowledge retrieval/writes. They use a real
+evaluation Postgres schema and a mocked QStash client so they never create external reminders.
+CI enables them only when `RUN_AGENT_EVALS=true` and `OPENAI_API_KEY` is available.
 
 ## Verification
 

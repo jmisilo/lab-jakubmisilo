@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     fileParallelism: false,
     hookTimeout: 180_000,
-    include: ['src/mastra/evals/**/*.eval.ts'],
+    include: ['src/app/evals/**/*.eval.ts'],
     maxWorkers: 1,
     testTimeout: 180_000,
   },
