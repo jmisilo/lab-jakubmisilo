@@ -1,4 +1,9 @@
-import { MastraPlatformExporter, MastraStorageExporter } from '@mastra/observability';
+import {
+  MastraPlatformExporter,
+  MastraStorageExporter,
+  Observability,
+  SensitiveDataFilter,
+} from '@mastra/observability';
 
 interface ObservabilityEnvironment {
   NODE_ENV?: string;
@@ -16,3 +21,17 @@ export function createAgentObservabilityExporters(
 
   return useMastraPlatform ? [new MastraPlatformExporter()] : [new MastraStorageExporter()];
 }
+
+export const agentObservability = new Observability({
+  configs: {
+    default: {
+      serviceName: 'agent',
+      exporters: createAgentObservabilityExporters(),
+      spanOutputProcessors: [new SensitiveDataFilter()],
+      logging: {
+        enabled: true,
+        level: 'info',
+      },
+    },
+  },
+});

@@ -1,5 +1,6 @@
 import { BotHandler } from './bot-handler';
-import { chat, chatState, initializeBot } from './transport';
+import { handleReactionFeedback } from './feedback';
+import { chat, chatState } from './transport';
 
 chat.onDirectMessage((thread, message) =>
   BotHandler.respondToMessage({
@@ -26,4 +27,6 @@ chat.onSubscribedMessage((thread, message) =>
   }),
 );
 
-export { chat, chatState, initializeBot };
+chat.onReaction(handleReactionFeedback);
+
+export { chat, chatState };

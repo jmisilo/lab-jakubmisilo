@@ -8,6 +8,8 @@ export type AgentResult = {
   text?: string;
   finishReason?: string;
   runId?: string;
+  traceId?: string;
+  spanId?: string;
   suspendPayload?: unknown;
   tripwire?: unknown;
   steps?: ReadonlyArray<AgentStep>;

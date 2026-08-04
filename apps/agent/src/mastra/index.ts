@@ -1,7 +1,6 @@
 import { Mastra } from '@mastra/core/mastra';
 import { SimpleAuth } from '@mastra/core/server';
 import { VercelDeployer } from '@mastra/deployer-vercel';
-import { Observability, SensitiveDataFilter } from '@mastra/observability';
 import { PostgresStore } from '@mastra/pg';
 
 import { agent } from '../app/agent/index';
@@ -30,7 +29,7 @@ import { manageKnowledgeTool, readKnowledgeTool } from '../app/tools/knowledge-t
 import { daySummaryWorkflow } from '../app/workflows/day-summary';
 import { databasePool } from '../infrastructure/database';
 import { logger } from '../infrastructure/logger';
-import { createAgentObservabilityExporters } from './observability';
+import { agentObservability } from './observability';
 
 configureScheduleDelivery({ runScheduled, postToThread });
 
@@ -93,17 +92,5 @@ export const mastra = new Mastra({
       public: ['/api/agents/agent/channels/imessage/webhook'],
     }),
   },
-  observability: new Observability({
-    configs: {
-      default: {
-        serviceName: 'agent',
-        exporters: createAgentObservabilityExporters(),
-        spanOutputProcessors: [new SensitiveDataFilter()],
-        logging: {
-          enabled: true,
-          level: 'info',
-        },
-      },
-    },
-  }),
+  observability: agentObservability,
 });

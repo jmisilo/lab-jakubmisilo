@@ -45,20 +45,6 @@ export const chat = new Chat({
   logger: createChatLogger('chat'),
 });
 
-let initialization: Promise<void> | undefined;
-
-/** Initialize the singleton once for out-of-band delivery paths. Webhooks initialize lazily. */
-export function initializeBot() {
-  initialization ??= chat.initialize().catch((error) => {
-    // A transient cold-start failure must not poison all later requests in a
-    // warm function instance.
-    initialization = undefined;
-    throw error;
-  });
-
-  return initialization;
-}
-
 function createChatLogger(component: string): ChatLogger {
   const child = logger.child({ component });
 

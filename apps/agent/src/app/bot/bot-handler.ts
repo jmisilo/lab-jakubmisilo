@@ -12,6 +12,7 @@ import { logger } from '../../infrastructure/logger';
 import { agent } from '../agent';
 import { resolveTimeZone } from '../agent/runtime-context';
 import { AttachmentService } from '../attachments';
+import { trackAgentResponse } from './feedback';
 import { normalizeIMessagePost } from './imessage';
 import { extractResponseText, formatAskUserQuestion, readAskUserSuspension } from './response';
 import { chatState } from './transport';
@@ -75,7 +76,7 @@ export class BotHandler {
       const suspension = readAskUserSuspension(result);
 
       if (suspension) {
-        await this.#postQuestion(thread, pendingKey, message, suspension);
+        await this.#postQuestion(thread, pendingKey, message, suspension, result);
         return;
       }
 
@@ -83,7 +84,14 @@ export class BotHandler {
         await chatState.delete(pendingKey);
       }
 
-      await thread.post(normalizeIMessagePost(extractResponseText(result)));
+      const sent = await thread.post(normalizeIMessagePost(extractResponseText(result)));
+      await trackAgentResponse(sent.id, {
+        resourceId,
+        threadId: thread.id,
+        traceId: result.traceId,
+        spanId: result.spanId,
+        runId: result.runId,
+      });
 
       logger.info('Inbound message handling completed', {
         messageId: message.id,
@@ -107,6 +115,7 @@ export class BotHandler {
     pendingKey: string,
     message: Message,
     suspension: AskUserSuspension,
+    result: AgentResult,
   ) {
     const pending = {
       ...suspension,
@@ -119,7 +128,14 @@ export class BotHandler {
     await chatState.set(pendingKey, pending, PENDING_QUESTION_TTL_MS);
 
     try {
-      await thread.post(normalizeIMessagePost(formatAskUserQuestion(suspension)));
+      const sent = await thread.post(normalizeIMessagePost(formatAskUserQuestion(suspension)));
+      await trackAgentResponse(sent.id, {
+        resourceId: message.author.userId,
+        threadId: thread.id,
+        traceId: result.traceId,
+        spanId: result.spanId,
+        runId: result.runId,
+      });
     } catch (error) {
       await chatState.delete(pendingKey);
       throw error;

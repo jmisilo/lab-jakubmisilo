@@ -4,11 +4,11 @@ import {
   RequestContext,
 } from '@mastra/core/request-context';
 
+import type { AgentResult } from './response';
 import { logger } from '../../infrastructure/logger';
 import { agent } from '../agent';
 import { postToThread } from './delivery';
 import { extractResponseText } from './response';
-import { initializeBot } from './transport';
 
 export async function runScheduled({
   resourceId,
@@ -25,8 +25,6 @@ export async function runScheduled({
   source: 'one-time-schedule' | 'recurring-schedule';
   deliveryId?: string;
 }) {
-  await initializeBot();
-
   logger.info('Scheduled agent turn started', {
     deliveryId,
     resourceId,
@@ -58,9 +56,16 @@ export async function runScheduled({
       requestContext,
     },
   );
-  const text = extractResponseText(result as never);
+  const agentResult = result as AgentResult;
+  const text = extractResponseText(agentResult);
 
-  await postToThread(threadId, text);
+  await postToThread(threadId, text, {
+    resourceId,
+    threadId,
+    traceId: agentResult.traceId,
+    spanId: agentResult.spanId,
+    runId: agentResult.runId,
+  });
 
   logger.info('Scheduled agent turn completed', {
     deliveryId,
