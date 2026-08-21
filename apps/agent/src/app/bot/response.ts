@@ -91,7 +91,7 @@ export function formatAskUserQuestion(suspension: AskUserSuspension) {
 
   const choices = suspension.options.map(
     (option, index) =>
-      `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ''}`,
+      `${index + 1}. ${option.label}${option.description ? ` - ${option.description}` : ''}`,
   );
   const suffix =
     suspension.selectionMode === 'multi_select'

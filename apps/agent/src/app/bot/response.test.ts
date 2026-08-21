@@ -37,4 +37,23 @@ describe('agent response boundary', () => {
     });
     expect(formatAskUserQuestion(suspension!)).toContain('1. In one hour');
   });
+
+  it('uses an ASCII hyphen between deterministic ask_user option labels and descriptions', () => {
+    expect(
+      formatAskUserQuestion({
+        runId: 'run-1',
+        toolCallId: 'tool-1',
+        question: 'Which one?',
+        options: [{ label: 'Soon', description: 'In one hour' }],
+      }),
+    ).toContain('1. Soon - In one hour');
+    expect(
+      formatAskUserQuestion({
+        runId: 'run-1',
+        toolCallId: 'tool-1',
+        question: 'Which one?',
+        options: [{ label: 'Soon', description: 'In one hour' }],
+      }),
+    ).not.toContain('—');
+  });
 });

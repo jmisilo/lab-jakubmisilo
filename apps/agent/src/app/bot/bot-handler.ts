@@ -14,6 +14,7 @@ import { resolveTimeZone } from '../agent/runtime-context';
 import { AttachmentService } from '../attachments';
 import { trackAgentResponse } from './feedback';
 import { normalizeIMessagePost } from './imessage';
+import { deliverAgentReply, isPartialReplyDeliveryFailure } from './reply-delivery';
 import { extractResponseText, formatAskUserQuestion, readAskUserSuspension } from './response';
 import { chatState } from './transport';
 
@@ -84,14 +85,28 @@ export class BotHandler {
         await chatState.delete(pendingKey);
       }
 
-      const sent = await thread.post(normalizeIMessagePost(extractResponseText(result)));
-      await trackAgentResponse(sent.id, {
-        resourceId,
-        threadId: thread.id,
-        traceId: result.traceId,
-        spanId: result.spanId,
-        runId: result.runId,
+      const delivery = await deliverAgentReply({
+        responseText: extractResponseText(result),
+        thread,
+        traceContext: {
+          resourceId,
+          threadId: thread.id,
+          traceId: result.traceId,
+          spanId: result.spanId,
+          runId: result.runId,
+        },
       });
+
+      if (isPartialReplyDeliveryFailure(delivery)) {
+        logger.error('Inbound message reply was only partially delivered', {
+          deliveredMessageIds: delivery.messageIds,
+          messageId: message.id,
+          resourceId,
+          threadId: thread.id,
+          error: describeError(delivery.cause),
+        });
+        return;
+      }
 
       logger.info('Inbound message handling completed', {
         messageId: message.id,
