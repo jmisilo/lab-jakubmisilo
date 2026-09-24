@@ -1,5 +1,7 @@
 packages:
   - 'apps/*'
+  # Model Router is an independently managed repository linked as a Git submodule.
+  - '!apps/model-router'
   - 'packages/*'
 
 supportedArchitectures:

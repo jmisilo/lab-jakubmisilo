@@ -17,6 +17,12 @@ const PROJECTS = [
     href: '/assistant',
   },
   {
+    title: 'Model Router',
+    headline: "Routes AI interactions to the right model using evaluators like Typesafe AI's Jev.",
+    href: 'https://github.com/jmisilo/model-router',
+    tag: 'TypeScript package',
+  },
+  {
     title: 'Extendable AI Widget',
     headline: 'Extendable AI widget component',
     href: '/ai-widget',

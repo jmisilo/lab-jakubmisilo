@@ -1,0 +1,3 @@
+[submodule "apps/model-router"]
+	path = apps/model-router
+	url = https://github.com/jmisilo/model-router.git

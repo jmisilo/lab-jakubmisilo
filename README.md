@@ -4,6 +4,7 @@
 
 ## Open Source projects
 
+- [Model Router](https://github.com/jmisilo/model-router) - routes AI interactions to the right model using evaluators like Typesafe AI's Jev.
 - [Custom AI Agent](https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/agent)
 - [Extendable AI Widget](https://github.com/jmisilo/lab-jakubmisilo/tree/main/apps/web/src/app/ai-widget)
 - [CLIP x GPT Captioning](https://github.com/jmisilo/clip-gpt-captioning)
@@ -24,6 +25,15 @@ Requires Node.js 24+, pnpm 10, and Vercel CLI.
 ```sh
 pnpm add -g vercel
 ```
+
+Model Router is linked at [`apps/model-router`](./apps/model-router) as a Git submodule.
+To fetch its source after cloning:
+
+```sh
+git submodule update --init apps/model-router
+```
+
+It maintains its own workspace and dependencies and is excluded from this repository's pnpm workspace.
 
 ## Environment
 
