@@ -1,8 +1,8 @@
 import type { Logger as ChatLogger } from 'chat';
 
 import { createPostgresState } from '@chat-adapter/state-pg';
-import { blooio } from '@imessage-sdk/blooio';
 import { createIMessageAdapter } from '@imessage-sdk/chat-adapter';
+import { photon } from '@imessage-sdk/photon';
 import { Chat } from 'chat';
 
 import { logger } from '../../infrastructure/logger';
@@ -19,7 +19,7 @@ const SAFE_CHAT_LOG_KEYS = new Set([
 ]);
 
 const imessageAdapter = createIMessageAdapter({
-  provider: blooio(),
+  provider: photon(),
 });
 
 /**
