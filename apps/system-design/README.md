@@ -8,4 +8,4 @@ System design examples and documentation for my personal projects and exercises.
 
 ## AI Model Router
 
-[AI Model Router design](designs/ai-model-router-design.png)
+![AI Model Router design](designs/ai-model-router-design.png)
